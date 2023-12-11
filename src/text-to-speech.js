@@ -1,6 +1,3 @@
-const { ref, uploadBytes, getDownloadURL } = require("firebase/storage");
-const { storage } = require("./firebase");
-
 const { getUnixTime } = require("date-fns");
 const { v4: uuidv4 } = require("uuid");
 const { uploadFile } = require("./google-cloud-storage");

@@ -40,10 +40,13 @@ async function handleTranscription(request, response) {
 
   twiml.gather({
     // enhanced: true,
-    speechTimeout: 2,
+    // speechTimeout: 2,
+    // speechModel: "experimental_conversations",
+    speechTimeout: "auto",
     speechModel: "experimental_conversations",
     input: "speech",
-    action: "https://7a65-119-73-99-183.ngrok.io/twilio/respond",
+    action: "https://5b3f-119-73-99-204.ngrok.io/twilio/respond",
+    actionOnEmptyResult: true,
   });
 
   // twiml.record({
@@ -95,6 +98,14 @@ async function handleReponse(request, response) {
 
   console.log("voice input", voiceInput);
 
+  if (!voiceInput) {
+    twiml.say("It's been a pleasure assisting you. Goodbye!");
+    twiml.hangup();
+
+    response.type("application/xml");
+    return response.send(twiml.toString());
+  }
+
   // Create a conversation variable to store the dialog and the user's input to the conversation history
   const conversation = cookieData?.conversation || [];
   conversation.push(`${voiceInput}`);
@@ -136,7 +147,7 @@ async function handleReponse(request, response) {
     {
       method: "POST",
     },
-    `https://7a65-119-73-99-183.ngrok.io/twilio/transcribe`
+    `https://5b3f-119-73-99-204.ngrok.io/twilio/transcribe`
   );
 
   response.type("application/xml");

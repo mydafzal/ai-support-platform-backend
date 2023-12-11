@@ -10,7 +10,6 @@ const storage = new Storage({
 
 async function uploadFile(fileName, arrayBuffer) {
   const buffer = Buffer.from(arrayBuffer);
-
   // Specify the destination file path in the bucket
   const destination = `eleven-labs/${fileName}`;
 
