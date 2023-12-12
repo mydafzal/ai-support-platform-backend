@@ -22,7 +22,7 @@ const { quickstart } = require("./src/speech-to-text");
 
 app.get("/speech", async (req, res) => {
   const response = await convertTextToSpeech(
-    "It's been a pleasure assisting you. Goodbye!"
+    "Hey! I'm MichaelX, your friendly ai assistant. What would you like to talk about?"
   );
 
   // res.status(200).json({ response: "uniqueFilename" });
