@@ -13,7 +13,8 @@ const STABILITY = 0.5;
 const USE_SPEAKER_BOOST = false;
 const STYLE = 0.0;
 // const VOICE_ID = "oWAxZDx7w5VEj9dCyTzz";
-const VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; //Rachel
+// const VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; //Rachel
+const VOICE_ID = "pqHfZKP75CvOlQylNhV4"; //Bill
 // const API_KEY = "a595fbf5f52043a4347ada24eafc6c3d";
 const API_KEY = "126cd91db93cc56a188c321abb9d48c5";
 

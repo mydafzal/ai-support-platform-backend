@@ -9,7 +9,13 @@ const port = 5000;
 
 // app.use(express.json());
 // app.use("/public", express.static("public"));
-app.use("/public", express.static(path.join(__dirname, "public")));
+app.use(
+  "/public",
+  express.static(path.join(__dirname, "public"), {
+    maxAge: 0,
+    etag: false,
+  })
+);
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 app.use(cookieParser());
@@ -22,7 +28,8 @@ const { quickstart } = require("./src/speech-to-text");
 
 app.get("/speech", async (req, res) => {
   const response = await convertTextToSpeech(
-    "Hey! I'm MichaelX, your friendly ai assistant. What would you like to talk about?"
+    // "Hey! I'm MichaelX, your friendly ai assistant. What would you like to talk about?"
+    "It's been a pleasure assisting you. Goodbye!"
   );
 
   // res.status(200).json({ response: "uniqueFilename" });
