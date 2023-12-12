@@ -2,12 +2,14 @@ const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const bodyParser = require("body-parser");
+const path = require("path");
 
 const app = express();
 const port = 5000;
 
 // app.use(express.json());
-app.use("/public", express.static("public"));
+// app.use("/public", express.static("public"));
+app.use("/public", express.static(path.join(__dirname, "public")));
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 app.use(cookieParser());
