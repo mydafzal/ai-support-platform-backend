@@ -34,7 +34,7 @@ async function handleTranscription(request, response) {
     // );
 
     twiml.play(
-      "https://ai-backend-five.vercel.app/uploads/greeting-message.mp3"
+      "https://ai-backend-five.vercel.app/public/greeting-message.mp3"
     );
     // twiml.play(
     //   "https://firebasestorage.googleapis.com/v0/b/redit-clone-75760.appspot.com/o/ßeleven-labs%2F1702117706_960ddb1e-e88b-45da-b49d-8650d1ae19b0.mp3.mp3?alt=media&token=fc944090-a216-470c-bf6b-4ad242b4618d"

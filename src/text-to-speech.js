@@ -51,10 +51,10 @@ async function convertTextToSpeech(text) {
   const fileName = generateFilename(fileExtension);
 
   // Save the audio file locally
-  // const filePath = path.join(__dirname, "..", "uploads", fileName);
+  // const filePath = path.join(__dirname, "..", "public", fileName);
   // fs.writeFileSync(filePath, buffer);
 
-  // const fileUrl = `https://ai-backend-five.vercel.app/uploads/${fileName}`;
+  // const fileUrl = `https://ai-backend-five.vercel.app/public/${fileName}`;
 
   // return fileUrl;
 
