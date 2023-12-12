@@ -103,9 +103,7 @@ async function handleReponse(request, response) {
 
   if (!voiceInput) {
     // twiml.say("It's been a pleasure assisting you. Goodbye!");
-    twiml.play(
-      "https://ai-backend-five.vercel.app/uploads/goodbye-message.mp3"
-    );
+    twiml.play("https://ai-backend-five.vercel.app/public/goodbye-message.mp3");
 
     twiml.hangup();
 
