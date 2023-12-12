@@ -34,7 +34,7 @@ async function handleTranscription(request, response) {
     // );
 
     twiml.play(
-      "https://34cb-119-73-99-204.ngrok.io/uploads/greeting-message.mp3"
+      "https://ai-backend-five.vercel.app/uploads/greeting-message.mp3"
     );
     // twiml.play(
     //   "https://firebasestorage.googleapis.com/v0/b/redit-clone-75760.appspot.com/o/ßeleven-labs%2F1702117706_960ddb1e-e88b-45da-b49d-8650d1ae19b0.mp3.mp3?alt=media&token=fc944090-a216-470c-bf6b-4ad242b4618d"
@@ -48,7 +48,7 @@ async function handleTranscription(request, response) {
     speechTimeout: "auto",
     speechModel: "experimental_conversations",
     input: "speech",
-    action: "https://34cb-119-73-99-204.ngrok.io/twilio/respond",
+    action: "https://ai-backend-five.vercel.app/twilio/respond",
     actionOnEmptyResult: true,
   });
 
@@ -104,7 +104,7 @@ async function handleReponse(request, response) {
   if (!voiceInput) {
     // twiml.say("It's been a pleasure assisting you. Goodbye!");
     twiml.play(
-      "https://34cb-119-73-99-204.ngrok.io/uploads/goodbye-message.mp3"
+      "https://ai-backend-five.vercel.app/uploads/goodbye-message.mp3"
     );
 
     twiml.hangup();
@@ -154,7 +154,7 @@ async function handleReponse(request, response) {
     {
       method: "POST",
     },
-    `https://34cb-119-73-99-204.ngrok.io/twilio/transcribe`
+    `https://ai-backend-five.vercel.app/twilio/transcribe`
   );
 
   response.type("application/xml");

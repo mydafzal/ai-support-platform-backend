@@ -53,7 +53,7 @@ async function convertTextToSpeech(text) {
   const filePath = path.join(__dirname, "..", "uploads", fileName);
   fs.writeFileSync(filePath, buffer);
 
-  const fileUrl = `https://34cb-119-73-99-204.ngrok.io/uploads/${fileName}`;
+  const fileUrl = `https://ai-backend-five.vercel.app/uploads/${fileName}`;
 
   return fileUrl;
 
