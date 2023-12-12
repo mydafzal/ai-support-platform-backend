@@ -43,7 +43,7 @@ async function handleTranscription(request, response) {
 
   twiml.gather({
     // enhanced: true,
-    // speechTimeout: 2,
+    speechTimeout: 2,
     // speechModel: "experimental_conversations",
     speechTimeout: "auto",
     speechModel: "experimental_conversations",
