@@ -24,6 +24,7 @@ async function uploadToS3(file, fileName) {
     Key: `ai-bot/${fileName}`,
     Body: buffer,
     ACL: "public-read",
+    ContentType: "audio/mpeg",
   };
 
   const { Location, Key } = await s3.upload(params).promise();
