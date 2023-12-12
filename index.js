@@ -7,6 +7,7 @@ const app = express();
 const port = 5000;
 
 // app.use(express.json());
+app.use("/uploads", express.static("uploads"));
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 app.use(cookieParser());
@@ -19,8 +20,7 @@ const { quickstart } = require("./src/speech-to-text");
 
 app.get("/speech", async (req, res) => {
   const response = await convertTextToSpeech(
-    // "Hi, my name is Hammad Farooq. This is a sample request to test the Turbo V2's latency."
-    "Hi"
+    "It's been a pleasure assisting you. Goodbye!"
   );
 
   // res.status(200).json({ response: "uniqueFilename" });

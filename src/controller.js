@@ -4,7 +4,8 @@ const { convertTextToSpeech } = require("./text-to-speech");
 const { convertSpeechToText } = require("./speech-to-text");
 
 const OPENAI_API_KEY = "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";
-// const OPENAI_API_KEY = "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";
+// const OPENAI_API_KEY = "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"; personal account
+
 const ACCOUNT_SID = "AC38de205937ab33d281c52f95f796107b";
 const API_KEY = "SK7eeb5340364290fd722197db55a79021";
 const API_SECRET = "dXVs0g5kF37d069sg5G5hjzUVI9CdiDf";
@@ -25,14 +26,16 @@ async function handleTranscription(request, response) {
   if (!request.cookies.convo) {
     console.log("saying introduction....");
 
-    twiml.say(
-      {
-        voice: "Polly.Joanna-Neural",
-      },
-      "Hey! I'm Joanna, a chatbot created using Twilio and ChatGPT. What would you like to talk about today?"
-    );
+    // twiml.say(
+    //   {
+    //     voice: "Polly.Joanna-Neural",
+    //   },
+    //   "Hey! I'm Joanna, a chatbot created using Twilio and ChatGPT. What would you like to talk about today?"
+    // );
 
-    // twiml.play("https://api.twilio.com/cowbell.mp3");
+    twiml.play(
+      "https://34cb-119-73-99-204.ngrok.io/uploads/greeting-message.mp3"
+    );
     // twiml.play(
     //   "https://firebasestorage.googleapis.com/v0/b/redit-clone-75760.appspot.com/o/ßeleven-labs%2F1702117706_960ddb1e-e88b-45da-b49d-8650d1ae19b0.mp3.mp3?alt=media&token=fc944090-a216-470c-bf6b-4ad242b4618d"
     // );
@@ -45,7 +48,7 @@ async function handleTranscription(request, response) {
     speechTimeout: "auto",
     speechModel: "experimental_conversations",
     input: "speech",
-    action: "https://5b3f-119-73-99-204.ngrok.io/twilio/respond",
+    action: "https://34cb-119-73-99-204.ngrok.io/twilio/respond",
     actionOnEmptyResult: true,
   });
 
@@ -99,7 +102,11 @@ async function handleReponse(request, response) {
   console.log("voice input", voiceInput);
 
   if (!voiceInput) {
-    twiml.say("It's been a pleasure assisting you. Goodbye!");
+    // twiml.say("It's been a pleasure assisting you. Goodbye!");
+    twiml.play(
+      "https://34cb-119-73-99-204.ngrok.io/uploads/goodbye-message.mp3"
+    );
+
     twiml.hangup();
 
     response.type("application/xml");
@@ -147,7 +154,7 @@ async function handleReponse(request, response) {
     {
       method: "POST",
     },
-    `https://5b3f-119-73-99-204.ngrok.io/twilio/transcribe`
+    `https://34cb-119-73-99-204.ngrok.io/twilio/transcribe`
   );
 
   response.type("application/xml");

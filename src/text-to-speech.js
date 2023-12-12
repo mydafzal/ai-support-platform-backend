@@ -2,13 +2,17 @@ const { getUnixTime } = require("date-fns");
 const { v4: uuidv4 } = require("uuid");
 const { uploadFile } = require("./google-cloud-storage");
 
+const fs = require("fs");
+const path = require("path");
+
 const MODEL_ID = "eleven_turbo_v2"; //eleven_multilingual_v2
 // const MODEL_ID = "eleven_multilingual_v2"; //eleven_multilingual_v2
-const SIMILARITY_BOOST = 0.5;
+const SIMILARITY_BOOST = 0.75;
 const STABILITY = 0.5;
-const USE_SPEAKER_BOOST = true;
-const STYLE = 0.5;
-const VOICE_ID = "oWAxZDx7w5VEj9dCyTzz";
+const USE_SPEAKER_BOOST = false;
+const STYLE = 0.0;
+// const VOICE_ID = "oWAxZDx7w5VEj9dCyTzz";
+const VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; //Rachel
 // const API_KEY = "a595fbf5f52043a4347ada24eafc6c3d";
 const API_KEY = "126cd91db93cc56a188c321abb9d48c5";
 
@@ -41,9 +45,19 @@ async function convertTextToSpeech(text) {
 
   const arrayBuffer = await response.arrayBuffer();
 
+  const buffer = Buffer.from(arrayBuffer);
+
   const fileName = generateFilename(fileExtension);
 
-  return await uploadFile(fileName, arrayBuffer);
+  // Save the audio file locally
+  const filePath = path.join(__dirname, "..", "uploads", fileName);
+  fs.writeFileSync(filePath, buffer);
+
+  const fileUrl = `https://34cb-119-73-99-204.ngrok.io/uploads/${fileName}`;
+
+  return fileUrl;
+
+  // return await uploadFile(fileName, arrayBuffer);
 }
 
 function generateFilename(fileExtension) {

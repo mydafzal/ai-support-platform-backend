@@ -6,10 +6,18 @@ const Twilio = require("twilio");
 
 const { nameGenerator } = require("./util");
 
-const ACCOUNT_SID = "AC38de205937ab33d281c52f95f796107b";
-const API_KEY = "SK7eeb5340364290fd722197db55a79021";
-const API_SECRET = "dXVs0g5kF37d069sg5G5hjzUVI9CdiDf";
-const TWIML_APP_SID = "APb1223b5a22dfffdfd7298c1589266a5d";
+// Personal twilio account
+// const ACCOUNT_SID = "AC38de205937ab33d281c52f95f796107b";
+// const API_KEY = "SK7eeb5340364290fd722197db55a79021";
+// const API_SECRET = "dXVs0g5kF37d069sg5G5hjzUVI9CdiDf";
+// const TWIML_APP_SID = "APb1223b5a22dfffdfd7298c1589266a5d";
+
+
+// Cheetay Twilio account
+const ACCOUNT_SID = "AC4aaae2efa313920547b86dff276458a3";
+const API_KEY = "SKef8b2f0ea28e603f83b097fef0ffc219";
+const API_SECRET = "bLQyI9w0bEWHenAUjlzUZ7NHV0ESt9Xi";
+const TWIML_APP_SID = "APb30804e44d38228e19ab88b299c553b0";
 
 const router = Router();
 
