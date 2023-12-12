@@ -4,6 +4,7 @@ const { uploadFile } = require("./google-cloud-storage");
 
 const fs = require("fs");
 const path = require("path");
+const { uploadToS3 } = require("./s3-storage");
 
 const MODEL_ID = "eleven_turbo_v2"; //eleven_multilingual_v2
 // const MODEL_ID = "eleven_multilingual_v2"; //eleven_multilingual_v2
@@ -50,14 +51,16 @@ async function convertTextToSpeech(text) {
   const fileName = generateFilename(fileExtension);
 
   // Save the audio file locally
-  const filePath = path.join(__dirname, "..", "uploads", fileName);
-  fs.writeFileSync(filePath, buffer);
+  // const filePath = path.join(__dirname, "..", "uploads", fileName);
+  // fs.writeFileSync(filePath, buffer);
 
-  const fileUrl = `https://ai-backend-five.vercel.app/uploads/${fileName}`;
+  // const fileUrl = `https://ai-backend-five.vercel.app/uploads/${fileName}`;
 
-  return fileUrl;
+  // return fileUrl;
 
   // return await uploadFile(fileName, arrayBuffer);
+
+  return await uploadToS3(arrayBuffer, fileName);
 }
 
 function generateFilename(fileExtension) {
