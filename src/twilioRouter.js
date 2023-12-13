@@ -4,6 +4,7 @@ const {
   handleTranscription,
   handleReponse,
   handleEmptyRecording,
+  handleDial,
 } = require("./controller");
 
 const OPENAI_API_KEY = "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";
@@ -26,6 +27,16 @@ router.post("/respond", async (req, res) => {
 
 router.post("/empty-recording", async (req, res) => {
   return await handleEmptyRecording(req, res);
+});
+
+router.post("/dial", async (req, res) => {
+  console.log("dialingingingi");
+  console.log("dialingingingi");
+  console.log("dialingingingi");
+
+  return await handleDial(req, res);
+
+  // return await handleEmptyRecording(req, res);
 });
 
 router.get("/open-ai", async (req, res) => {

@@ -30,7 +30,7 @@ async function handleTranscription(request, response) {
     // );
 
     twiml.play(
-      "https://ai-backend-five.vercel.app/public/greeting-message-michael.mp3"
+      "https://ac54-119-73-99-204.ngrok.io/public/greeting-message.mp3"
     );
     // twiml.play(
     //   "https://c88a-119-73-99-204.ngrok.io/public/greeting-message-michael.mp3"
@@ -43,7 +43,7 @@ async function handleTranscription(request, response) {
     speechModel: "experimental_conversations",
     input: "speech",
     // action: "https://ai-backend-five.vercel.app/twilio/respond",
-    action: "https://6480-119-73-99-204.ngrok.io/twilio/respond",
+    action: "https://ac54-119-73-99-204.ngrok.io/twilio/respond",
     actionOnEmptyResult: true,
   });
 
@@ -112,7 +112,14 @@ async function handleReponse(request, response) {
 
   console.log("conversation - before", conversation);
 
-  const aiResponse = await generateAIResponse(conversation.join(";"));
+  let aiResponse = await generateAIResponse(conversation.join(";"));
+
+  let connectToHuman = false;
+
+  if (aiResponse === "connect_to_human") {
+    aiResponse = "You are now being connected to a human agent.";
+    connectToHuman = true;
+  }
 
   // For some reason the OpenAI API loves to prepend the name or role in its responses, so let's remove 'assistant:' 'Joanna:', or 'user:' from the AI response if it's the first word
   const cleanedAiResponse = aiResponse.replace(/^\w+:\s*/i, "").trim();
@@ -142,14 +149,28 @@ async function handleReponse(request, response) {
 
   twiml.play(textToSpeechFileURL);
 
-  // Redirect to the Function where the <Gather> is capturing the caller's speech
-  twiml.redirect(
-    {
-      method: "POST",
-    },
-    // `https://ai-backend-five.vercel.app/twilio/transcribe`
-    `https://6480-119-73-99-204.ngrok.io/twilio/transcribe`
-  );
+  if (connectToHuman === true) {
+    console.log("connecting to a human..............");
+
+    twiml
+      .dial({
+        callerId: "+923201403392",
+        action: "https://ac54-119-73-99-204.ngrok.io/twilio/dial",
+        method: "POST",
+      })
+      .number("+923201403392");
+
+    // twiml.hangup();
+  } else {
+    // Redirect to the Function where the <Gather> is capturing the caller's speech
+    twiml.redirect(
+      {
+        method: "POST",
+      },
+      // `https://ai-backend-five.vercel.app/twilio/transcribe`
+      `https://ac54-119-73-99-204.ngrok.io/twilio/transcribe`
+    );
+  }
 
   response.type("application/xml");
 
@@ -182,21 +203,22 @@ async function handleReponse(request, response) {
             function: {
               name: "schedule_meeting",
               description:
-                "Schedule meeting with a human because user wants to talk to a human.",
+                "Schedule meeting with a human because user wants to discuss further with a human in a scheduled meeting.",
               parameters: {
                 type: "object",
-                properties: {
-                  // location: {
-                  //   type: "string",
-                  //   description: "The city and state, e.g. San Francisco, CA",
-                  // },
-                  // format: {
-                  //   type: "string",
-                  //   enum: ["celsius", "fahrenheit"],
-                  //   description:
-                  //     "The temperature unit to use. Infer this from the users location.",
-                  // },
-                },
+                properties: {},
+              },
+            },
+          },
+          {
+            type: "function",
+            function: {
+              name: "connect_to_human",
+              description:
+                "The user wants to connect to a human now and would like to continue conversation with him/her now.",
+              parameters: {
+                type: "object",
+                properties: {},
               },
             },
           },
@@ -250,7 +272,11 @@ async function handleReponse(request, response) {
         const functionName =
           completion.choices[0].message?.tool_calls[0].function.name;
 
-        return await executeFunctionCall(functionName);
+        if (functionName === "connect_to_human") {
+          return functionName;
+        }
+
+        return await executeFunctionCall(functionName, twiml);
 
         return "Got it! Thank you.";
       }
@@ -332,11 +358,13 @@ async function handleEmptyRecording(request, response) {
   return response.send(twiml.toString());
 }
 
-async function executeFunctionCall(functionName) {
+async function executeFunctionCall(functionName, twiml) {
   console.log("executeFunctionCall : name: ", functionName);
 
   if (functionName === "schedule_meeting") {
     return await scheduleMeeting();
+  } else if (functionName === "connect_to_human") {
+    return await connectToHuman(twiml);
   }
 }
 
@@ -357,8 +385,30 @@ async function scheduleMeeting() {
   };
 }
 
+async function connectToHuman(twiml) {
+  console.log("scheduling meeting.....");
+
+  twiml.dial("+923055952372");
+
+  return `You are now being connected to a human agent.`;
+}
+
+async function handleDial(request, response) {
+  const VoiceResponse = Twilio.twiml.VoiceResponse;
+  const twiml = new VoiceResponse();
+
+  // twiml.say("Hi called party, what's up");
+
+  twiml.hangup();
+
+  response.type("application/xml");
+
+  return response.send(twiml.toString());
+}
+
 module.exports = {
   handleTranscription,
   handleReponse,
   handleEmptyRecording,
+  handleDial,
 };

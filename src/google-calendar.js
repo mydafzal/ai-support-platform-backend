@@ -69,6 +69,8 @@ async function addEventToGoogleCalendar(eventName, start, end) {
     {
       calendarId: "hammadfarooq233@gmail.com",
       resource: event,
+      sendNotifications: true,
+      sendUpdates: "all",
     },
     function (err, event) {
       if (err) {
