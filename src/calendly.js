@@ -1,0 +1,89 @@
+const moment = require("moment/moment");
+const fetch = require("node-fetch");
+const {
+  getCalendarEvents,
+  addEventToGoogleCalendar,
+} = require("./google-calendar");
+
+// let url =
+//   "https://api.calendly.com/event_types?user=https%3A%2F%2Fapi.calendly.com%2Fusers%2F1a29130a-36bf-450c-851d-08ce787b9406";
+
+let url =
+  "https://api.calendly.com/event_types?user=https://api.calendly.com/users/65559c9d-b8e4-4d3f-84f0-4d06dff4ce37";
+
+// access token calendly - ccript account
+// const ACCESS_TOKEN =
+//   "eyJraWQiOiIxY2UxZTEzNjE3ZGNmNzY2YjNjZWJjY2Y4ZGM1YmFmYThhNjVlNjg0MDIzZjdjMzJiZTgzNDliMjM4MDEzNWI0IiwidHlwIjoiUEFUIiwiYWxnIjoiRVMyNTYifQ.eyJpc3MiOiJodHRwczovL2F1dGguY2FsZW5kbHkuY29tIiwiaWF0IjoxNzAyNDUwOTI2LCJqdGkiOiJiMTIyZDUyMy01NjU2LTQ1NTktOGQwNi0xZDRhZTkxZTA4OTYiLCJ1c2VyX3V1aWQiOiIxYTI5MTMwYS0zNmJmLTQ1MGMtODUxZC0wOGNlNzg3Yjk0MDYifQ.1ZoY6YPliZl4vE2mRilPnXbpea2YA66XQpakgq7aFVOzj2u9GYM47owmLuh7zHVprKu2CB8zWtTz2L6QMq1cJQ";
+
+const ACCESS_TOKEN =
+  "eyJraWQiOiIxY2UxZTEzNjE3ZGNmNzY2YjNjZWJjY2Y4ZGM1YmFmYThhNjVlNjg0MDIzZjdjMzJiZTgzNDliMjM4MDEzNWI0IiwidHlwIjoiUEFUIiwiYWxnIjoiRVMyNTYifQ.eyJpc3MiOiJodHRwczovL2F1dGguY2FsZW5kbHkuY29tIiwiaWF0IjoxNzAyNDYxNDE5LCJqdGkiOiJiNDAxNThhMS0zN2ZhLTQ3NjUtODc1My01MmNhMDA3ZDJmNmQiLCJ1c2VyX3V1aWQiOiI2NTU1OWM5ZC1iOGU0LTRkM2YtODRmMC00ZDA2ZGZmNGNlMzcifQ.spTXAbkewi_FUt1h7g7xI4xLhPligbvb2Zkxqo4P8tjIzr5np0Zb1OUHNT7ZTSoa6ctag4Ffk5JLaGdh3JpeFw";
+
+async function getAvailableTimeSlots() {
+  let currentDate = new Date();
+  currentDate = new Date(currentDate.setDate(new Date().getDate() + 1));
+
+  currentDate.setHours(1, 59, 59, 999); // For calendly time zone difference of 5 hours
+  const startTime = currentDate.toString();
+
+  currentDate.setHours(23, 59, 59, 999);
+  const endTime = currentDate.toString();
+
+  let options = {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${ACCESS_TOKEN}`,
+    },
+  };
+
+  let response = await fetch(url, options);
+  let data = await response.json();
+
+  const eventUri = data.collection[0].uri;
+
+  response = await fetch(
+    `https://api.calendly.com/event_type_available_times?event_type=${eventUri}&start_time=${startTime}&end_time=${endTime}`,
+    options
+  );
+
+  data = await response.json();
+
+  //   data.collection?.forEach((item) => {
+  //     const time = new Date(item.start_time);
+
+  //     const formattedTime = moment(time).format("hh:mm a");
+  //     console.log("slot", formattedTime);
+  //   });
+
+  const time = new Date(data.collection[0].start_time);
+  const formattedTime = moment(time).format("hh:mm a");
+
+  //   await getCalendarEvents();
+
+  let meetingStartTime = new Date(data.collection[0].start_time);
+
+  let meetingEndTime = new Date(
+    new Date(meetingStartTime).setTime(
+      meetingStartTime.getTime() + 30 * 60 * 1000
+    )
+  );
+
+  console.log(moment(meetingStartTime).format("hh:mm a"));
+  console.log(moment(meetingEndTime).format("hh:mm a"));
+  console.log(moment(meetingEndTime).format("dddd"));
+
+  await addEventToGoogleCalendar(
+    "Cheetah AI",
+    meetingStartTime.toISOString(),
+    meetingEndTime.toISOString()
+  );
+
+  return {
+    day: moment(meetingEndTime).format("dddd"),
+    time: moment(meetingStartTime).format("hh:mm a"),
+  };
+
+  //   return formattedTime;
+}
+
+module.exports = { getAvailableTimeSlots };

@@ -12,6 +12,7 @@ const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 const router = Router();
 
 router.post("/incoming-call", async (req, res) => {
+  console.log("incoming...........");
   return await handleTranscription(req, res);
 });
 

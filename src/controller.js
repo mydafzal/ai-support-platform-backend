@@ -2,14 +2,10 @@ const Twilio = require("twilio");
 const { OpenAI } = require("openai");
 const { convertTextToSpeech } = require("./text-to-speech");
 const { convertSpeechToText } = require("./speech-to-text");
+const { getAvailableTimeSlots } = require("./calendly");
 
 const OPENAI_API_KEY = "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";
 // const OPENAI_API_KEY = "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"; personal account
-
-const ACCOUNT_SID = "AC38de205937ab33d281c52f95f796107b";
-const API_KEY = "SK7eeb5340364290fd722197db55a79021";
-const API_SECRET = "dXVs0g5kF37d069sg5G5hjzUVI9CdiDf";
-const TWIML_APP_SID = "APb1223b5a22dfffdfd7298c1589266a5d";
 
 async function handleTranscription(request, response) {
   if (request.cookies.convo) {
@@ -37,18 +33,17 @@ async function handleTranscription(request, response) {
       "https://ai-backend-five.vercel.app/public/greeting-message-michael.mp3"
     );
     // twiml.play(
-    //   "https://firebasestorage.googleapis.com/v0/b/redit-clone-75760.appspot.com/o/ßeleven-labs%2F1702117706_960ddb1e-e88b-45da-b49d-8650d1ae19b0.mp3.mp3?alt=media&token=fc944090-a216-470c-bf6b-4ad242b4618d"
+    //   "https://c88a-119-73-99-204.ngrok.io/public/greeting-message-michael.mp3"
     // );
   }
 
   twiml.gather({
-    // enhanced: true,
     speechTimeout: 2,
-    // speechModel: "experimental_conversations",
-    speechTimeout: "auto",
+    // speechTimeout: "auto",
     speechModel: "experimental_conversations",
     input: "speech",
-    action: "https://ai-backend-five.vercel.app/twilio/respond",
+    // action: "https://ai-backend-five.vercel.app/twilio/respond",
+    action: "https://6480-119-73-99-204.ngrok.io/twilio/respond",
     actionOnEmptyResult: true,
   });
 
@@ -77,7 +72,6 @@ async function handleReponse(request, response) {
   const VoiceResponse = Twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
-  // Parse the cookie value if it exists
   const cookieValue = request.cookies.convo;
   const cookieData = cookieValue
     ? JSON.parse(decodeURIComponent(cookieValue))
@@ -113,7 +107,6 @@ async function handleReponse(request, response) {
     return response.send(twiml.toString());
   }
 
-  // Create a conversation variable to store the dialog and the user's input to the conversation history
   const conversation = cookieData?.conversation || [];
   conversation.push(`${voiceInput}`);
 
@@ -154,7 +147,8 @@ async function handleReponse(request, response) {
     {
       method: "POST",
     },
-    `https://ai-backend-five.vercel.app/twilio/transcribe`
+    // `https://ai-backend-five.vercel.app/twilio/transcribe`
+    `https://6480-119-73-99-204.ngrok.io/twilio/transcribe`
   );
 
   response.type("application/xml");
@@ -182,6 +176,31 @@ async function handleReponse(request, response) {
     try {
       const completion = await openai.chat.completions.create({
         model: "gpt-3.5-turbo",
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "schedule_meeting",
+              description:
+                "Schedule meeting with a human because user wants to talk to a human.",
+              parameters: {
+                type: "object",
+                properties: {
+                  // location: {
+                  //   type: "string",
+                  //   description: "The city and state, e.g. San Francisco, CA",
+                  // },
+                  // format: {
+                  //   type: "string",
+                  //   enum: ["celsius", "fahrenheit"],
+                  //   description:
+                  //     "The temperature unit to use. Infer this from the users location.",
+                  // },
+                },
+              },
+            },
+          },
+        ],
         messages: messages,
         temperature: 0.8, // Controls the randomness of the generated responses. Higher values (e.g., 1.0) make the output more random and creative, while lower values (e.g., 0.2) make it more focused and deterministic. You can adjust the temperature based on your desired level of creativity and exploration.
         max_tokens: 100, //You can adjust this number to control the length of the generated responses. Keep in mind that setting max_tokens too low might result in responses that are cut off and don't make sense.
@@ -212,7 +231,29 @@ async function handleReponse(request, response) {
       //   return callback(null, response); // Return the response to the callback function
       // }
 
-      console.log("completion message", completion.choices[0].message.content);
+      console.log("completion message", completion.choices[0].message);
+      console.log(
+        "completion message",
+        completion.choices[0].message?.tool_calls
+      );
+
+      console.log(
+        "completion message function",
+        completion.choices[0].message?.tool_calls?.[0].function
+      );
+
+      if (
+        (completion.choices[0].message.content === null ||
+          !completion.choices[0].message.content) &&
+        completion.choices[0].message?.tool_calls?.length > 0
+      ) {
+        const functionName =
+          completion.choices[0].message?.tool_calls[0].function.name;
+
+        return await executeFunctionCall(functionName);
+
+        return "Got it! Thank you.";
+      }
 
       return completion.choices[0].message.content;
     } catch (error) {
@@ -289,6 +330,31 @@ async function handleEmptyRecording(request, response) {
   response.type("application/xml");
   response.cookie("convo", request.cookies.convo, ["Path=/"]);
   return response.send(twiml.toString());
+}
+
+async function executeFunctionCall(functionName) {
+  console.log("executeFunctionCall : name: ", functionName);
+
+  if (functionName === "schedule_meeting") {
+    return await scheduleMeeting();
+  }
+}
+
+async function scheduleMeeting() {
+  //
+  console.log("scheduling meeting.....");
+
+  const { day, time } = await getAvailableTimeSlots();
+
+  return `Your meeting has been scheduled for ${day} at ${time}.`;
+
+  const result = {
+    role: "tool",
+    tool_call_id: assistantMessage["tool_calls"][0]["id"],
+    name: assistantMessage["tool_calls"][0]["function"]["name"],
+    // content: results,
+    content: "Your meeting has been scheduled for Thursday at 11:00 am",
+  };
 }
 
 module.exports = {

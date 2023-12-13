@@ -25,6 +25,7 @@ const authRouter = require("./src/authRouter");
 const twilioRouter = require("./src/twilioRouter");
 const { convertTextToSpeech } = require("./src/text-to-speech");
 const { quickstart } = require("./src/speech-to-text");
+const { getAvailableTimeSlots } = require("./src/calendly");
 
 app.get("/speech", async (req, res) => {
   const response = await convertTextToSpeech(
@@ -33,6 +34,11 @@ app.get("/speech", async (req, res) => {
   );
 
   // res.status(200).json({ response: "uniqueFilename" });
+  res.status(200).json({ response });
+});
+
+app.get("/calendar", async (req, res) => {
+  const response = getAvailableTimeSlots();
   res.status(200).json({ response });
 });
 
