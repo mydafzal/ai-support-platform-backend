@@ -18,7 +18,6 @@ async function handleTranscription(request, response) {
   const VoiceResponse = Twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
-  // If no previous conversation is present, or if the conversation is empty, start the conversation
   if (!request.cookies.convo) {
     console.log("saying introduction....");
 
@@ -30,33 +29,20 @@ async function handleTranscription(request, response) {
     // );
 
     twiml.play(
-      "https://ac54-119-73-99-204.ngrok.io/public/greeting-message.mp3"
+      "https://ai-backend-five.vercel.app/public/greeting-message-adam.mp3"
     );
-    // twiml.play(
-    //   "https://c88a-119-73-99-204.ngrok.io/public/greeting-message-michael.mp3"
-    // );
   }
 
   twiml.gather({
     speechTimeout: 2,
-    // speechTimeout: "auto",
     speechModel: "experimental_conversations",
     input: "speech",
-    // action: "https://ai-backend-five.vercel.app/twilio/respond",
-    action: "https://ac54-119-73-99-204.ngrok.io/twilio/respond",
+    action: "https://ai-backend-five.vercel.app/twilio/respond",
     actionOnEmptyResult: true,
   });
 
-  // twiml.record({
-  //   action: "https://9673-119-73-99-183.ngrok.io/twilio/empty-recording",
-  //   method: "POST",
-  //   recordingStatusCallback:
-  //     "https://9673-119-73-99-183.ngrok.io/twilio/respond",
-  // });
-
   response.type("application/xml");
 
-  // If no conversation cookie is present, set an empty conversation cookie
   if (!request.cookies.convo) {
     response.cookie("convo", "", ["Path=/"]);
   }
@@ -65,8 +51,6 @@ async function handleTranscription(request, response) {
 }
 
 async function handleReponse(request, response) {
-  console.log("request - cookies - handleResponse", request?.cookies);
-
   const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
   const VoiceResponse = Twilio.twiml.VoiceResponse;
@@ -78,20 +62,6 @@ async function handleReponse(request, response) {
     : null;
 
   let voiceInput = request.body.SpeechResult;
-
-  // const recordingUrl = request.body.RecordingUrl;
-  // const recordingDuration = request.body.RecordingDuration;
-
-  // console.log("recording", recordingUrl);
-  // console.log("recording duration", recordingDuration);
-
-  // const transcription = await convertSpeechToText(recordingUrl);
-
-  // if (transcription === false) {
-  //   response.type("application/xml");
-  //   response.cookie("convo", cookieValue, ["Path=/"]);
-  //   return response.send(twiml.toString());
-  // }
 
   console.log("voice input", voiceInput);
 
@@ -110,8 +80,6 @@ async function handleReponse(request, response) {
   const conversation = cookieData?.conversation || [];
   conversation.push(`${voiceInput}`);
 
-  console.log("conversation - before", conversation);
-
   let aiResponse = await generateAIResponse(conversation.join(";"));
 
   let connectToHuman = false;
@@ -121,10 +89,9 @@ async function handleReponse(request, response) {
     connectToHuman = true;
   }
 
-  // For some reason the OpenAI API loves to prepend the name or role in its responses, so let's remove 'assistant:' 'Joanna:', or 'user:' from the AI response if it's the first word
+  // remove 'assistant:' 'Joanna:', or 'user:' from the AI response if it's the first word
   const cleanedAiResponse = aiResponse.replace(/^\w+:\s*/i, "").trim();
 
-  // Add the AI's response to the conversation history
   // conversation.push(`assistant: ${aiResponse}`);
   conversation.push(`${aiResponse}`);
 
@@ -154,27 +121,23 @@ async function handleReponse(request, response) {
 
     twiml
       .dial({
-        callerId: "+923201403392",
-        action: "https://ac54-119-73-99-204.ngrok.io/twilio/dial",
+        callerId: "+923055952372",
+        action: "https://ai-backend-five.vercel.app/twilio/dial",
         method: "POST",
       })
-      .number("+923201403392");
-
-    // twiml.hangup();
+      .number("+923055952372");
   } else {
     // Redirect to the Function where the <Gather> is capturing the caller's speech
     twiml.redirect(
       {
         method: "POST",
       },
-      // `https://ai-backend-five.vercel.app/twilio/transcribe`
-      `https://ac54-119-73-99-204.ngrok.io/twilio/transcribe`
+      `https://ai-backend-five.vercel.app/twilio/transcribe`
     );
   }
 
   response.type("application/xml");
 
-  // Update the conversation history cookie with the response from the OpenAI API
   const newCookieValue = encodeURIComponent(
     JSON.stringify({
       conversation,
@@ -206,7 +169,14 @@ async function handleReponse(request, response) {
                 "Schedule meeting with a human because user wants to discuss further with a human in a scheduled meeting.",
               parameters: {
                 type: "object",
-                properties: {},
+                properties: {
+                  email: {
+                    type: "string",
+                    description:
+                      "A valid user email address with google domain, that is, a gmail address.",
+                  },
+                },
+                required: ["email"],
               },
             },
           },
@@ -215,7 +185,7 @@ async function handleReponse(request, response) {
             function: {
               name: "connect_to_human",
               description:
-                "The user wants to connect to a human now and would like to continue conversation with him/her now.",
+                "The user wants to connect to a human now and would like to continue conversation with him/her now or the user said 'I love humans'.",
               parameters: {
                 type: "object",
                 properties: {},
@@ -229,35 +199,6 @@ async function handleReponse(request, response) {
         // top_p: 0.9, Set the top_p value to around 0.9 to keep the generated responses focused on the most probable tokens without completely eliminating creativity. Adjust the value based on the desired level of exploration.
         // n: 1, Specifies the number of completions you want the model to generate. Generating multiple completions will increase the time it takes to receive the responses.
       });
-
-      // // Check if the response has a status code of 500
-      // if (completion.status === 500) {
-      //   console.error("Error: OpenAI API returned a 500 status code."); // Log an error message indicating that the OpenAI API returned a 500 status code
-      //   twiml.say(
-      //     {
-      //       // Create a TwiML say element to provide an error message to the user
-      //       voice: "Polly.Joanna-Neural",
-      //     },
-      //     "Oops, looks like I got an error from the OpenAI API on that request. Let's try that again."
-      //   );
-
-      //   twiml.redirect(
-      //     {
-      //       // Create a TwiML redirect element to redirect the user to the /transcribe endpoint
-      //       method: "POST",
-      //     },
-      //     `/transcribe`
-      //   );
-      //   response.appendHeader("Content-Type", "application/xml"); // Set the Content-Type header of the response to "application/xml"
-      //   response.setBody(twiml.toString()); // Set the body of the response to the XML string representation of the TwiML response
-      //   return callback(null, response); // Return the response to the callback function
-      // }
-
-      console.log("completion message", completion.choices[0].message);
-      console.log(
-        "completion message",
-        completion.choices[0].message?.tool_calls
-      );
 
       console.log(
         "completion message function",
@@ -277,8 +218,6 @@ async function handleReponse(request, response) {
         }
 
         return await executeFunctionCall(functionName, twiml);
-
-        return "Got it! Thank you.";
       }
 
       return completion.choices[0].message.content;
@@ -319,7 +258,7 @@ async function handleReponse(request, response) {
       {
         role: "system",
         content:
-          "You are a creative, funny, friendly and amusing AI assistant named MichaelX. Please provide engaging but concise responses.",
+          "You are a creative, funny, friendly and amusing AI assistant named Adam. Please provide engaging but concise responses. Don't make assumptions about what values to plug into functions. Ask for clarification if a user request is ambiguous. Prompt user to confirm the email address he/she provided by repeating the email address to the user. Don't assume how words in the user's email are to be spelled, ask for clarification if the spelling is ambiguous.",
       },
       {
         role: "user",
@@ -329,7 +268,7 @@ async function handleReponse(request, response) {
       {
         role: "assistant",
         content:
-          "Hey! I'm MichaelX, your friendly ai assistant. What would you like to talk about?",
+          "Hi, thanks for calling Cheetah Agency. I'm Adam, an AI trained to help potential and current customers learn more about the agency and our storied history or schedule meetings with our engineers or creative team. I can also forward you to one of my favourite humans here at Cheetah. Just say 'I love humans' and I'll forward you. Anyways, tell me what you want to do - I can handle it.",
       },
     ];
 
@@ -358,21 +297,18 @@ async function handleEmptyRecording(request, response) {
   return response.send(twiml.toString());
 }
 
-async function executeFunctionCall(functionName, twiml) {
-  console.log("executeFunctionCall : name: ", functionName);
-
+async function executeFunctionCall(functionName, args) {
   if (functionName === "schedule_meeting") {
-    return await scheduleMeeting();
-  } else if (functionName === "connect_to_human") {
-    return await connectToHuman(twiml);
+    return await scheduleMeeting(args);
   }
 }
 
-async function scheduleMeeting() {
-  //
+async function scheduleMeeting(args) {
   console.log("scheduling meeting.....");
 
-  const { day, time } = await getAvailableTimeSlots();
+  const { email } = args;
+
+  const { day, time } = await getAvailableTimeSlots(email);
 
   return `Your meeting has been scheduled for ${day} at ${time}.`;
 
@@ -385,24 +321,13 @@ async function scheduleMeeting() {
   };
 }
 
-async function connectToHuman(twiml) {
-  console.log("scheduling meeting.....");
-
-  twiml.dial("+923055952372");
-
-  return `You are now being connected to a human agent.`;
-}
-
 async function handleDial(request, response) {
   const VoiceResponse = Twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
-  // twiml.say("Hi called party, what's up");
-
   twiml.hangup();
 
   response.type("application/xml");
-
   return response.send(twiml.toString());
 }
 
