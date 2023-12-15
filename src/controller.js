@@ -3,6 +3,7 @@ const { OpenAI } = require("openai");
 const { convertTextToSpeech } = require("./text-to-speech");
 const { convertSpeechToText } = require("./speech-to-text");
 const { getAvailableTimeSlots } = require("./calendly");
+const { getUserById } = require("./firestore");
 
 const OPENAI_API_KEY = "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";
 // const OPENAI_API_KEY = "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"; personal account
@@ -117,8 +118,6 @@ async function handleReponse(request, response) {
   twiml.play(textToSpeechFileURL);
 
   if (connectToHuman === true) {
-    console.log("connecting to a human..............");
-
     twiml
       .dial({
         callerId: "+923055952372",
@@ -169,14 +168,7 @@ async function handleReponse(request, response) {
                 "Schedule meeting with a human because user wants to discuss further with a human in a scheduled meeting.",
               parameters: {
                 type: "object",
-                properties: {
-                  email: {
-                    type: "string",
-                    description:
-                      "A valid user email address with google domain, that is, a gmail address.",
-                  },
-                },
-                required: ["email"],
+                properties: {},
               },
             },
           },
@@ -200,27 +192,23 @@ async function handleReponse(request, response) {
         // n: 1, Specifies the number of completions you want the model to generate. Generating multiple completions will increase the time it takes to receive the responses.
       });
 
-      console.log(
-        "completion message function",
-        completion.choices[0].message?.tool_calls?.[0].function
-      );
-
-      if (
+      const shouldCallFunction =
         (completion.choices[0].message.content === null ||
           !completion.choices[0].message.content) &&
-        completion.choices[0].message?.tool_calls?.length > 0
-      ) {
-        const functionName =
-          completion.choices[0].message?.tool_calls[0].function.name;
+        completion.choices[0].message?.tool_calls?.length > 0;
 
-        if (functionName === "connect_to_human") {
-          return functionName;
-        }
-
-        return await executeFunctionCall(functionName, twiml);
+      if (!shouldCallFunction) {
+        return completion.choices[0].message.content;
       }
 
-      return completion.choices[0].message.content;
+      const functionName =
+        completion.choices[0].message?.tool_calls[0].function.name;
+
+      if (functionName === "connect_to_human") {
+        return functionName;
+      }
+
+      return await executeFunctionCall(functionName, twiml, request);
     } catch (error) {
       // Check if the error is a timeout error
       if (error.code === "ETIMEDOUT" || error.code === "ESOCKETTIMEDOUT") {
@@ -257,8 +245,10 @@ async function handleReponse(request, response) {
     const messages = [
       {
         role: "system",
+        // content:
+        //   "You are a creative, funny, friendly and amusing AI assistant named Adam. Please provide engaging but concise responses. Don't make assumptions about what values to plug into functions. Ask for clarification if a user request is ambiguous. Prompt user to confirm the email address he/she provided by repeating the email address to the user. Don't assume how words in the user's email are to be spelled, ask for clarification if the spelling is ambiguous.",
         content:
-          "You are a creative, funny, friendly and amusing AI assistant named Adam. Please provide engaging but concise responses. Don't make assumptions about what values to plug into functions. Ask for clarification if a user request is ambiguous. Prompt user to confirm the email address he/she provided by repeating the email address to the user. Don't assume how words in the user's email are to be spelled, ask for clarification if the spelling is ambiguous.",
+          "You are a creative, funny, friendly and amusing AI assistant named Adam. Please provide engaging but concise responses.",
       },
       {
         role: "user",
@@ -297,18 +287,36 @@ async function handleEmptyRecording(request, response) {
   return response.send(twiml.toString());
 }
 
-async function executeFunctionCall(functionName, args) {
+async function executeFunctionCall(functionName, twiml, request) {
   if (functionName === "schedule_meeting") {
-    return await scheduleMeeting(args);
+    return await scheduleMeeting(request);
+  }
+
+  if (functionName === "connect_to_human") {
+    return await connectToHuman(twiml);
   }
 }
 
-async function scheduleMeeting(args) {
+async function scheduleMeeting(request) {
   console.log("scheduling meeting.....");
 
-  const { email } = args;
+  let userId = request.body.From;
 
-  const { day, time } = await getAvailableTimeSlots(email);
+  if (userId && userId.startsWith("client:")) {
+    userId = userId.split(":")[1];
+  }
+
+  console.log("request.body", request.body);
+
+  const user = await getUserById(userId);
+
+  if (!user?.email) {
+    return "Please first create an account at cheetah.com. After successful registration, come back and I will get your meeting scheduled.";
+  }
+
+  // 1. Check if email is available in db: if yes, schedule meeting, else return with message.
+
+  const { day, time } = await getAvailableTimeSlots(new Date(), user.email);
 
   return `Your meeting has been scheduled for ${day} at ${time}.`;
 
@@ -319,6 +327,20 @@ async function scheduleMeeting(args) {
     // content: results,
     content: "Your meeting has been scheduled for Thursday at 11:00 am",
   };
+}
+
+async function connectToHuman(twiml) {
+  console.log("connecting to a human..............");
+
+  twiml
+    .dial({
+      callerId: "+923055952372",
+      action: "https://ai-backend-five.vercel.app/twilio/dial",
+      method: "POST",
+    })
+    .number("+923055952372");
+
+  return "You are now being connected to a human agent.";
 }
 
 async function handleDial(request, response) {

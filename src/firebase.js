@@ -1,21 +1,30 @@
 const { initializeApp } = require("firebase/app");
+const { getFirestore } = require("firebase/firestore");
 const { getStorage } = require("firebase/storage");
 
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+var admin = require("firebase-admin");
 
-// Your web app's Firebase configuration
+var serviceAccount = require("../firebase-admin-service-key.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
+
 const firebaseConfig = {
-  apiKey: "AIzaSyB-BCh9KgeZWTLZtKReszqSXGmTmc_2HF0",
-  authDomain: "redit-clone-75760.firebaseapp.com",
-  projectId: "redit-clone-75760",
-  storageBucket: "redit-clone-75760.appspot.com",
-  messagingSenderId: "926865071298",
-  appId: "1:926865071298:web:1e09211fe362fdf8206f5b",
+  apiKey: "AIzaSyDywXgVOE5dbwXs0AZrAmarYxqcycUN-uk",
+  authDomain: "ai-ccript.firebaseapp.com",
+  projectId: "ai-ccript",
+  storageBucket: "ai-ccript.appspot.com",
+  messagingSenderId: "654756323555",
+  appId: "1:654756323555:web:02ef14176e5b7d2fa865d6",
+  measurementId: "G-5XEGG9LW0V",
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const storage = getStorage(app);
+// const firestore = getFirestore(app);
 
-module.exports = { app, storage };
+const firestore = admin.firestore();
+
+module.exports = { app, storage, firestore };
