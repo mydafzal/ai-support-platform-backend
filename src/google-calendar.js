@@ -46,6 +46,9 @@ async function authorize() {
 
   try {
     const token = fs.readFileSync(TOKEN_PATH);
+
+    console.log("token path", token);
+
     oAuth2Client.setCredentials(JSON.parse(token));
 
     if (oAuth2Client.isTokenExpiring()) {
@@ -54,6 +57,8 @@ async function authorize() {
 
     return oAuth2Client;
   } catch (error) {
+    console.log("getAccessToken --------");
+
     return await getAccessToken(oAuth2Client);
   }
 }
