@@ -18,10 +18,20 @@ const ACCESS_TOKEN =
 async function getAvailableTimeSlots(currentDate, email) {
   // let currentDate = new Date();
 
-  const timeZoneOffset = 5 * 60; // 5 hours in minutes
-  currentDate = new Date(currentDate.getTime() + timeZoneOffset * 60000);
+  // const timeZoneOffset = 5 * 60; // 5 hours in minutes
+  // currentDate = new Date(currentDate.getTime() + timeZoneOffset * 60000);
 
-  console.log("currentDate", currentDate?.toString());
+  // console.log("currentDate", currentDate?.toString());
+
+  const hoursDifference = Math.abs(currentDate?.getTimezoneOffset()) / 60;
+
+  console.log("timezone difference", currentDate?.getTimezoneOffset());
+  console.log(
+    "current time",
+    moment(currentDate).subtract(5, "hours").format("hh:mm a")
+  );
+
+  // return "done";
 
   // currentDate = new Date(currentDate.setDate(new Date().getDate() + 1));
 
@@ -32,13 +42,17 @@ async function getAvailableTimeSlots(currentDate, email) {
     newDate.getMonth() === currentDate.getMonth() &&
     newDate.getDate() === currentDate.getDate();
 
-  if (!isToday) {
-    console.log("isToday", isToday);
+  // if (!isToday) {
+  //   console.log("isToday", isToday);
 
-    currentDate.setHours(1, 59, 59, 999); // For calendly time zone difference of 5 hours. This means 7am.
-  }
+  //   currentDate.setHours(1, 59, 59, 999); // For calendly time zone difference of 5 hours. This means 7am.
+  // }
 
   const startTime = currentDate.toString();
+  // const startTime = moment(currentDate)
+  //   .subtract(5, "hours")
+  //   .toDate()
+  //   .toString();
 
   console.log(moment(currentDate).format("hh:mm a"));
 
@@ -84,7 +98,9 @@ async function getAvailableTimeSlots(currentDate, email) {
 
   //   await getCalendarEvents();
 
-  let meetingStartTime = new Date(data.collection[0].start_time);
+  let meetingStartTime = moment(new Date(data.collection[0].start_time))
+    .subtract(hoursDifference, "hours")
+    .toDate();
 
   let meetingEndTime = new Date(
     new Date(meetingStartTime).setTime(
@@ -96,8 +112,11 @@ async function getAvailableTimeSlots(currentDate, email) {
   console.log(moment(meetingEndTime).format("hh:mm a"));
   console.log(moment(meetingEndTime).format("dddd"));
 
+  // return;
+
   await addEventToGoogleCalendar(
-    email,
+    // email,
+    "hammad@ccript.com",
     "Cheetah AI",
     meetingStartTime.toISOString(),
     meetingEndTime.toISOString()
