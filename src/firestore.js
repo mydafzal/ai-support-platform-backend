@@ -8,11 +8,11 @@ const {
 const { firestore } = require("./firebase");
 
 // Function to get a user document by ID
-async function getUserById(userId) {
+async function getUser(by, value) {
   try {
     const snapshot = await firestore
       .collection("users")
-      .where("id", "==", userId)
+      .where(by, "==", value)
       .get();
 
     if (snapshot.empty) {
@@ -30,4 +30,4 @@ async function getUserById(userId) {
   }
 }
 
-module.exports = { getUserById };
+module.exports = { getUser };

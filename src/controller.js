@@ -3,7 +3,7 @@ const { OpenAI } = require("openai");
 const { convertTextToSpeech } = require("./text-to-speech");
 const { convertSpeechToText } = require("./speech-to-text");
 const { getAvailableTimeSlots } = require("./calendly");
-const { getUserById } = require("./firestore");
+const { getUserById, getUser } = require("./firestore");
 
 // const OPENAI_API_KEY = "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"; // personal account
 
@@ -33,7 +33,7 @@ async function handleTranscription(request, response) {
     // );
 
     twiml.play(
-      "https://ai-backend-five.vercel.app/public/greeting-message-adam.mp3"
+      "https://29eb-119-73-99-27.ngrok.io/public/greeting-message-adam.mp3"
     );
   }
 
@@ -41,7 +41,7 @@ async function handleTranscription(request, response) {
     speechTimeout: 2,
     speechModel: "experimental_conversations",
     input: "speech",
-    action: "https://ai-backend-five.vercel.app/twilio/respond",
+    action: "https://29eb-119-73-99-27.ngrok.io/twilio/respond",
     actionOnEmptyResult: true,
   });
 
@@ -72,7 +72,7 @@ async function handleReponse(request, response) {
   if (!voiceInput) {
     // twiml.say("It's been a pleasure assisting you. Goodbye!");
     twiml.play(
-      "https://ai-backend-five.vercel.app/public/goodbye-message-michael.mp3"
+      "https://29eb-119-73-99-27.ngrok.io/public/goodbye-message-michael.mp3"
     );
 
     twiml.hangup();
@@ -124,7 +124,7 @@ async function handleReponse(request, response) {
     twiml
       .dial({
         callerId: "+923055952372",
-        action: "https://ai-backend-five.vercel.app/twilio/dial",
+        action: "https://29eb-119-73-99-27.ngrok.io/twilio/dial",
         method: "POST",
       })
       .number("+923055952372");
@@ -134,7 +134,7 @@ async function handleReponse(request, response) {
       {
         method: "POST",
       },
-      `https://ai-backend-five.vercel.app/twilio/transcribe`
+      `https://29eb-119-73-99-27.ngrok.io/twilio/transcribe`
     );
   }
 
@@ -161,7 +161,8 @@ async function handleReponse(request, response) {
 
     try {
       const completion = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
+        // model: "gpt-3.5-turbo",
+        model: "gpt-3.5-turbo-1106",
         tools: [
           {
             type: "function",
@@ -180,7 +181,7 @@ async function handleReponse(request, response) {
             function: {
               name: "connect_to_human",
               description:
-                "The user wants to connect to a human now and would like to continue conversation with him/her now or the user said 'I love humans'.",
+                "The user wants to connect to a human and would like to continue conversation with him/her now or the user said 'I love humans'.",
               parameters: {
                 type: "object",
                 properties: {},
@@ -250,8 +251,70 @@ async function handleReponse(request, response) {
         role: "system",
         // content:
         //   "You are a creative, funny, friendly and amusing AI assistant named Adam. Please provide engaging but concise responses. Don't make assumptions about what values to plug into functions. Ask for clarification if a user request is ambiguous. Prompt user to confirm the email address he/she provided by repeating the email address to the user. Don't assume how words in the user's email are to be spelled, ask for clarification if the spelling is ambiguous.",
-        content:
-          "You are a creative, funny, friendly and amusing AI assistant named Adam. Please provide engaging but concise responses.",
+        // content:
+        //   "You are a creative, funny, friendly and amusing AI assistant named Adam. Please provide engaging but concise responses.",
+        content: `You are a creative, funny, friendly and amusing AI assistant named Adam. Along with that you knows about the history of Cheetah Agency and help its potential and current customers learn more about the agency. Please provide engaging but concise responses.
+          Summary of Cheetah Agency's History:
+
+          Founding and Growth:
+          Cheetah Agency was founded in 2006 by a team of visionaries with a focus on improving the world. Originally a design agency, it has evolved into a comprehensive agency covering creative, marketing, and product/software development across 50 global locations.
+
+          Commitment to Excellence:
+          With over 16 years of experience, Cheetah Agency has become an industry leader in delivering top-quality digital experiences and innovative solutions to help businesses achieve their goals. The agency emphasizes a commitment to excellence and building long-lasting client relationships.
+
+          Journey and Achievements:
+          The agency's journey began with designing websites and album covers for hip-hop artists, growing from humble beginnings in the hood. Overcoming challenges, they expanded, worked with major clients globally, and established a reputation for creating impactful digital solutions.
+
+          Milestones and Inventions:
+          2006-2009:
+
+          Inception (02-11-2006): 
+          Formation of Maze Agency.
+
+          First Hip-Hop Multimedia Website (04-14-2006): 
+          Launched the first multimedia-based hip-hop website, achieving success with gold-selling singles.
+
+          Platinum Status (01-01-2008): 
+          Designed albums reaching gold or platinum status.
+
+          Lawyer Innovations (02-03-2009): 
+          Expanded into professional web and digital services for attorneys.
+
+          2010-2016:
+
+          Cloud Platform (02-09-2010): 
+          Launched a hosting platform for shared, VPS, cloud, and dedicated hosting services.
+
+          One-Click Cloud Apps (03-11-2011): 
+          Invented the first one-click installer for cloud-based applications, receiving nominations for web awards.
+
+          Virtual Desktop Infrastructure (04-12-2012): 
+          Invented the first cloud-based VDI technology, subsequently shut down by Microsoft.
+
+          Quantum SDN (04-12-2012): 
+          Became the first hosting company to offer virtual L2/L3 networks, inventing the first quantum-based software-defined network.
+
+          2014-2015:
+
+          Maze Renamed To Cheetah Agency (07-12-2014): 
+          Rebranded with a 10-year global expansion plan.
+
+          Bring on the Fortune 500s (2015): 
+          Contracted for major projects with Fortune 500 companies.
+          
+          2016-Present:
+
+          The A.I. Prediction (08-11-2016): 
+          Leadership made bold predictions about the future of A.I. in design, development, and marketing.
+
+          Distributed Web Protocol (2016-2021): 
+          Developed the revolutionary Distributed Web Protocol over a 5-year period.
+
+          ADAM AI Engine, DotBot & MarketBot (2022-Present): 
+          Announced the development of ADAM A.I. engine, DotBot, and MarketBot, an AI-based marketing platform.
+
+          Cheetah Agency continues to strive for innovation, setting new standards in the digital landscape.
+          `,
       },
       {
         role: "user",
@@ -303,15 +366,20 @@ async function executeFunctionCall(functionName, twiml, request) {
 async function scheduleMeeting(request) {
   console.log("scheduling meeting.....");
 
-  let userId = request.body.From;
+  let from = request.body.From;
 
-  if (userId && userId.startsWith("client:")) {
-    userId = userId.split(":")[1];
+  let by, phone;
+
+  if (from && from.startsWith("client:")) {
+    by = "id";
+    from = from.split(":")[1];
+  } else {
+    by = "phone";
   }
 
   console.log("request.body", request.body);
 
-  const user = await getUserById(userId);
+  const user = await getUser(by, from);
 
   if (!user?.email) {
     return "Please first create an account at cheetah.com. After successful registration, come back and I will get your meeting scheduled.";
@@ -337,8 +405,9 @@ async function connectToHuman(twiml) {
 
   twiml
     .dial({
-      callerId: "+923055952372",
-      action: "https://ai-backend-five.vercel.app/twilio/dial",
+      // callerId: "+923055952372",
+      callerId: "+14697074725",
+      action: "https://29eb-119-73-99-27.ngrok.io/twilio/dial",
       method: "POST",
     })
     .number("+923055952372");
