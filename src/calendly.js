@@ -102,7 +102,7 @@ async function getAvailableTimeSlots(currentDate, email) {
   //   await getCalendarEvents();
 
   let meetingStartTime = moment(new Date(data.collection[0].start_time))
-    .subtract(hoursDifference, "hours")
+    .subtract(hoursDifference === 0 ? -5 : hoursDifference, "hours")
     .toDate();
 
   let meetingEndTime = new Date(
