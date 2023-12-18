@@ -5,8 +5,11 @@ const { convertSpeechToText } = require("./speech-to-text");
 const { getAvailableTimeSlots } = require("./calendly");
 const { getUserById } = require("./firestore");
 
-const OPENAI_API_KEY = "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";
-// const OPENAI_API_KEY = "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"; personal account
+// const OPENAI_API_KEY = "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"; // personal account
+
+// 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
+
+const OPENAI_API_KEY = "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"; // cheetah account
 
 async function handleTranscription(request, response) {
   if (request.cookies.convo) {
