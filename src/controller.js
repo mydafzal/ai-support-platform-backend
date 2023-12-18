@@ -33,7 +33,7 @@ async function handleTranscription(request, response) {
     // );
 
     twiml.play(
-      "https://ai-backend-five.vercel.app/public/greeting-message-adam.mp3"
+      "https://37d2-119-73-99-27.ngrok.io/public/greeting-message-adam.mp3"
     );
   }
 
@@ -41,7 +41,7 @@ async function handleTranscription(request, response) {
     speechTimeout: 2,
     speechModel: "experimental_conversations",
     input: "speech",
-    action: "https://ai-backend-five.vercel.app/twilio/respond",
+    action: "https://37d2-119-73-99-27.ngrok.io/twilio/respond",
     actionOnEmptyResult: true,
   });
 
@@ -72,7 +72,7 @@ async function handleReponse(request, response) {
   if (!voiceInput) {
     // twiml.say("It's been a pleasure assisting you. Goodbye!");
     twiml.play(
-      "https://ai-backend-five.vercel.app/public/goodbye-message-michael.mp3"
+      "https://37d2-119-73-99-27.ngrok.io/public/goodbye-message-michael.mp3"
     );
 
     twiml.hangup();
@@ -124,7 +124,7 @@ async function handleReponse(request, response) {
     twiml
       .dial({
         callerId: "+923055952372",
-        action: "https://ai-backend-five.vercel.app/twilio/dial",
+        action: "https://37d2-119-73-99-27.ngrok.io/twilio/dial",
         method: "POST",
       })
       .number("+923055952372");
@@ -134,7 +134,7 @@ async function handleReponse(request, response) {
       {
         method: "POST",
       },
-      `https://ai-backend-five.vercel.app/twilio/transcribe`
+      `https://37d2-119-73-99-27.ngrok.io/twilio/transcribe`
     );
   }
 
@@ -338,7 +338,7 @@ async function connectToHuman(twiml) {
   twiml
     .dial({
       callerId: "+923055952372",
-      action: "https://ai-backend-five.vercel.app/twilio/dial",
+      action: "https://37d2-119-73-99-27.ngrok.io/twilio/dial",
       method: "POST",
     })
     .number("+923055952372");

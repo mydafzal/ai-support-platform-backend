@@ -28,6 +28,8 @@ async function getAvailableTimeSlots(currentDate, email) {
     newDate.getDate() === currentDate.getDate();
 
   if (!isToday) {
+    console.log("isToday", isToday);
+
     currentDate.setHours(1, 59, 59, 999); // For calendly time zone difference of 5 hours. This means 7am.
   }
 
