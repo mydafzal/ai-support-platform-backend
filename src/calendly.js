@@ -101,9 +101,12 @@ async function getAvailableTimeSlots(currentDate, email) {
 
   //   await getCalendarEvents();
 
-  let meetingStartTime = moment(new Date(data.collection[0].start_time))
-    .subtract(hoursDifference === 0 ? -5 : hoursDifference, "hours")
-    .toDate();
+  let meetingStartTime =
+    hoursDifference === 0
+      ? moment(new Date(data.collection[0].start_time)).add(5, "hours").toDate()
+      : moment(new Date(data.collection[0].start_time))
+          .subtract(hoursDifference, "hours")
+          .toDate();
 
   let meetingEndTime = new Date(
     new Date(meetingStartTime).setTime(
@@ -118,8 +121,7 @@ async function getAvailableTimeSlots(currentDate, email) {
   // return;
 
   await addEventToGoogleCalendar(
-    // email,
-    "hammad@ccript.com",
+    email,
     "Cheetah AI",
     meetingStartTime.toISOString(),
     meetingEndTime.toISOString()
