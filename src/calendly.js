@@ -48,7 +48,10 @@ async function getAvailableTimeSlots(currentDate, email) {
   //   currentDate.setHours(1, 59, 59, 999); // For calendly time zone difference of 5 hours. This means 7am.
   // }
 
-  const startTime = currentDate.toString();
+  const startTime =
+    hoursDifference === 0
+      ? moment(currentDate).add(5, "hours").toDate().toString()
+      : currentDate.toString();
   // const startTime = moment(currentDate)
   //   .subtract(5, "hours")
   //   .toDate()
