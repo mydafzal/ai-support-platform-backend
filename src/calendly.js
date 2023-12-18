@@ -18,6 +18,9 @@ const ACCESS_TOKEN =
 async function getAvailableTimeSlots(currentDate, email) {
   // let currentDate = new Date();
 
+  const timeZoneOffset = 5 * 60; // 5 hours in minutes
+  currentDate = new Date(currentDate.getTime() + timeZoneOffset * 60000);
+
   console.log("currentDate", currentDate?.toString());
 
   // currentDate = new Date(currentDate.setDate(new Date().getDate() + 1));
