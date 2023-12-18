@@ -4,8 +4,11 @@ const credentials = require("../credentials.json");
 const fs = require("fs");
 const readline = require("readline");
 
+const path = require("path");
+
 const SCOPES = ["https://www.googleapis.com/auth/calendar.events"];
-const TOKEN_PATH = "./token.json";
+// const TOKEN_PATH = "./token.json";
+const TOKEN_PATH = path.join(__dirname, "..", "token.json");
 
 let auth, calendar;
 
