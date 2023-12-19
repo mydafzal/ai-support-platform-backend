@@ -4,6 +4,8 @@ const cookieParser = require("cookie-parser");
 const bodyParser = require("body-parser");
 const path = require("path");
 
+const moment = require("moment");
+
 const app = express();
 const port = 5000;
 
@@ -32,6 +34,7 @@ const { convertTextToSpeech } = require("./src/text-to-speech");
 const { quickstart } = require("./src/speech-to-text");
 const { getAvailableTimeSlots } = require("./src/calendly");
 const { getUserById } = require("./src/firestore");
+const { scheduleMeeting } = require("./src/controller");
 
 app.get("/speech", async (req, res) => {
   const response = await convertTextToSpeech(
@@ -61,10 +64,38 @@ app.get("/calendar", async (req, res) => {
 
 app.get("/text", async (req, res) => {
   // const response = await quickstart();
-  // res.status(200).json({ response });
 
-  const response = await getUserById("ad63b861-b45c-4926-bcae-804761c6092d");
-  res.status(200).json({ response });
+  const monthMap = {
+    January: 0,
+    February: 1,
+    March: 2,
+    April: 3,
+    May: 4,
+    June: 5,
+    July: 6,
+    August: 7,
+    September: 8,
+    October: 9,
+    November: 10,
+    December: 11,
+  };
+
+  const month = "January";
+  const date = 2;
+  const hour = 19;
+
+  const convertedDate = new Date();
+
+  convertedDate.setFullYear(new Date().getFullYear()); // Set the current year
+  convertedDate.setMonth(monthMap[month]); // Set the month
+  convertedDate.setDate(date);
+  convertedDate.setHours(hour);
+
+  console.log("convertedDate", moment(convertedDate).format("HH"));
+
+  // format("hh:mm)
+
+  res.status(200).json({ response: "" });
 });
 
 app.use("/auth", authRouter);

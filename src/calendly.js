@@ -15,8 +15,16 @@ let url =
 const ACCESS_TOKEN =
   "eyJraWQiOiIxY2UxZTEzNjE3ZGNmNzY2YjNjZWJjY2Y4ZGM1YmFmYThhNjVlNjg0MDIzZjdjMzJiZTgzNDliMjM4MDEzNWI0IiwidHlwIjoiUEFUIiwiYWxnIjoiRVMyNTYifQ.eyJpc3MiOiJodHRwczovL2F1dGguY2FsZW5kbHkuY29tIiwiaWF0IjoxNzAyNDYxNDE5LCJqdGkiOiJiNDAxNThhMS0zN2ZhLTQ3NjUtODc1My01MmNhMDA3ZDJmNmQiLCJ1c2VyX3V1aWQiOiI2NTU1OWM5ZC1iOGU0LTRkM2YtODRmMC00ZDA2ZGZmNGNlMzcifQ.spTXAbkewi_FUt1h7g7xI4xLhPligbvb2Zkxqo4P8tjIzr5np0Zb1OUHNT7ZTSoa6ctag4Ffk5JLaGdh3JpeFw";
 
-async function getAvailableTimeSlots(currentDate, email) {
+async function getAvailableTimeSlots(
+  currentDate,
+  email,
+  nextThreeSlots = false
+) {
   // let currentDate = new Date();
+
+  const requestedSlot = `${moment(currentDate)
+    // .add(1, "hours")
+    .format("HH")}:00`;
 
   // const timeZoneOffset = 5 * 60; // 5 hours in minutes
   // currentDate = new Date(currentDate.getTime() + timeZoneOffset * 60000);
@@ -75,6 +83,8 @@ async function getAvailableTimeSlots(currentDate, email) {
 
   const eventUri = data.collection[0].uri;
 
+  console.log("eventUri", eventUri);
+
   response = await fetch(
     `https://api.calendly.com/event_type_available_times?event_type=${eventUri}&start_time=${startTime}&end_time=${endTime}`,
     options
@@ -92,9 +102,61 @@ async function getAvailableTimeSlots(currentDate, email) {
   data.collection?.forEach((item) => {
     const time = new Date(item.start_time);
 
-    const formattedTime = moment(time).format("hh:mm a");
+    const formattedTime = moment(time).format("HH:mm");
     console.log("slot", formattedTime);
   });
+
+  const slots = data.collection?.map((item) => {
+    let time = new Date(item.start_time);
+
+    if (hoursDifference !== 0) {
+      time = moment(time).subtract(5, "hours").toDate();
+    }
+
+    // const time = new Date(item.start_time);
+
+    const formattedTime = moment(time).format("HH:mm");
+    // console.log("slot", formattedTime);
+
+    return formattedTime;
+  });
+
+  console.log("slots", slots);
+
+  if (nextThreeSlots === true) {
+    let nextSlots = [];
+
+    for (let i = 0; i < slots.length; i++) {
+      if (slots[i] > requestedSlot) {
+        nextSlots.push(slots[i]);
+
+        if (nextSlots.length === 3) {
+          break;
+        }
+      }
+    }
+
+    return `Next available slots: ${nextSlots}`;
+  }
+
+  if (slots.length === 0) {
+    return "No slots left for today";
+  } else if (slots.includes(requestedSlot)) {
+    return `Slot available: ${requestedSlot}`;
+  } else {
+    let nextSlot;
+
+    for (let i = 0; i < slots.length; i++) {
+      if (slots[i] > requestedSlot) {
+        nextSlot = slots[i];
+        break;
+      }
+    }
+
+    return `Slot not available. Next available slot is ${nextSlot}`;
+  }
+
+  return slots;
 
   const time = new Date(data.collection[0].start_time);
   const formattedTime = moment(time).format("hh:mm a");
