@@ -21,7 +21,7 @@ async function handleTranscription(request, response) {
     // https://ai-backend-five.vercel.app
 
     twiml.play(
-      "https://ac11-119-73-99-27.ngrok.io/public/greeting-message-michael.mp3"
+      "https://8e14-119-73-99-27.ngrok-free.app/public/greeting-message-michael.mp3"
     );
   }
 
@@ -29,7 +29,7 @@ async function handleTranscription(request, response) {
     speechTimeout: 2,
     speechModel: "experimental_conversations",
     input: "speech",
-    action: "https://ac11-119-73-99-27.ngrok.io/twilio/respond",
+    action: "https://8e14-119-73-99-27.ngrok-free.app/twilio/respond",
     actionOnEmptyResult: true,
   });
 
@@ -54,10 +54,6 @@ async function handleReponse(request, response) {
     ? JSON.parse(decodeURIComponent(cookieValue))
     : null;
 
-  console.log("cookieValue", cookieValue);
-
-  console.log("cookieData", cookieData);
-
   let voiceInput = request.body.SpeechResult;
 
   console.log("voice input", voiceInput);
@@ -65,7 +61,7 @@ async function handleReponse(request, response) {
   if (!voiceInput) {
     // twiml.say("It's been a pleasure assisting you. Goodbye!");
     twiml.play(
-      "https://ac11-119-73-99-27.ngrok.io/public/goodbye-message-michael.mp3"
+      "https://8e14-119-73-99-27.ngrok-free.app/public/goodbye-message-michael.mp3"
     );
 
     twiml.hangup();
@@ -77,15 +73,6 @@ async function handleReponse(request, response) {
   let conversation = [];
 
   if (cookieData?.conversation) {
-    // conversation = cookieData.conversation.map((item) => {
-    //   item = item.split(":");
-
-    //   return {
-    //     role: item[0],
-    //     content: item[1],
-    //   };
-    // });
-
     conversation = cookieData.conversation;
   }
   conversation = [...initializeConversation(), ...conversation];
@@ -97,9 +84,6 @@ async function handleReponse(request, response) {
 
   if (aiResponse?.role === "tool") {
     conversation.push(aiResponse);
-
-    console.log("tool...");
-    console.log(conversation);
 
     aiResponse = await generateAIResponse(conversation);
   }
@@ -116,7 +100,7 @@ async function handleReponse(request, response) {
   conversation.push({ role: "assistant", content: `${aiResponse}` });
   // conversation.push(`${aiResponse}`);
 
-  console.log("conversation - after", conversation);
+  // console.log("conversation - after", conversation);
 
   while (conversation.length > 20) {
     conversation.shift();
@@ -129,7 +113,7 @@ async function handleReponse(request, response) {
 
   twiml.play(textToSpeechFileURL);
   // twiml.play(
-  //   "https://ac11-119-73-99-27.ngrok.io/public/greeting-message-michael.mp3"
+  //   "https://8e14-119-73-99-27.ngrok-free.app/public/greeting-message-michael.mp3"
   // );
 
   console.log("play");
@@ -138,22 +122,19 @@ async function handleReponse(request, response) {
     twiml
       .dial({
         callerId: "+923055952372",
-        action: "https://ac11-119-73-99-27.ngrok.io/twilio/dial",
+        action: "https://8e14-119-73-99-27.ngrok-free.app/twilio/dial",
         method: "POST",
       })
       .number("+923055952372");
   } else {
     // Redirect to the Function where the <Gather> is capturing the caller's speech
-    console.log("redirect");
     twiml.redirect(
       {
         method: "POST",
       },
-      `https://ac11-119-73-99-27.ngrok.io/twilio/transcribe`
+      `https://8e14-119-73-99-27.ngrok-free.app/twilio/transcribe`
     );
   }
-
-  console.log("preparing response");
 
   response.type("application/xml");
 
@@ -161,15 +142,11 @@ async function handleReponse(request, response) {
 
   const newCookieValue = encodeURIComponent(
     JSON.stringify({
-      // conversation: conversation?.map((obj) => `${obj.role}:${obj.content}`),
       conversation,
     })
   );
 
   response.cookie("convo", newCookieValue);
-
-  console.log("response returned...");
-
   return response.send(twiml.toString());
 
   // Function to generate the AI response based on the conversation history
@@ -185,8 +162,8 @@ async function handleReponse(request, response) {
   async function createChatCompletion(messages) {
     try {
       const completion = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        // model: "gpt-3.5-turbo-1106",
+        // model: "gpt-3.5-turbo",
+        model: "gpt-3.5-turbo-1106",
         tools: [
           {
             type: "function",
@@ -289,7 +266,7 @@ async function handleReponse(request, response) {
             function: {
               name: "get_slots_for_next_date",
               description:
-                "No time slots are left on the date you currently provided so now ",
+                "No time slots are left on the date you currently provided so now get available slots for the next date.",
               parameters: {
                 type: "object",
                 properties: {
@@ -310,22 +287,22 @@ async function handleReponse(request, response) {
                       "December",
                     ],
                     description:
-                      "The month in which the user would like to get his/her meeting scheduled.",
+                      "The month in which the user would like to get his/her meeting scheduled. If you incremented the date parameter and that date exceeds the month given by the user, then you should also move the month to next one.",
                   },
 
                   date: {
                     type: "number",
                     enum: Array.from({ length: 31 }, (_, index) => index + 1),
                     description:
-                      "The date next to the one that you previously provided for checking time slots available",
+                      "The date next to the one that you previously provided for checking available time slots.",
                   },
 
-                  hour: {
-                    type: "number",
-                    enum: Array.from({ length: 23 }, (_, index) => index),
-                    description:
-                      "The specific hour between 0 to 23 at which the user would like to get his/her meeting scheduled.",
-                  },
+                  // hour: {
+                  //   type: "number",
+                  //   enum: Array.from({ length: 23 }, (_, index) => index),
+                  //   description:
+                  //     "The specific hour between 0 to 23 at which the user would like to get his/her meeting scheduled.",
+                  // },
                 },
                 required: ["month", "date", "hour"],
               },
@@ -354,9 +331,16 @@ async function handleReponse(request, response) {
 
       const assistantMessage = completion.choices[0].message;
 
-      const shouldCallFunction =
-        (assistantMessage.content === null || !assistantMessage.content) &&
-        assistantMessage?.tool_calls?.length > 0;
+      console.log("assistantMessage", assistantMessage.content);
+      console.log("assistantMessage", assistantMessage.tool_calls?.[0]);
+
+      // const shouldCallFunction =
+      //   (assistantMessage.content === null || !assistantMessage.content) &&
+      //   assistantMessage?.tool_calls?.length > 0;
+
+      const shouldCallFunction = assistantMessage?.tool_calls?.length > 0;
+
+      console.log("shouldCallFunction", shouldCallFunction);
 
       if (!shouldCallFunction) {
         return assistantMessage.content;
@@ -373,6 +357,8 @@ async function handleReponse(request, response) {
       );
 
       conversation.push(assistantMessage);
+
+      console.log("calling execute call function now.....");
 
       return await executeFunctionCall(assistantMessage, twiml, request);
     } catch (error) {
@@ -533,6 +519,10 @@ async function executeFunctionCall(assistantMessage, twiml, request) {
     return await getNextThreeSlots(assistantMessage);
   }
 
+  if (functionName === "get_slots_for_next_date") {
+    return await getSlotsForNextDate(assistantMessage);
+  }
+
   if (functionName === "connect_to_human") {
     return await connectToHuman(twiml);
   }
@@ -614,7 +604,7 @@ async function connectToHuman(twiml) {
     .dial({
       // callerId: "+923055952372",
       callerId: "+14697074725",
-      action: "https://ac11-119-73-99-27.ngrok.io/twilio/dial",
+      action: "https://8e14-119-73-99-27.ngrok-free.app/twilio/dial",
       method: "POST",
     })
     .number("+923055952372");
@@ -644,13 +634,56 @@ async function getNextThreeSlots(assistantMessage) {
 
   let { month, date, hour } = args;
 
+  date = parseInt(date);
+  hour = parseInt(hour);
+
   const convertedDate = new Date();
 
   convertedDate.setFullYear(new Date().getFullYear());
   convertedDate.setMonth(monthMap[month]);
   convertedDate.setDate(date);
-  convertedDate.setHours(hour - 1, 59, 59, 59);
+  convertedDate.setHours(hour + 1, 59, 59, 59);
   // convertedDate.setHours(hour);
+
+  console.log("convertedDate", convertedDate, convertedDate.toString());
+
+  const result = await getAvailableTimeSlots(convertedDate, "", true);
+
+  return {
+    role: "tool",
+    tool_call_id: assistantMessage.tool_calls[0].id,
+    name: assistantMessage.tool_calls[0].function.name,
+    content: `${result}`,
+  };
+}
+
+async function getSlotsForNextDate(assistantMessage) {
+  let args = JSON.parse(assistantMessage?.tool_calls?.[0].function.arguments);
+
+  console.log("getSlotsForNextDate", args);
+
+  const monthMap = {
+    January: 0,
+    February: 1,
+    March: 2,
+    April: 3,
+    May: 4,
+    June: 5,
+    July: 6,
+    August: 7,
+    September: 8,
+    October: 9,
+    November: 10,
+    December: 11,
+  };
+
+  let { month, date } = args;
+
+  const convertedDate = new Date();
+
+  convertedDate.setFullYear(new Date().getFullYear());
+  convertedDate.setMonth(monthMap[month]);
+  convertedDate.setDate(date);
 
   console.log("convertedDate", convertedDate, convertedDate.toString());
 
@@ -685,13 +718,30 @@ function initializeConversation() {
       content: `You are a creative, funny, friendly and amusing AI assistant named Adam. You also know about the history of Cheetah Agency and you will help its potential and current customers learn more about the agency. 
       
       Keep in mind the following points when answering questions:
-      1. Please provide engaging but concise responses. 
+      1. Please provide engaging but concise responses.
       2. Don't make assumptions about what values to plug into functions. Ask for clarification if a user request is ambiguous.
-      3. When user indicates that he would like to schedule a meeting, ask for specific month (January to December), date of the month, and the specific hour in 24-hour format separately. Ask user to first provide the month, then ask for date and finally ask for hour. Month, date and hour all are required from the user. Make sure that the user provides a date in future. Consider following scenarios:
-          - For example, the user asked to schedule meeting on 28 December at 19.
-          - Case 1: Slot is available. Schedule the meeting.
-          - Case 2: Slot is not available. Communicate one next slot to the user. If user accepts the slot, then schedule the meeting otherwise get next three available slots and communicate it to the user and keep getting and communicating next three slots until you are told that no slots for the given date are left
-          - Case 3: If no slots are left for the given date, increment the date and and try getting available slots for the new date and keep communicating available slots for that date.
+      3. When user indicates that he would like to schedule a meeting, ask the user to provide the first specific month (January to December), then ask for date of the month, finally the specific hour in 24-hour format. After receiving this information, call the appropriate functions with these details to get available slots. Suppose the user provided folowing values of month, date and hour:
+      month: December
+      date: 28
+      hour: 19
+
+      Here's an example the workflow to follow:
+
+        3.1. First call the 'schedule_meeting' function. If the function's result indicates the slot on December 28 at 19:00 is available, respond to the user that the slot is open.
+
+        3.2. If the 'schedule_meeting' function's result indicates the slot on December 28 at 19:00 is unavailable and provides the next available slot, for example 21:00, communicate this slot to the user.
+
+        3.3. If the user refuses the suggested slot (21:00 in this example), directly call the 'get_next_three_slots' function to get the next three available slots on December 28 and present these to the user, without letting the user know that you are going to get the next three available slots on December 28.
+
+        3.4. If the 'get_next_three_slots' function's result indicates no slots for the December 28, increment the date to 29 (and month also if the date was 31 and after incrementing becomes 1).
+        
+        3.5. Now, after incrementing the date, call the 'get_slots_for_next_date' function again with incremented date to get three slots on the December 29 and communicate them to the user. 
+        
+        3.6 If the user refuses suggested slots on the incremented date (29 in this example), then keep getting next three slots on the current date (29) by calling the 'get_next_three_slots' function and keep communicating these slots to the user. 
+        
+        3.7 If the 'get_next_three_slots' function's result indicates no slots for the December 29, also, then start the workflow again from step 3.4 and keep repeating step 3.4 and its following steps until the user accepts a slot.
+
+        Ensure clear and concise communication with the user at each step, and handle user refusals appropriately. Your goal is to successfully schedule a meeting for the user based on the provided criteria
           
       4. Use the following information about Cheetah Agency's history to answers questions about the agency:
 

@@ -26,6 +26,8 @@ async function getAvailableTimeSlots(
     // .add(1, "hours")
     .format("HH")}:00`;
 
+  console.log("requested slot", requestedSlot);
+
   // const timeZoneOffset = 5 * 60; // 5 hours in minutes
   // currentDate = new Date(currentDate.getTime() + timeZoneOffset * 60000);
 
@@ -83,7 +85,7 @@ async function getAvailableTimeSlots(
 
   const eventUri = data.collection[0].uri;
 
-  console.log("eventUri", eventUri);
+  // console.log("eventUri", eventUri);
 
   response = await fetch(
     `https://api.calendly.com/event_type_available_times?event_type=${eventUri}&start_time=${startTime}&end_time=${endTime}`,
@@ -91,7 +93,7 @@ async function getAvailableTimeSlots(
   );
 
   data = await response.json();
-  console.log("data", data);
+  // console.log("data", data);
 
   if (data?.collection?.length < 1) {
     return getAvailableTimeSlots(
@@ -136,7 +138,7 @@ async function getAvailableTimeSlots(
       }
     }
 
-    return `Next available slots: ${nextSlots}`;
+    return `User refused the previous available slot you communicated to the user. So here are next available slots: ${nextSlots}`;
   }
 
   if (slots.length === 0) {

@@ -4,8 +4,6 @@ const cookieParser = require("cookie-parser");
 const bodyParser = require("body-parser");
 const path = require("path");
 
-const moment = require("moment");
-
 const app = express();
 const port = 5000;
 
@@ -51,50 +49,9 @@ app.get("/speech", async (req, res) => {
 app.get("/calendar", async (req, res) => {
   const response = getAvailableTimeSlots(new Date(), "");
   res.status(200).json({ response });
-
-  // client.calls
-  //   .create({
-  //     twiml: "<Response><Say>Ahoy there!</Say></Response>",
-  //     // to: "+923055952372",
-  //     from: "+923201403392",
-  //     to: "+12057402083",
-  //   })
-  //   .then((call) => console.log("call", call));
 });
 
 app.get("/text", async (req, res) => {
-  // const response = await quickstart();
-
-  const monthMap = {
-    January: 0,
-    February: 1,
-    March: 2,
-    April: 3,
-    May: 4,
-    June: 5,
-    July: 6,
-    August: 7,
-    September: 8,
-    October: 9,
-    November: 10,
-    December: 11,
-  };
-
-  const month = "January";
-  const date = 2;
-  const hour = 19;
-
-  const convertedDate = new Date();
-
-  convertedDate.setFullYear(new Date().getFullYear()); // Set the current year
-  convertedDate.setMonth(monthMap[month]); // Set the month
-  convertedDate.setDate(date);
-  convertedDate.setHours(hour);
-
-  console.log("convertedDate", moment(convertedDate).format("HH"));
-
-  // format("hh:mm)
-
   res.status(200).json({ response: "" });
 });
 
