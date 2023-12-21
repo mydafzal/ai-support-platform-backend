@@ -21,7 +21,7 @@ async function handleTranscription(request, response) {
     // https://ai-backend-five.vercel.app
 
     twiml.play(
-      "https://8e14-119-73-99-27.ngrok-free.app/public/greeting-message-michael.mp3"
+      "https://d5d0-119-73-99-27.ngrok-free.app/public/greeting-message-michael.mp3"
     );
   }
 
@@ -29,7 +29,7 @@ async function handleTranscription(request, response) {
     speechTimeout: 2,
     speechModel: "experimental_conversations",
     input: "speech",
-    action: "https://8e14-119-73-99-27.ngrok-free.app/twilio/respond",
+    action: "https://d5d0-119-73-99-27.ngrok-free.app/twilio/respond",
     actionOnEmptyResult: true,
   });
 
@@ -61,7 +61,7 @@ async function handleReponse(request, response) {
   if (!voiceInput) {
     // twiml.say("It's been a pleasure assisting you. Goodbye!");
     twiml.play(
-      "https://8e14-119-73-99-27.ngrok-free.app/public/goodbye-message-michael.mp3"
+      "https://d5d0-119-73-99-27.ngrok-free.app/public/goodbye-message-michael.mp3"
     );
 
     twiml.hangup();
@@ -113,7 +113,7 @@ async function handleReponse(request, response) {
 
   twiml.play(textToSpeechFileURL);
   // twiml.play(
-  //   "https://8e14-119-73-99-27.ngrok-free.app/public/greeting-message-michael.mp3"
+  //   "https://d5d0-119-73-99-27.ngrok-free.app/public/greeting-message-michael.mp3"
   // );
 
   console.log("play");
@@ -122,7 +122,7 @@ async function handleReponse(request, response) {
     twiml
       .dial({
         callerId: "+923055952372",
-        action: "https://8e14-119-73-99-27.ngrok-free.app/twilio/dial",
+        action: "https://d5d0-119-73-99-27.ngrok-free.app/twilio/dial",
         method: "POST",
       })
       .number("+923055952372");
@@ -132,7 +132,7 @@ async function handleReponse(request, response) {
       {
         method: "POST",
       },
-      `https://8e14-119-73-99-27.ngrok-free.app/twilio/transcribe`
+      `https://d5d0-119-73-99-27.ngrok-free.app/twilio/transcribe`
     );
   }
 
@@ -164,13 +164,62 @@ async function handleReponse(request, response) {
       const completion = await openai.chat.completions.create({
         // model: "gpt-3.5-turbo",
         model: "gpt-3.5-turbo-1106",
+        model: "ft:gpt-3.5-turbo-1106:cheetah-agency-llc::8YDKqVF9",
         tools: [
+          // {
+          //   type: "function",
+          //   function: {
+          //     name: "schedule_meeting",
+          //     description:
+          //       "Schedule meeting with a human because user wants to discuss further with a human in a scheduled meeting.",
+          //     parameters: {
+          //       type: "object",
+          //       properties: {
+          //         month: {
+          //           type: "number",
+          //           enum: [
+          //             "January",
+          //             "February",
+          //             "March",
+          //             "April",
+          //             "May",
+          //             "June",
+          //             "July",
+          //             "August",
+          //             "September",
+          //             "October",
+          //             "November",
+          //             "December",
+          //           ],
+          //           description:
+          //             "The month in which the user would like to get his/her meeting scheduled.",
+          //         },
+
+          //         date: {
+          //           type: "number",
+          //           enum: Array.from({ length: 31 }, (_, index) => index + 1),
+          //           description:
+          //             "The specific date of the given month on which the user would like to get his/her meeting scheduled.",
+          //         },
+
+          //         hour: {
+          //           type: "number",
+          //           enum: Array.from({ length: 23 }, (_, index) => index),
+          //           description:
+          //             "The specific hour between 0 to 23 at which the user would like to get his/her meeting scheduled.",
+          //         },
+          //       },
+          //       required: ["month", "date", "hour"],
+          //     },
+          //   },
+          // },
+
           {
             type: "function",
             function: {
-              name: "schedule_meeting",
+              name: "check_slot_availability",
               description:
-                "Schedule meeting with a human because user wants to discuss further with a human in a scheduled meeting.",
+                "Based on the month, date and hour provided by the user, check if the slot is available.",
               parameters: {
                 type: "object",
                 properties: {
@@ -334,11 +383,11 @@ async function handleReponse(request, response) {
       console.log("assistantMessage", assistantMessage.content);
       console.log("assistantMessage", assistantMessage.tool_calls?.[0]);
 
-      // const shouldCallFunction =
-      //   (assistantMessage.content === null || !assistantMessage.content) &&
-      //   assistantMessage?.tool_calls?.length > 0;
+      const shouldCallFunction =
+        (assistantMessage.content === null || !assistantMessage.content) &&
+        assistantMessage?.tool_calls?.length > 0;
 
-      const shouldCallFunction = assistantMessage?.tool_calls?.length > 0;
+      // const shouldCallFunction = assistantMessage?.tool_calls?.length > 0;
 
       console.log("shouldCallFunction", shouldCallFunction);
 
@@ -515,6 +564,10 @@ async function executeFunctionCall(assistantMessage, twiml, request) {
     return await scheduleMeeting(assistantMessage, request);
   }
 
+  if (functionName === "check_slot_availability") {
+    return await checkSlotAvailability(assistantMessage, request);
+  }
+
   if (functionName === "get_next_three_slots") {
     return await getNextThreeSlots(assistantMessage);
   }
@@ -597,6 +650,73 @@ async function scheduleMeeting(assistantMessage, request) {
   return `Your meeting has been scheduled for ${day} at ${time}.`;
 }
 
+async function checkSlotAvailability(assistantMessage, request) {
+  args = JSON.parse(assistantMessage?.tool_calls?.[0].function.arguments);
+
+  console.log("checkSlotAvailability", args);
+
+  const monthMap = {
+    January: 0,
+    February: 1,
+    March: 2,
+    April: 3,
+    May: 4,
+    June: 5,
+    July: 6,
+    August: 7,
+    September: 8,
+    October: 9,
+    November: 10,
+    December: 11,
+  };
+
+  let { month, date, hour } = args;
+
+  date = parseInt(date);
+  hour = parseInt(hour);
+
+  const convertedDate = new Date();
+
+  convertedDate.setFullYear(new Date().getFullYear());
+  convertedDate.setMonth(monthMap[month]);
+  convertedDate.setDate(date);
+  // convertedDate.setHours(hour - 1, 59, 59, 59);
+  convertedDate.setHours(hour, 30);
+
+  console.log("convertedDate", convertedDate, convertedDate.toString());
+
+  // return "Please first create an account at cheetah.com. After successful registration, come back and I will get your meeting scheduled.";
+
+  // let from = request.body.From;
+
+  // let by;
+
+  // if (from && from.startsWith("client:")) {
+  //   by = "id";
+  //   from = from.split(":")[1];
+  // } else {
+  //   by = "phone";
+  // }
+
+  // const user = await getUser(by, from);
+
+  // if (!user?.email) {
+  //   return "Please first create an account at cheetah.com. After successful registration, come back and I will get your meeting scheduled.";
+  // }
+
+  // const { day, time } = await getAvailableTimeSlots(new Date(), user.email);
+  const slots = await getAvailableTimeSlots(convertedDate, "");
+
+  return {
+    role: "tool",
+    tool_call_id: assistantMessage.tool_calls[0].id,
+    name: assistantMessage.tool_calls[0].function.name,
+    content: `${slots}`,
+  };
+
+  return `Your meeting has been scheduled for ${day} at ${time}.`;
+}
+
 async function connectToHuman(twiml) {
   console.log("connecting to a human..............");
 
@@ -604,7 +724,7 @@ async function connectToHuman(twiml) {
     .dial({
       // callerId: "+923055952372",
       callerId: "+14697074725",
-      action: "https://8e14-119-73-99-27.ngrok-free.app/twilio/dial",
+      action: "https://d5d0-119-73-99-27.ngrok-free.app/twilio/dial",
       method: "POST",
     })
     .number("+923055952372");
@@ -715,35 +835,12 @@ function initializeConversation() {
       //   "You are a creative, funny, friendly and amusing AI assistant named Adam. Please provide engaging but concise responses. Don't make assumptions about what values to plug into functions. Ask for clarification if a user request is ambiguous. Prompt user to confirm the email address he/she provided by repeating the email address to the user. Don't assume how words in the user's email are to be spelled, ask for clarification if the spelling is ambiguous.",
       // content:
       //   "You are a creative, funny, friendly and amusing AI assistant named Adam. Please provide engaging but concise responses.",
-      content: `You are a creative, funny, friendly and amusing AI assistant named Adam. You also know about the history of Cheetah Agency and you will help its potential and current customers learn more about the agency. 
+      content: `You are an AI assistant named Adam. You know about the history of Cheetah Agency and you will help its potential and current customers learn more about the agency, connect customers to the human agents of the agency, and schedule customers' meetings with the team. 
       
       Keep in mind the following points when answering questions:
       1. Please provide engaging but concise responses.
-      2. Don't make assumptions about what values to plug into functions. Ask for clarification if a user request is ambiguous.
-      3. When user indicates that he would like to schedule a meeting, ask the user to provide the first specific month (January to December), then ask for date of the month, finally the specific hour in 24-hour format. After receiving this information, call the appropriate functions with these details to get available slots. Suppose the user provided folowing values of month, date and hour:
-      month: December
-      date: 28
-      hour: 19
-
-      Here's an example the workflow to follow:
-
-        3.1. First call the 'schedule_meeting' function. If the function's result indicates the slot on December 28 at 19:00 is available, respond to the user that the slot is open.
-
-        3.2. If the 'schedule_meeting' function's result indicates the slot on December 28 at 19:00 is unavailable and provides the next available slot, for example 21:00, communicate this slot to the user.
-
-        3.3. If the user refuses the suggested slot (21:00 in this example), directly call the 'get_next_three_slots' function to get the next three available slots on December 28 and present these to the user, without letting the user know that you are going to get the next three available slots on December 28.
-
-        3.4. If the 'get_next_three_slots' function's result indicates no slots for the December 28, increment the date to 29 (and month also if the date was 31 and after incrementing becomes 1).
-        
-        3.5. Now, after incrementing the date, call the 'get_slots_for_next_date' function again with incremented date to get three slots on the December 29 and communicate them to the user. 
-        
-        3.6 If the user refuses suggested slots on the incremented date (29 in this example), then keep getting next three slots on the current date (29) by calling the 'get_next_three_slots' function and keep communicating these slots to the user. 
-        
-        3.7 If the 'get_next_three_slots' function's result indicates no slots for the December 29, also, then start the workflow again from step 3.4 and keep repeating step 3.4 and its following steps until the user accepts a slot.
-
-        Ensure clear and concise communication with the user at each step, and handle user refusals appropriately. Your goal is to successfully schedule a meeting for the user based on the provided criteria
-          
-      4. Use the following information about Cheetah Agency's history to answers questions about the agency:
+      2. Don't make assumptions about what values to plug into functions. You must ask the user for any values before calling the functions.
+      3. Use the following information about Cheetah Agency's history to answers questions about the agency:
 
         Summary of Cheetah Agency's History:
 
