@@ -1,76 +1,37 @@
 const moment = require("moment/moment");
 const fetch = require("node-fetch");
-const { addEventToGoogleCalendar } = require("./google-calendar");
-
-// let url =
-//   "https://api.calendly.com/event_types?user=https%3A%2F%2Fapi.calendly.com%2Fusers%2F1a29130a-36bf-450c-851d-08ce787b9406";
 
 let url =
   "https://api.calendly.com/event_types?user=https://api.calendly.com/users/65559c9d-b8e4-4d3f-84f0-4d06dff4ce37";
-
-// access token calendly - ccript account
-// const ACCESS_TOKEN =
-//   "eyJraWQiOiIxY2UxZTEzNjE3ZGNmNzY2YjNjZWJjY2Y4ZGM1YmFmYThhNjVlNjg0MDIzZjdjMzJiZTgzNDliMjM4MDEzNWI0IiwidHlwIjoiUEFUIiwiYWxnIjoiRVMyNTYifQ.eyJpc3MiOiJodHRwczovL2F1dGguY2FsZW5kbHkuY29tIiwiaWF0IjoxNzAyNDUwOTI2LCJqdGkiOiJiMTIyZDUyMy01NjU2LTQ1NTktOGQwNi0xZDRhZTkxZTA4OTYiLCJ1c2VyX3V1aWQiOiIxYTI5MTMwYS0zNmJmLTQ1MGMtODUxZC0wOGNlNzg3Yjk0MDYifQ.1ZoY6YPliZl4vE2mRilPnXbpea2YA66XQpakgq7aFVOzj2u9GYM47owmLuh7zHVprKu2CB8zWtTz2L6QMq1cJQ";
 
 const ACCESS_TOKEN =
   "eyJraWQiOiIxY2UxZTEzNjE3ZGNmNzY2YjNjZWJjY2Y4ZGM1YmFmYThhNjVlNjg0MDIzZjdjMzJiZTgzNDliMjM4MDEzNWI0IiwidHlwIjoiUEFUIiwiYWxnIjoiRVMyNTYifQ.eyJpc3MiOiJodHRwczovL2F1dGguY2FsZW5kbHkuY29tIiwiaWF0IjoxNzAyNDYxNDE5LCJqdGkiOiJiNDAxNThhMS0zN2ZhLTQ3NjUtODc1My01MmNhMDA3ZDJmNmQiLCJ1c2VyX3V1aWQiOiI2NTU1OWM5ZC1iOGU0LTRkM2YtODRmMC00ZDA2ZGZmNGNlMzcifQ.spTXAbkewi_FUt1h7g7xI4xLhPligbvb2Zkxqo4P8tjIzr5np0Zb1OUHNT7ZTSoa6ctag4Ffk5JLaGdh3JpeFw";
 
 async function getAvailableTimeSlots(
-  currentDate,
+  requestedDate,
   email,
   nextThreeSlots = false
 ) {
-  // let currentDate = new Date();
+  const requestedSlot = `${moment(requestedDate).format("HH")}:00`;
 
-  const requestedSlot = `${moment(currentDate)
-    // .add(1, "hours")
-    .format("HH")}:00`;
+  const hoursDifference = Math.abs(requestedDate?.getTimezoneOffset()) / 60;
 
-  console.log("requested slot", requestedSlot);
-
-  // const timeZoneOffset = 5 * 60; // 5 hours in minutes
-  // currentDate = new Date(currentDate.getTime() + timeZoneOffset * 60000);
-
-  // console.log("currentDate", currentDate?.toString());
-
-  const hoursDifference = Math.abs(currentDate?.getTimezoneOffset()) / 60;
-
-  console.log("timezone difference", currentDate?.getTimezoneOffset());
+  console.log("timezone difference", requestedDate?.getTimezoneOffset());
   console.log(
     "current time",
-    moment(currentDate).subtract(5, "hours").format("hh:mm a")
+    moment(requestedDate).subtract(5, "hours").format("hh:mm a")
   );
-
-  // return "done";
-
-  // currentDate = new Date(currentDate.setDate(new Date().getDate() + 1));
-
-  const newDate = new Date();
-
-  const isToday =
-    newDate.getFullYear() === currentDate.getFullYear() &&
-    newDate.getMonth() === currentDate.getMonth() &&
-    newDate.getDate() === currentDate.getDate();
-
-  // if (!isToday) {
-  //   console.log("isToday", isToday);
-
-  //   currentDate.setHours(1, 59, 59, 999); // For calendly time zone difference of 5 hours. This means 7am.
-  // }
 
   const startTime =
     hoursDifference === 0
-      ? moment(currentDate).add(5, "hours").toDate().toString()
-      : currentDate.toString();
-  // const startTime = moment(currentDate)
-  //   .subtract(5, "hours")
-  //   .toDate()
-  //   .toString();
+      ? moment(requestedDate).add(5, "hours").toDate().toString()
+      : // : moment(requestedDate).subtract(5, "hours").toDate().toString();
+        requestedDate.toString();
 
-  console.log(moment(currentDate).format("hh:mm a"));
+  console.log(moment(requestedDate).format("hh:mm a"));
 
-  currentDate.setHours(24, 59, 59, 999);
-  const endTime = currentDate.toString();
+  requestedDate.setHours(23, 59, 59, 999);
+  const endTime = requestedDate.toString();
 
   let options = {
     method: "GET",
@@ -85,7 +46,7 @@ async function getAvailableTimeSlots(
 
   const eventUri = data.collection[0].uri;
 
-  // console.log("eventUri", eventUri);
+  console.log("eventUri", eventUri);
 
   response = await fetch(
     `https://api.calendly.com/event_type_available_times?event_type=${eventUri}&start_time=${startTime}&end_time=${endTime}`,
@@ -95,11 +56,11 @@ async function getAvailableTimeSlots(
   data = await response.json();
   // console.log("data", data);
 
-  if (data?.collection?.length < 1) {
-    return getAvailableTimeSlots(
-      new Date(currentDate.setDate(new Date().getDate() + 1))
-    );
-  }
+  // if (data?.collection?.length < 1) {
+  //   return getAvailableTimeSlots(
+  //     new Date(requestedDate.setDate(new Date().getDate() + 1))
+  //   );
+  // }
 
   data.collection?.forEach((item) => {
     const time = new Date(item.start_time);
@@ -115,10 +76,7 @@ async function getAvailableTimeSlots(
       time = moment(time).subtract(5, "hours").toDate();
     }
 
-    // const time = new Date(item.start_time);
-
     const formattedTime = moment(time).format("HH:mm");
-    // console.log("slot", formattedTime);
 
     return formattedTime;
   });
@@ -141,15 +99,20 @@ async function getAvailableTimeSlots(
     return `User refused the previous available slot you communicated to the user. So here are next available slots: ${nextSlots}`;
   }
 
-  if (slots.length === 0) {
-    return "No slots left for today";
-  } else if (slots.includes(requestedSlot)) {
-    return `Slot available: ${requestedSlot}`;
+  const actualRequestedSlot = `${parseInt(requestedSlot.split(":")[0]) + 1}:00`;
+
+  console.log("requestedSlot", requestedSlot);
+  console.log("actualRequestedSlot", actualRequestedSlot);
+
+  if (!slots || slots?.length === 0) {
+    return "No slots left for the given date.";
+  } else if (slots.includes(actualRequestedSlot)) {
+    return `Slot available: ${actualRequestedSlot}`;
   } else {
     let nextSlot;
 
     for (let i = 0; i < slots.length; i++) {
-      if (slots[i] > requestedSlot) {
+      if (slots[i] > actualRequestedSlot) {
         nextSlot = slots[i];
         break;
       }
@@ -157,46 +120,6 @@ async function getAvailableTimeSlots(
 
     return `Slot not available. Next available slot is ${nextSlot}`;
   }
-
-  return slots;
-
-  const time = new Date(data.collection[0].start_time);
-  const formattedTime = moment(time).format("hh:mm a");
-
-  //   await getCalendarEvents();
-
-  let meetingStartTime =
-    hoursDifference === 0
-      ? moment(new Date(data.collection[0].start_time)).add(5, "hours").toDate()
-      : moment(new Date(data.collection[0].start_time))
-          .subtract(hoursDifference, "hours")
-          .toDate();
-
-  let meetingEndTime = new Date(
-    new Date(meetingStartTime).setTime(
-      meetingStartTime.getTime() + 30 * 60 * 1000
-    )
-  );
-
-  console.log(moment(meetingStartTime).format("hh:mm a"));
-  console.log(moment(meetingEndTime).format("hh:mm a"));
-  console.log(moment(meetingEndTime).format("dddd"));
-
-  // return;
-
-  await addEventToGoogleCalendar(
-    email,
-    "Cheetah AI",
-    meetingStartTime.toISOString(),
-    meetingEndTime.toISOString()
-  );
-
-  return {
-    day: moment(meetingEndTime).format("dddd"),
-    time: moment(meetingStartTime).format("hh:mm a"),
-  };
-
-  return formattedTime;
 }
 
 module.exports = { getAvailableTimeSlots };

@@ -1,13 +1,15 @@
 const Twilio = require("twilio");
 const { OpenAI } = require("openai");
 const { convertTextToSpeech } = require("./text-to-speech");
-const { convertSpeechToText } = require("./speech-to-text");
 const { getAvailableTimeSlots } = require("./calendly");
-const { getUserById, getUser } = require("./firestore");
-
-// const OPENAI_API_KEY = "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"; // personal account
-
-// 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
+const { getUser } = require("./firestore");
+const {
+  getConversationByUserId,
+  updateConversation,
+  addConversation,
+} = require("./datastore");
+const { addEventToGoogleCalendar } = require("./google-calendar");
+const moment = require("moment");
 
 const OPENAI_API_KEY = "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"; // cheetah account
 
@@ -15,13 +17,23 @@ async function handleTranscription(request, response) {
   const VoiceResponse = Twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
-  if (!request.cookies.convo) {
+  let callerId = request.body.From;
+
+  if (callerId?.startsWith("client:")) {
+    callerId = callerId.split(":")[1];
+  }
+
+  const conversation = getConversationByUserId(callerId);
+
+  if (!conversation) {
     console.log("saying introduction....");
+
+    addConversation(callerId, initializeConversation());
 
     // https://ai-backend-five.vercel.app
 
     twiml.play(
-      "https://d5d0-119-73-99-27.ngrok-free.app/public/greeting-message-michael.mp3"
+      "https://ai-backend-five.vercel.app/public/greeting-message-michael.mp3"
     );
   }
 
@@ -29,30 +41,25 @@ async function handleTranscription(request, response) {
     speechTimeout: 2,
     speechModel: "experimental_conversations",
     input: "speech",
-    action: "https://d5d0-119-73-99-27.ngrok-free.app/twilio/respond",
+    action: "https://ai-backend-five.vercel.app/twilio/respond",
     actionOnEmptyResult: true,
   });
 
   response.type("application/xml");
-
-  if (!request.cookies.convo) {
-    console.log("No cookies.......", request.cookies.convo);
-    response.cookie("convo", "", ["Path=/"]);
-  }
-
   return response.send(twiml.toString());
 }
 
 async function handleReponse(request, response) {
+  let callerId = request.body.From;
+
+  if (callerId?.startsWith("client:")) {
+    callerId = callerId.split(":")[1];
+  }
+
   const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
   const VoiceResponse = Twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
-
-  const cookieValue = request.cookies.convo;
-  const cookieData = cookieValue
-    ? JSON.parse(decodeURIComponent(cookieValue))
-    : null;
 
   let voiceInput = request.body.SpeechResult;
 
@@ -61,7 +68,7 @@ async function handleReponse(request, response) {
   if (!voiceInput) {
     // twiml.say("It's been a pleasure assisting you. Goodbye!");
     twiml.play(
-      "https://d5d0-119-73-99-27.ngrok-free.app/public/goodbye-message-michael.mp3"
+      "https://ai-backend-five.vercel.app/public/goodbye-message-michael.mp3"
     );
 
     twiml.hangup();
@@ -70,26 +77,21 @@ async function handleReponse(request, response) {
     return response.send(twiml.toString());
   }
 
-  let conversation = [];
-
-  if (cookieData?.conversation) {
-    conversation = cookieData.conversation;
-  }
-  conversation = [...initializeConversation(), ...conversation];
+  let conversation = getConversationByUserId(callerId);
 
   conversation.push({ role: "user", content: `${voiceInput}` });
 
-  // let aiResponse = await generateAIResponse(conversation.join(";"));
   let aiResponse = await generateAIResponse(conversation);
 
-  if (aiResponse?.role === "tool") {
+  while (aiResponse?.role === "tool") {
+    console.log("while");
     conversation.push(aiResponse);
-
     aiResponse = await generateAIResponse(conversation);
   }
 
-  let connectToHuman = false;
+  console.log("aiResponse", aiResponse);
 
+  let connectToHuman = false;
   if (aiResponse === "connect_to_human") {
     aiResponse = "You are now being connected to a human agent.";
     connectToHuman = true;
@@ -98,7 +100,6 @@ async function handleReponse(request, response) {
   const cleanedAiResponse = aiResponse.replace(/^\w+:\s*/i, "").trim();
 
   conversation.push({ role: "assistant", content: `${aiResponse}` });
-  // conversation.push(`${aiResponse}`);
 
   // console.log("conversation - after", conversation);
 
@@ -112,17 +113,12 @@ async function handleReponse(request, response) {
   console.log("textToSpeechFileURL", textToSpeechFileURL);
 
   twiml.play(textToSpeechFileURL);
-  // twiml.play(
-  //   "https://d5d0-119-73-99-27.ngrok-free.app/public/greeting-message-michael.mp3"
-  // );
-
-  console.log("play");
 
   if (connectToHuman === true) {
     twiml
       .dial({
         callerId: "+923055952372",
-        action: "https://d5d0-119-73-99-27.ngrok-free.app/twilio/dial",
+        action: "https://ai-backend-five.vercel.app/twilio/dial",
         method: "POST",
       })
       .number("+923055952372");
@@ -132,88 +128,24 @@ async function handleReponse(request, response) {
       {
         method: "POST",
       },
-      `https://d5d0-119-73-99-27.ngrok-free.app/twilio/transcribe`
+      `https://ai-backend-five.vercel.app/twilio/transcribe`
     );
   }
 
   response.type("application/xml");
+  updateConversation(callerId, conversation);
 
-  conversation.splice(0, 3);
-
-  const newCookieValue = encodeURIComponent(
-    JSON.stringify({
-      conversation,
-    })
-  );
-
-  response.cookie("convo", newCookieValue);
   return response.send(twiml.toString());
 
-  // Function to generate the AI response based on the conversation history
   async function generateAIResponse(conversation) {
-    // const messages = formatConversation(conversation);
-    // return await createChatCompletion(messages);
-    // console.log("conversation-------", conversation);
-    // return;
     return await createChatCompletion(conversation);
   }
 
-  // Function to create a chat completion using the OpenAI API
   async function createChatCompletion(messages) {
     try {
       const completion = await openai.chat.completions.create({
-        // model: "gpt-3.5-turbo",
         model: "gpt-3.5-turbo-1106",
-        model: "ft:gpt-3.5-turbo-1106:cheetah-agency-llc::8YDKqVF9",
         tools: [
-          // {
-          //   type: "function",
-          //   function: {
-          //     name: "schedule_meeting",
-          //     description:
-          //       "Schedule meeting with a human because user wants to discuss further with a human in a scheduled meeting.",
-          //     parameters: {
-          //       type: "object",
-          //       properties: {
-          //         month: {
-          //           type: "number",
-          //           enum: [
-          //             "January",
-          //             "February",
-          //             "March",
-          //             "April",
-          //             "May",
-          //             "June",
-          //             "July",
-          //             "August",
-          //             "September",
-          //             "October",
-          //             "November",
-          //             "December",
-          //           ],
-          //           description:
-          //             "The month in which the user would like to get his/her meeting scheduled.",
-          //         },
-
-          //         date: {
-          //           type: "number",
-          //           enum: Array.from({ length: 31 }, (_, index) => index + 1),
-          //           description:
-          //             "The specific date of the given month on which the user would like to get his/her meeting scheduled.",
-          //         },
-
-          //         hour: {
-          //           type: "number",
-          //           enum: Array.from({ length: 23 }, (_, index) => index),
-          //           description:
-          //             "The specific hour between 0 to 23 at which the user would like to get his/her meeting scheduled.",
-          //         },
-          //       },
-          //       required: ["month", "date", "hour"],
-          //     },
-          //   },
-          // },
-
           {
             type: "function",
             function: {
@@ -224,7 +156,7 @@ async function handleReponse(request, response) {
                 type: "object",
                 properties: {
                   month: {
-                    type: "number",
+                    type: "string",
                     enum: [
                       "January",
                       "February",
@@ -247,7 +179,7 @@ async function handleReponse(request, response) {
                     type: "number",
                     enum: Array.from({ length: 31 }, (_, index) => index + 1),
                     description:
-                      "The specific date of the given month on which the user would like to get his/her meeting scheduled.",
+                      "The date of the month on which the user would like to get his/her meeting scheduled.",
                   },
 
                   hour: {
@@ -272,7 +204,7 @@ async function handleReponse(request, response) {
                 type: "object",
                 properties: {
                   month: {
-                    type: "number",
+                    type: "string",
                     enum: [
                       "January",
                       "February",
@@ -361,6 +293,54 @@ async function handleReponse(request, response) {
           {
             type: "function",
             function: {
+              name: "schedule_meeting",
+              description:
+                "Schedule the user's meeting based on the time slot accepted by the user.",
+              parameters: {
+                type: "object",
+                properties: {
+                  month: {
+                    type: "string",
+                    enum: [
+                      "January",
+                      "February",
+                      "March",
+                      "April",
+                      "May",
+                      "June",
+                      "July",
+                      "August",
+                      "September",
+                      "October",
+                      "November",
+                      "December",
+                    ],
+                    description:
+                      "The month in which the user would like to get his/her meeting scheduled.",
+                  },
+
+                  date: {
+                    type: "number",
+                    enum: Array.from({ length: 31 }, (_, index) => index + 1),
+                    description:
+                      "The specific date of the given month on which the user would like to get his/her meeting scheduled.",
+                  },
+
+                  hour: {
+                    type: "number",
+                    enum: Array.from({ length: 23 }, (_, index) => index),
+                    description:
+                      "The specific hour between 0 to 23 at which the user would like to get his/her meeting scheduled.",
+                  },
+                },
+                required: ["month", "date", "hour"],
+              },
+            },
+          },
+
+          {
+            type: "function",
+            function: {
               name: "connect_to_human",
               description:
                 "The user wants to connect to a human and would like to continue conversation with him/her now or the user said 'I love humans'.",
@@ -372,22 +352,23 @@ async function handleReponse(request, response) {
           },
         ],
         messages: messages,
-        temperature: 0.8, // Controls the randomness of the generated responses. Higher values (e.g., 1.0) make the output more random and creative, while lower values (e.g., 0.2) make it more focused and deterministic. You can adjust the temperature based on your desired level of creativity and exploration.
-        max_tokens: 100, //You can adjust this number to control the length of the generated responses. Keep in mind that setting max_tokens too low might result in responses that are cut off and don't make sense.
-        // top_p: 0.9, Set the top_p value to around 0.9 to keep the generated responses focused on the most probable tokens without completely eliminating creativity. Adjust the value based on the desired level of exploration.
-        // n: 1, Specifies the number of completions you want the model to generate. Generating multiple completions will increase the time it takes to receive the responses.
+        temperature: 0.8,
+        max_tokens: 100,
       });
 
       const assistantMessage = completion.choices[0].message;
 
-      console.log("assistantMessage", assistantMessage.content);
-      console.log("assistantMessage", assistantMessage.tool_calls?.[0]);
+      console.log("assistantMessage.content", assistantMessage.content);
+      console.log(
+        " assistantMessage.tool_calls?.[0]",
+        assistantMessage.tool_calls?.[0]
+      );
 
       const shouldCallFunction =
-        (assistantMessage.content === null || !assistantMessage.content) &&
+        (assistantMessage.content === null ||
+          !assistantMessage.content ||
+          assistantMessage.content?.includes('{"name":')) &&
         assistantMessage?.tool_calls?.length > 0;
-
-      // const shouldCallFunction = assistantMessage?.tool_calls?.length > 0;
 
       console.log("shouldCallFunction", shouldCallFunction);
 
@@ -406,12 +387,8 @@ async function handleReponse(request, response) {
       );
 
       conversation.push(assistantMessage);
-
-      console.log("calling execute call function now.....");
-
       return await executeFunctionCall(assistantMessage, twiml, request);
     } catch (error) {
-      // Check if the error is a timeout error
       if (error.code === "ETIMEDOUT" || error.code === "ESOCKETTIMEDOUT") {
         console.error("Error: OpenAI API request timed out."); // Log an error message indicating that the OpenAI API request timed out
         twiml.say(
@@ -438,7 +415,6 @@ async function handleReponse(request, response) {
     }
   }
 
-  // Function to format the conversation history into a format that the OpenAI API can understand
   function formatConversation(conversation) {
     // let isAI = true;
     let isAI = false;
@@ -562,150 +538,38 @@ async function executeFunctionCall(assistantMessage, twiml, request) {
 
   if (functionName === "schedule_meeting") {
     return await scheduleMeeting(assistantMessage, request);
-  }
-
-  if (functionName === "check_slot_availability") {
+  } else if (functionName === "check_slot_availability") {
     return await checkSlotAvailability(assistantMessage, request);
-  }
-
-  if (functionName === "get_next_three_slots") {
+  } else if (functionName === "get_next_three_slots") {
     return await getNextThreeSlots(assistantMessage);
-  }
-
-  if (functionName === "get_slots_for_next_date") {
+  } else if (functionName === "get_slots_for_next_date") {
     return await getSlotsForNextDate(assistantMessage);
-  }
-
-  if (functionName === "connect_to_human") {
+  } else if (functionName === "connect_to_human") {
     return await connectToHuman(twiml);
   }
 }
 
-async function scheduleMeeting(assistantMessage, request) {
-  args = JSON.parse(assistantMessage?.tool_calls?.[0].function.arguments);
-
-  console.log("args.month", args.month);
-  console.log("args.date", args.date);
-  console.log("args.hour", args.hour);
-
-  const monthMap = {
-    January: 0,
-    February: 1,
-    March: 2,
-    April: 3,
-    May: 4,
-    June: 5,
-    July: 6,
-    August: 7,
-    September: 8,
-    October: 9,
-    November: 10,
-    December: 11,
-  };
-
-  let { month, date, hour } = args;
-
-  date = parseInt(date);
-  hour = parseInt(hour);
-
-  const convertedDate = new Date();
-
-  convertedDate.setFullYear(new Date().getFullYear()); // Set the current year
-  convertedDate.setMonth(monthMap[month]); // Set the month
-  convertedDate.setDate(date);
-  // convertedDate.setHours(hour - 1, 59, 59, 59);
-  convertedDate.setHours(hour, 30);
-
-  console.log("convertedDate", convertedDate, convertedDate.toString());
-
-  // return "Please first create an account at cheetah.com. After successful registration, come back and I will get your meeting scheduled.";
-
-  // let from = request.body.From;
-
-  // let by;
-
-  // if (from && from.startsWith("client:")) {
-  //   by = "id";
-  //   from = from.split(":")[1];
-  // } else {
-  //   by = "phone";
-  // }
-
-  // const user = await getUser(by, from);
-
-  // if (!user?.email) {
-  //   return "Please first create an account at cheetah.com. After successful registration, come back and I will get your meeting scheduled.";
-  // }
-
-  // const { day, time } = await getAvailableTimeSlots(new Date(), user.email);
-  const slots = await getAvailableTimeSlots(convertedDate, "");
-
-  return {
-    role: "tool",
-    tool_call_id: assistantMessage.tool_calls[0].id,
-    name: assistantMessage.tool_calls[0].function.name,
-    content: `${slots}`,
-  };
-
-  return `Your meeting has been scheduled for ${day} at ${time}.`;
-}
-
 async function checkSlotAvailability(assistantMessage, request) {
-  args = JSON.parse(assistantMessage?.tool_calls?.[0].function.arguments);
+  const result = await isUserRegistered(request);
 
-  console.log("checkSlotAvailability", args);
+  if (!result) {
+    return {
+      role: "tool",
+      tool_call_id: assistantMessage.tool_calls[0].id,
+      name: assistantMessage.tool_calls[0].function.name,
+      // content:
+      //   "Please first create an account at cheetah.com. After successful registration, come back and I will get your meeting scheduled.",
+      content:
+        "User has not yet created an account. User must create an account at cheetah.com before he can request to schedule a meeting.",
+    };
+  }
 
-  const monthMap = {
-    January: 0,
-    February: 1,
-    March: 2,
-    April: 3,
-    May: 4,
-    June: 5,
-    July: 6,
-    August: 7,
-    September: 8,
-    October: 9,
-    November: 10,
-    December: 11,
-  };
+  const { month, date, hour } = JSON.parse(
+    assistantMessage?.tool_calls?.[0].function.arguments
+  );
 
-  let { month, date, hour } = args;
-
-  date = parseInt(date);
-  hour = parseInt(hour);
-
-  const convertedDate = new Date();
-
-  convertedDate.setFullYear(new Date().getFullYear());
-  convertedDate.setMonth(monthMap[month]);
-  convertedDate.setDate(date);
-  // convertedDate.setHours(hour - 1, 59, 59, 59);
-  convertedDate.setHours(hour, 30);
-
-  console.log("convertedDate", convertedDate, convertedDate.toString());
-
-  // return "Please first create an account at cheetah.com. After successful registration, come back and I will get your meeting scheduled.";
-
-  // let from = request.body.From;
-
-  // let by;
-
-  // if (from && from.startsWith("client:")) {
-  //   by = "id";
-  //   from = from.split(":")[1];
-  // } else {
-  //   by = "phone";
-  // }
-
-  // const user = await getUser(by, from);
-
-  // if (!user?.email) {
-  //   return "Please first create an account at cheetah.com. After successful registration, come back and I will get your meeting scheduled.";
-  // }
-
-  // const { day, time } = await getAvailableTimeSlots(new Date(), user.email);
-  const slots = await getAvailableTimeSlots(convertedDate, "");
+  const convertedDate = constructDate(month, date, hour);
+  const slots = await getAvailableTimeSlots(convertedDate);
 
   return {
     role: "tool",
@@ -713,60 +577,16 @@ async function checkSlotAvailability(assistantMessage, request) {
     name: assistantMessage.tool_calls[0].function.name,
     content: `${slots}`,
   };
-
-  return `Your meeting has been scheduled for ${day} at ${time}.`;
-}
-
-async function connectToHuman(twiml) {
-  console.log("connecting to a human..............");
-
-  twiml
-    .dial({
-      // callerId: "+923055952372",
-      callerId: "+14697074725",
-      action: "https://d5d0-119-73-99-27.ngrok-free.app/twilio/dial",
-      method: "POST",
-    })
-    .number("+923055952372");
-
-  return "You are now being connected to a human agent.";
 }
 
 async function getNextThreeSlots(assistantMessage) {
-  let args = JSON.parse(assistantMessage?.tool_calls?.[0].function.arguments);
+  let { month, date, hour } = JSON.parse(
+    assistantMessage?.tool_calls?.[0].function.arguments
+  );
 
-  console.log("getNextThreeSlots", args);
+  hour = parseInt(hour) + 1;
 
-  const monthMap = {
-    January: 0,
-    February: 1,
-    March: 2,
-    April: 3,
-    May: 4,
-    June: 5,
-    July: 6,
-    August: 7,
-    September: 8,
-    October: 9,
-    November: 10,
-    December: 11,
-  };
-
-  let { month, date, hour } = args;
-
-  date = parseInt(date);
-  hour = parseInt(hour);
-
-  const convertedDate = new Date();
-
-  convertedDate.setFullYear(new Date().getFullYear());
-  convertedDate.setMonth(monthMap[month]);
-  convertedDate.setDate(date);
-  convertedDate.setHours(hour + 1, 59, 59, 59);
-  // convertedDate.setHours(hour);
-
-  console.log("convertedDate", convertedDate, convertedDate.toString());
-
+  const convertedDate = constructDate(month, date, hour);
   const result = await getAvailableTimeSlots(convertedDate, "", true);
 
   return {
@@ -778,35 +598,11 @@ async function getNextThreeSlots(assistantMessage) {
 }
 
 async function getSlotsForNextDate(assistantMessage) {
-  let args = JSON.parse(assistantMessage?.tool_calls?.[0].function.arguments);
+  let { month, date } = JSON.parse(
+    assistantMessage?.tool_calls?.[0].function.arguments
+  );
 
-  console.log("getSlotsForNextDate", args);
-
-  const monthMap = {
-    January: 0,
-    February: 1,
-    March: 2,
-    April: 3,
-    May: 4,
-    June: 5,
-    July: 6,
-    August: 7,
-    September: 8,
-    October: 9,
-    November: 10,
-    December: 11,
-  };
-
-  let { month, date } = args;
-
-  const convertedDate = new Date();
-
-  convertedDate.setFullYear(new Date().getFullYear());
-  convertedDate.setMonth(monthMap[month]);
-  convertedDate.setDate(date);
-
-  console.log("convertedDate", convertedDate, convertedDate.toString());
-
+  const convertedDate = constructDate(month, date);
   const result = await getAvailableTimeSlots(convertedDate, "", true);
 
   return {
@@ -815,6 +611,88 @@ async function getSlotsForNextDate(assistantMessage) {
     name: assistantMessage.tool_calls[0].function.name,
     content: `${result}`,
   };
+}
+
+async function scheduleMeeting(assistantMessage, request) {
+  const { month, date, hour } = JSON.parse(
+    assistantMessage?.tool_calls?.[0].function.arguments
+  );
+
+  const convertedDate = constructDate(month, date, hour);
+
+  console.log("scheduleMeeting convertedDate", convertedDate.toString());
+
+  // const hours = convertedDate.getHours();
+  // convertedDate.setHours(hours, 0, 0, 0);
+
+  const timezoneDifferenceInHours =
+    Math.abs(convertedDate?.getTimezoneOffset()) / 60;
+
+  console.log("timezoneDifferenceInHours", timezoneDifferenceInHours);
+
+  // const meetingStartTime =
+  //   timezoneDifferenceInHours !== 0
+  //     ? moment(convertedDate).add(5, "hours").toDate()
+  //     : moment(convertedDate)
+  //         .subtract(timezoneDifferenceInHours, "hours")
+  //         .toDate();
+
+  let meetingStartTime =
+    timezoneDifferenceInHours === 0
+      ? moment(convertedDate)
+          .subtract(timezoneDifferenceInHours, "hours")
+          .toDate()
+      : convertedDate;
+
+  meetingStartTime = moment(meetingStartTime).add(1, "minute").toDate();
+
+  let meetingEndTime = new Date(
+    new Date(meetingStartTime).setTime(
+      meetingStartTime.getTime() + 30 * 60 * 1000
+    )
+  );
+
+  console.log("meetingStartTime", moment(meetingStartTime).format("hh:mm a"));
+  console.log("meetingEndTime", moment(meetingEndTime).format("hh:mm a"));
+  console.log("format(dddd)", moment(meetingEndTime).format("dddd"));
+
+  // return {
+  //   role: "tool",
+  //   tool_call_id: assistantMessage.tool_calls[0].id,
+  //   name: assistantMessage.tool_calls[0].function.name,
+  //   content: `Meeting has been scheduled. Inform the user.`,
+  // };
+
+  const email = await isUserRegistered(request);
+
+  await addEventToGoogleCalendar(
+    email,
+    "Cheetah AI",
+    meetingStartTime.toISOString(),
+    meetingEndTime.toISOString()
+  );
+
+  return {
+    role: "tool",
+    tool_call_id: assistantMessage.tool_calls[0].id,
+    name: assistantMessage.tool_calls[0].function.name,
+    content: `Meeting has been scheduled.`,
+  };
+}
+
+async function connectToHuman(twiml) {
+  console.log("connecting to a human..............");
+
+  twiml
+    .dial({
+      // callerId: "+923055952372",
+      callerId: "+14697074725",
+      action: "https://ai-backend-five.vercel.app/twilio/dial",
+      method: "POST",
+    })
+    .number("+923055952372");
+
+  return "You are now being connected to a human agent.";
 }
 
 async function handleDial(request, response) {
@@ -839,7 +717,31 @@ function initializeConversation() {
       
       Keep in mind the following points when answering questions:
       1. Please provide engaging but concise responses.
-      2. Don't make assumptions about what values to plug into functions. You must ask the user for any values before calling the functions.
+      2. Don't make assumptions about what values to plug into functions. Ask for clarification if a user request is ambiguous.
+      3. When the user indicates that he would like to schedule a meeting, first ask the user to provide specific month (January to       December), then ask for date of the month, and finally the hour in 24-hour format. After the user has provided month, date and hour, call the appropriate functions with these details to get available slots. 
+        Suppose the user provided folowing values of December for month, 28 for date and 19 for hour. Here's an example the workflow to follow based on the given values:
+
+        3.1. First, call the 'check_slot_availability' function with the date, month and hour provided by the user. If the function's result indicates that the slot on December 28 at 19:00 is available, call the 'schedule_meeting' function to schedule the meeting and then inform the user.
+
+        3.2. If the result of 'check_slot_availability' function indicates that the slot on December 28 at 19:00 is unavailable and provides the next available slot, for example 21:00, suggest this next slot to the user.If the user accepted next available slot, that is 21:00, call the 'schedule_meeting' function to schedule the meeting and then inform the user.
+
+        3.3. If the user refuses the suggested slot, directly call the 'get_next_three_slots' function to get the next three available slots on December 28 and present these slots to the user, without letting the user know that you are going to get the next three available slots. If the user refuses the suggested slots, call the 'get_next_three_slots' functions again with the same month and date as provided by the user but with the hour that is the last of the three slots returned by the 'get_next_three_slots' function. After getting the slots from the 'get_next_three_slots' function, suggest these slots to the user again. If the user refuses the suggested slots again, call the 'get_next_three_slots' function again with the same month and date but with the hour that is the last of the newest three slots. So you the get the idea, keep calling the 'get_next_three_slots' function until its result indicates that there are not slots left on December 28.
+
+        3.4. If the result of 'get_next_three_slots' function indicates that no slots left on December 28, move to the next 29 (and month also if needed).
+        
+        3.5. After moving to the next date, that is December 29, call the 'get_slots_for_next_date' function with the next date to get three slots on December 29, without letting the user know that you are going to get the available slots on December 29, and suggest available slots to the user. You need to call 'get_slots_for_next_date' function only when the result of 'get_next_three_slots' indicated that no slots are left for the previous date, that is Decmber 28.
+        
+        3.6. If the user refuses suggested slots on the December 29, then keep getting next three slots on the current date (29) by calling the 'get_next_three_slots' function and keep communicating these slots to the user until either the user accepts one of the suggested or there are not slots left on December 29, too. 
+        
+        3.7. If the 'get_next_three_slots' function's result indicates no slots for the December 29, too, then start the workflow again from step 3.4.
+
+        3.8. Finally, when the user has accepted or confirmed a time slot, call the 'schedule_meeting' function with the correct month, date and hour that the user accepted for scheduling the meeting.
+
+
+        Remember that if the result of any of the function calls during the schedule meeting workflow tell you that the user has not yet created an account, do not proceed with the schedule meeting process. User must have account because the meeting will be schedule based on the user's email.
+        When the user accepts one of the available slots, you should call the 'schedule_meeting' function and then inform the user about status of the meeting.
+        Ensure clear and concise communication with the user at each step, and handle user refusals appropriately. Your goal is to successfully schedule a meeting for the user based on the provided criteria.
+
       3. Use the following information about Cheetah Agency's history to answers questions about the agency:
 
         Summary of Cheetah Agency's History:
@@ -915,6 +817,59 @@ function initializeConversation() {
         "Hi, thanks for calling Cheetah Agency. I'm Adam, an AI trained to help potential and current customers learn more about the agency and our storied history or schedule meetings with our engineers or creative team. I can also forward you to one of my favourite humans here at Cheetah. Just say 'I love humans' and I'll forward you. Anyways, tell me what you want to do - I can handle it.",
     },
   ];
+}
+
+async function isUserRegistered(request) {
+  let from = request.body.From;
+  let by;
+
+  if (from && from.startsWith("client:")) {
+    by = "id";
+    from = from.split(":")[1];
+  } else {
+    by = "phone";
+  }
+  const user = await getUser(by, from);
+
+  if (user?.email) {
+    return user.email;
+  }
+
+  return false;
+}
+
+function constructDate(month, date, hour) {
+  const monthMap = {
+    January: 0,
+    February: 1,
+    March: 2,
+    April: 3,
+    May: 4,
+    June: 5,
+    July: 6,
+    August: 7,
+    September: 8,
+    October: 9,
+    November: 10,
+    December: 11,
+  };
+
+  date = parseInt(date);
+  hour = hour ? parseInt(hour) - 1 : null;
+
+  const convertedDate = new Date();
+
+  convertedDate.setFullYear(new Date().getFullYear());
+  convertedDate.setMonth(monthMap[month]);
+  convertedDate.setDate(date);
+
+  if (hour || hour === 0) {
+    convertedDate.setHours(hour, 59, 59, 59);
+  }
+
+  console.log("convertedDate", convertedDate, convertedDate.toString());
+
+  return convertedDate;
 }
 
 module.exports = {
