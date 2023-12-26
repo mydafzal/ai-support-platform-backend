@@ -5,6 +5,7 @@ const {
   handleReponse,
   handleEmptyRecording,
   handleDial,
+  handleCallDisconnect,
 } = require("./controller");
 
 const OPENAI_API_KEY = "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";
@@ -29,14 +30,22 @@ router.post("/empty-recording", async (req, res) => {
   return await handleEmptyRecording(req, res);
 });
 
+router.post("/call-status", async (req, res) => {
+  console.log("call-status - request.body.from", req.body.From);
+
+  if (req.body.CallStatus === "completed") {
+    handleCallDisconnect(req);
+  }
+
+  res.status(200).send();
+});
+
 router.post("/dial", async (req, res) => {
   console.log("dialingingingi");
   console.log("dialingingingi");
   console.log("dialingingingi");
 
   return await handleDial(req, res);
-
-  // return await handleEmptyRecording(req, res);
 });
 
 router.get("/open-ai", async (req, res) => {
