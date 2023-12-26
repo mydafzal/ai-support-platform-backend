@@ -75,7 +75,7 @@ async function getAvailableTimeSlots(
     // if (hoursDifference !== 0) {
     //   time = moment(time).subtract(5, "hours").toDate();
     // }
-    time = moment(time).subtract(5, "hours").toDate();
+    // time = moment(time).subtract(5, "hours").toDate();
 
     const formattedTime = moment(time).format("HH:mm");
 

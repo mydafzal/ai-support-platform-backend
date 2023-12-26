@@ -578,7 +578,14 @@ async function checkSlotAvailability(assistantMessage, request) {
     assistantMessage?.tool_calls?.[0].function.arguments
   );
 
-  const convertedDate = constructDate(month, date, hour);
+  let convertedDate = constructDate(month, date, hour);
+
+  const hoursDifference = Math.abs(requestedDate?.getTimezoneOffset()) / 60;
+
+  if (hoursDifference === 0) {
+    convertedDate = moment(convertedDate).subtract(5, "hours").toDate();
+  }
+
   const slots = await getAvailableTimeSlots(convertedDate);
 
   console.log("getAvailableTimeSlots - response", slots);
@@ -598,7 +605,14 @@ async function getNextThreeSlots(assistantMessage) {
 
   hour = parseInt(hour) + 1;
 
-  const convertedDate = constructDate(month, date, hour);
+  let convertedDate = constructDate(month, date, hour);
+
+  const hoursDifference = Math.abs(requestedDate?.getTimezoneOffset()) / 60;
+
+  if (hoursDifference === 0) {
+    convertedDate = moment(convertedDate).subtract(5, "hours").toDate();
+  }
+
   const result = await getAvailableTimeSlots(convertedDate, "", true);
 
   return {
@@ -614,7 +628,14 @@ async function getSlotsForNextDate(assistantMessage) {
     assistantMessage?.tool_calls?.[0].function.arguments
   );
 
-  const convertedDate = constructDate(month, date);
+  let convertedDate = constructDate(month, date);
+
+  const hoursDifference = Math.abs(requestedDate?.getTimezoneOffset()) / 60;
+
+  if (hoursDifference === 0) {
+    convertedDate = moment(convertedDate).subtract(5, "hours").toDate();
+  }
+
   const result = await getAvailableTimeSlots(convertedDate, "", true);
 
   return {
