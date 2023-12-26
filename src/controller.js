@@ -82,6 +82,11 @@ async function handleReponse(request, response) {
 
   let conversation = getConversationByUserId(callerId);
 
+  if (!conversation) {
+    conversation = initializeConversation();
+    addConversation(callerId, conversation);
+  }
+
   conversation.push({ role: "user", content: `${voiceInput}` });
 
   let aiResponse = await generateAIResponse(conversation);
