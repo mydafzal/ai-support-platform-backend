@@ -7,6 +7,7 @@ const {
   getConversationByUserId,
   updateConversation,
   addConversation,
+  deleteConversation,
 } = require("./datastore");
 const { addEventToGoogleCalendar } = require("./google-calendar");
 const moment = require("moment");
@@ -72,6 +73,8 @@ async function handleReponse(request, response) {
     );
 
     twiml.hangup();
+
+    deleteConversation(callerId);
 
     response.type("application/xml");
     return response.send(twiml.toString());
@@ -699,7 +702,15 @@ async function handleDial(request, response) {
   const VoiceResponse = Twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
+  let callerId = request.body.From;
+
+  if (callerId?.startsWith("client:")) {
+    callerId = callerId.split(":")[1];
+  }
+
   twiml.hangup();
+
+  deleteConversation(callerId);
 
   response.type("application/xml");
   return response.send(twiml.toString());

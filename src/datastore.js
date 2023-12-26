@@ -1,4 +1,4 @@
-const conversations = [];
+let conversations = [];
 
 function addConversation(userId, conversation) {
   conversations.push({ userId, conversation });
@@ -13,8 +13,13 @@ function updateConversation(userId, conversation) {
   conversations[index].conversation = conversation;
 }
 
+function deleteConversation(userId) {
+  conversations = conversations.filter((item) => item.userId !== userId);
+}
+
 module.exports = {
   addConversation,
   getConversationByUserId,
   updateConversation,
+  deleteConversation,
 };
