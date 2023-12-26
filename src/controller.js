@@ -43,10 +43,10 @@ async function handleTranscription(request, response) {
 
     addConversation(callerId, initializeConversation(isPhoneCall));
 
-    // https://1558-119-73-99-27.ngrok-free.app
+    // https://ai-backend-five.vercel.app
 
     twiml.play(
-      "https://1558-119-73-99-27.ngrok-free.app/public/greeting-message-michael.mp3"
+      "https://ai-backend-five.vercel.app/public/greeting-message-michael.mp3"
     );
   }
 
@@ -54,7 +54,7 @@ async function handleTranscription(request, response) {
     speechTimeout: "auto",
     speechModel: "experimental_conversations",
     input: "speech",
-    action: "https://1558-119-73-99-27.ngrok-free.app/twilio/respond",
+    action: "https://ai-backend-five.vercel.app/twilio/respond",
     actionOnEmptyResult: true,
   });
 
@@ -87,7 +87,7 @@ async function handleReponse(request, response) {
   if (!voiceInput) {
     // twiml.say("It's been a pleasure assisting you. Goodbye!");
     twiml.play(
-      "https://1558-119-73-99-27.ngrok-free.app/public/goodbye-message-michael.mp3"
+      "https://ai-backend-five.vercel.app/public/goodbye-message-michael.mp3"
     );
 
     twiml.hangup();
@@ -146,7 +146,7 @@ async function handleReponse(request, response) {
     twiml
       .dial({
         callerId: "+923055952372",
-        action: "https://1558-119-73-99-27.ngrok-free.app/twilio/dial",
+        action: "https://ai-backend-five.vercel.app/twilio/dial",
         method: "POST",
       })
       .number("+923055952372");
@@ -156,7 +156,7 @@ async function handleReponse(request, response) {
       {
         method: "POST",
       },
-      `https://1558-119-73-99-27.ngrok-free.app/twilio/transcribe`
+      `https://ai-backend-five.vercel.app/twilio/transcribe`
     );
   }
 
@@ -775,7 +775,7 @@ async function connectToHuman(twiml) {
     .dial({
       // callerId: "+923055952372",
       callerId: "+14697074725",
-      action: "https://1558-119-73-99-27.ngrok-free.app/twilio/dial",
+      action: "https://ai-backend-five.vercel.app/twilio/dial",
       method: "POST",
     })
     .number("+923055952372");
