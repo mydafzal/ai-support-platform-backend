@@ -62,12 +62,12 @@ async function getAvailableTimeSlots(
   //   );
   // }
 
-  data.collection?.forEach((item) => {
-    const time = new Date(item.start_time);
+  // data.collection?.forEach((item) => {
+  //   const time = new Date(item.start_time);
 
-    const formattedTime = moment(time).format("HH:mm");
-    console.log("slot", formattedTime);
-  });
+  //   const formattedTime = moment(time).format("HH:mm");
+  //   console.log("slot", formattedTime);
+  // });
 
   const slots = data.collection?.map((item) => {
     let time = new Date(item.start_time);
