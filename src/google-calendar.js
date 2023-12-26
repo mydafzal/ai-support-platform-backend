@@ -147,7 +147,13 @@ async function refreshAccessToken(oAuth2Client) {
   }
 }
 
-async function addEventToGoogleCalendar(callerEmail, eventName, start, end) {
+async function addEventToGoogleCalendar(
+  callerEmail,
+  eventName,
+  projectType,
+  start,
+  end
+) {
   if (!auth) {
     auth = await authorize();
   }
@@ -160,7 +166,7 @@ async function addEventToGoogleCalendar(callerEmail, eventName, start, end) {
 
   const event = {
     summary: eventName,
-    description: "Meeting with Cheetah's customer support",
+    description: `Meeting with Cheetah's customer support for a ${projectType} project.`,
     start: {
       dateTime: start,
       timeZone: "America/Los_Angeles",
@@ -180,7 +186,7 @@ async function addEventToGoogleCalendar(callerEmail, eventName, start, end) {
     },
     conferenceData: {
       createRequest: {
-        requestId: "ai-ccript-3",
+        requestId: "customer-bot",
         conferenceSolutionKey: {
           type: "hangoutsMeet",
         },
