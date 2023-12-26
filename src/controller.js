@@ -13,6 +13,13 @@ const { addEventToGoogleCalendar } = require("./google-calendar");
 const moment = require("moment");
 
 const OPENAI_API_KEY = "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"; // cheetah account
+const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+
+const ACCOUNT_SID = "AC0ea48061c1c3c4fc80453e587912191f";
+const AUTH_TOKEN = "11cc0d1ee279310ad0c7af5131efd7dc";
+const MESSAGING_SERVICE_SID = "MGa0a02a92b492d363da643620c0728958";
+
+const twilioClient = Twilio(ACCOUNT_SID, AUTH_TOKEN);
 
 async function handleTranscription(request, response) {
   const VoiceResponse = Twilio.twiml.VoiceResponse;
@@ -20,8 +27,11 @@ async function handleTranscription(request, response) {
 
   let callerId = request.body.From;
 
+  let isPhoneCall = true;
+
   if (callerId?.startsWith("client:")) {
     callerId = callerId.split(":")[1];
+    isPhoneCall = false;
   }
 
   const conversation = getConversationByUserId(callerId);
@@ -29,17 +39,17 @@ async function handleTranscription(request, response) {
   if (!conversation) {
     console.log("saying introduction....");
 
-    addConversation(callerId, initializeConversation());
+    addConversation(callerId, initializeConversation(isPhoneCall));
 
     // https://ai-backend-five.vercel.app
 
     twiml.play(
-      "https://ai-backend-five.vercel.app/public/greeting-message-adam.mp3"
+      "https://ai-backend-five.vercel.app/public/greeting-message-michael.mp3"
     );
   }
 
   twiml.gather({
-    speechTimeout: 2,
+    speechTimeout: "auto",
     speechModel: "experimental_conversations",
     input: "speech",
     action: "https://ai-backend-five.vercel.app/twilio/respond",
@@ -53,11 +63,12 @@ async function handleTranscription(request, response) {
 async function handleReponse(request, response) {
   let callerId = request.body.From;
 
+  let isPhoneCall = true;
+
   if (callerId?.startsWith("client:")) {
     callerId = callerId.split(":")[1];
+    isPhoneCall = false;
   }
-
-  const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
   const VoiceResponse = Twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
@@ -74,7 +85,7 @@ async function handleReponse(request, response) {
 
     twiml.hangup();
 
-    deleteConversation(callerId);
+    // deleteConversation(callerId);
 
     response.type("application/xml");
     return response.send(twiml.toString());
@@ -83,11 +94,13 @@ async function handleReponse(request, response) {
   let conversation = getConversationByUserId(callerId);
 
   if (!conversation) {
-    conversation = initializeConversation();
+    conversation = initializeConversation(isPhoneCall);
     addConversation(callerId, conversation);
   }
 
   conversation.push({ role: "user", content: `${voiceInput}` });
+
+  console.log("conversation - before", conversation);
 
   let aiResponse = await generateAIResponse(conversation);
 
@@ -97,7 +110,7 @@ async function handleReponse(request, response) {
     aiResponse = await generateAIResponse(conversation);
   }
 
-  // console.log("aiResponse", aiResponse);
+  console.log("aiResponse", aiResponse);
 
   let connectToHuman = false;
   if (aiResponse === "connect_to_human") {
@@ -117,8 +130,8 @@ async function handleReponse(request, response) {
 
   const textToSpeechFileURL = await convertTextToSpeech(cleanedAiResponse);
 
-  // console.log("cleanedAiResponse", cleanedAiResponse);
-  // console.log("textToSpeechFileURL", textToSpeechFileURL);
+  console.log("cleanedAiResponse", cleanedAiResponse);
+  console.log("textToSpeechFileURL", textToSpeechFileURL);
 
   twiml.play(textToSpeechFileURL);
 
@@ -150,215 +163,244 @@ async function handleReponse(request, response) {
   }
 
   async function createChatCompletion(messages) {
+    const tools = [
+      {
+        type: "function",
+        function: {
+          name: "check_slot_availability",
+          description:
+            "Based on the month, date and hour provided by the user, check if the slot is available.",
+          parameters: {
+            type: "object",
+            properties: {
+              month: {
+                type: "string",
+                enum: [
+                  "January",
+                  "February",
+                  "March",
+                  "April",
+                  "May",
+                  "June",
+                  "July",
+                  "August",
+                  "September",
+                  "October",
+                  "November",
+                  "December",
+                ],
+                description:
+                  "The month in which the user would like to get his/her meeting scheduled.",
+              },
+
+              date: {
+                type: "number",
+                enum: Array.from({ length: 31 }, (_, index) => index + 1),
+                description:
+                  "The date of the month on which the user would like to get his/her meeting scheduled.",
+              },
+
+              hour: {
+                type: "number",
+                enum: Array.from({ length: 23 }, (_, index) => index),
+                description:
+                  "The specific hour between 0 to 23 at which the user would like to get his/her meeting scheduled.",
+              },
+            },
+            required: ["month", "date", "hour"],
+          },
+        },
+      },
+
+      {
+        type: "function",
+        function: {
+          name: "get_next_three_slots",
+          description:
+            "The user declined your request to schedule meeting on the slot that you communicated as the next available slot, that is next to the one the user originally requested. The slot that you communicated was available but the user refused to schedule meeting on that slot.",
+          parameters: {
+            type: "object",
+            properties: {
+              month: {
+                type: "string",
+                enum: [
+                  "January",
+                  "February",
+                  "March",
+                  "April",
+                  "May",
+                  "June",
+                  "July",
+                  "August",
+                  "September",
+                  "October",
+                  "November",
+                  "December",
+                ],
+                description:
+                  "The month in which the user would like to get his/her meeting scheduled.",
+              },
+
+              date: {
+                type: "number",
+                enum: Array.from({ length: 31 }, (_, index) => index + 1),
+                description:
+                  "The specific date of the given month on which the user would like to get his/her meeting scheduled.",
+              },
+
+              hour: {
+                type: "number",
+                enum: Array.from({ length: 23 }, (_, index) => index),
+                description:
+                  "The specific hour you communicated to the user as the next available time slot.",
+              },
+            },
+            required: ["month", "date", "hour"],
+          },
+        },
+      },
+
+      {
+        type: "function",
+        function: {
+          name: "get_slots_for_next_date",
+          description:
+            "No time slots are left on the date you currently provided so now get available slots for the next date.",
+          parameters: {
+            type: "object",
+            properties: {
+              month: {
+                type: "number",
+                enum: [
+                  "January",
+                  "February",
+                  "March",
+                  "April",
+                  "May",
+                  "June",
+                  "July",
+                  "August",
+                  "September",
+                  "October",
+                  "November",
+                  "December",
+                ],
+                description:
+                  "The month in which the user would like to get his/her meeting scheduled. If you incremented the date parameter and that date exceeds the month given by the user, then you should also move the month to next one.",
+              },
+
+              date: {
+                type: "number",
+                enum: Array.from({ length: 31 }, (_, index) => index + 1),
+                description:
+                  "The date next to the one that you previously provided for checking available time slots.",
+              },
+            },
+            required: ["month", "date", "hour"],
+          },
+        },
+      },
+
+      {
+        type: "function",
+        function: {
+          name: "schedule_meeting",
+          description:
+            "Schedule the user's meeting based on the time slot accepted by the user.",
+          parameters: {
+            type: "object",
+            properties: {
+              month: {
+                type: "string",
+                enum: [
+                  "January",
+                  "February",
+                  "March",
+                  "April",
+                  "May",
+                  "June",
+                  "July",
+                  "August",
+                  "September",
+                  "October",
+                  "November",
+                  "December",
+                ],
+                description:
+                  "The month in which the user would like to get his/her meeting scheduled.",
+              },
+
+              date: {
+                type: "number",
+                enum: Array.from({ length: 31 }, (_, index) => index + 1),
+                description:
+                  "The specific date of the given month on which the user would like to get his/her meeting scheduled.",
+              },
+
+              hour: {
+                type: "number",
+                enum: Array.from({ length: 23 }, (_, index) => index),
+                description:
+                  "The specific hour between 0 to 23 at which the user would like to get his/her meeting scheduled.",
+              },
+
+              projectType: {
+                type: "string",
+                enum: ["Creative", "Technical", "Marketing"],
+                description:
+                  "The type of project about which the user would like to discuss in the scheduled meeting.",
+              },
+            },
+            required: ["month", "date", "hour", "projectType"],
+          },
+        },
+      },
+
+      {
+        type: "function",
+        function: {
+          name: "is_user_registered",
+          description:
+            "Check if the user has created an account with Cheetah Agency.",
+          parameters: {
+            type: "object",
+            properties: {},
+          },
+        },
+      },
+
+      {
+        type: "function",
+        function: {
+          name: "connect_to_human",
+          description:
+            "The user wants to connect to a human and would like to continue conversation with him/her now or the user said 'I love humans'.",
+          parameters: {
+            type: "object",
+            properties: {},
+          },
+        },
+      },
+    ];
+
+    if (!request.body.From.startsWith("client:"))
+      tools.push({
+        type: "function",
+        function: {
+          name: "send_sms_with_form_link",
+          description: "Send an SMS to the user's phone number.",
+          parameters: {
+            type: "object",
+            properties: {},
+          },
+        },
+      });
+
     try {
       const completion = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo-1106",
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "check_slot_availability",
-              description:
-                "Based on the month, date and hour provided by the user, check if the slot is available.",
-              parameters: {
-                type: "object",
-                properties: {
-                  month: {
-                    type: "string",
-                    enum: [
-                      "January",
-                      "February",
-                      "March",
-                      "April",
-                      "May",
-                      "June",
-                      "July",
-                      "August",
-                      "September",
-                      "October",
-                      "November",
-                      "December",
-                    ],
-                    description:
-                      "The month in which the user would like to get his/her meeting scheduled.",
-                  },
-
-                  date: {
-                    type: "number",
-                    enum: Array.from({ length: 31 }, (_, index) => index + 1),
-                    description:
-                      "The date of the month on which the user would like to get his/her meeting scheduled.",
-                  },
-
-                  hour: {
-                    type: "number",
-                    enum: Array.from({ length: 23 }, (_, index) => index),
-                    description:
-                      "The specific hour between 0 to 23 at which the user would like to get his/her meeting scheduled.",
-                  },
-                },
-                required: ["month", "date", "hour"],
-              },
-            },
-          },
-
-          {
-            type: "function",
-            function: {
-              name: "get_next_three_slots",
-              description:
-                "The user declined your request to schedule meeting on the slot that you communicated as the next available slot, that is next to the one the user originally requested. The slot that you communicated was available but the user refused to schedule meeting on that slot.",
-              parameters: {
-                type: "object",
-                properties: {
-                  month: {
-                    type: "string",
-                    enum: [
-                      "January",
-                      "February",
-                      "March",
-                      "April",
-                      "May",
-                      "June",
-                      "July",
-                      "August",
-                      "September",
-                      "October",
-                      "November",
-                      "December",
-                    ],
-                    description:
-                      "The month in which the user would like to get his/her meeting scheduled.",
-                  },
-
-                  date: {
-                    type: "number",
-                    enum: Array.from({ length: 31 }, (_, index) => index + 1),
-                    description:
-                      "The specific date of the given month on which the user would like to get his/her meeting scheduled.",
-                  },
-
-                  hour: {
-                    type: "number",
-                    enum: Array.from({ length: 23 }, (_, index) => index),
-                    description:
-                      "The specific hour you communicated to the user as the next available time slot.",
-                  },
-                },
-                required: ["month", "date", "hour"],
-              },
-            },
-          },
-
-          {
-            type: "function",
-            function: {
-              name: "get_slots_for_next_date",
-              description:
-                "No time slots are left on the date you currently provided so now get available slots for the next date.",
-              parameters: {
-                type: "object",
-                properties: {
-                  month: {
-                    type: "number",
-                    enum: [
-                      "January",
-                      "February",
-                      "March",
-                      "April",
-                      "May",
-                      "June",
-                      "July",
-                      "August",
-                      "September",
-                      "October",
-                      "November",
-                      "December",
-                    ],
-                    description:
-                      "The month in which the user would like to get his/her meeting scheduled. If you incremented the date parameter and that date exceeds the month given by the user, then you should also move the month to next one.",
-                  },
-
-                  date: {
-                    type: "number",
-                    enum: Array.from({ length: 31 }, (_, index) => index + 1),
-                    description:
-                      "The date next to the one that you previously provided for checking available time slots.",
-                  },
-
-                  // hour: {
-                  //   type: "number",
-                  //   enum: Array.from({ length: 23 }, (_, index) => index),
-                  //   description:
-                  //     "The specific hour between 0 to 23 at which the user would like to get his/her meeting scheduled.",
-                  // },
-                },
-                required: ["month", "date", "hour"],
-              },
-            },
-          },
-
-          {
-            type: "function",
-            function: {
-              name: "schedule_meeting",
-              description:
-                "Schedule the user's meeting based on the time slot accepted by the user.",
-              parameters: {
-                type: "object",
-                properties: {
-                  month: {
-                    type: "string",
-                    enum: [
-                      "January",
-                      "February",
-                      "March",
-                      "April",
-                      "May",
-                      "June",
-                      "July",
-                      "August",
-                      "September",
-                      "October",
-                      "November",
-                      "December",
-                    ],
-                    description:
-                      "The month in which the user would like to get his/her meeting scheduled.",
-                  },
-
-                  date: {
-                    type: "number",
-                    enum: Array.from({ length: 31 }, (_, index) => index + 1),
-                    description:
-                      "The specific date of the given month on which the user would like to get his/her meeting scheduled.",
-                  },
-
-                  hour: {
-                    type: "number",
-                    enum: Array.from({ length: 23 }, (_, index) => index),
-                    description:
-                      "The specific hour between 0 to 23 at which the user would like to get his/her meeting scheduled.",
-                  },
-                },
-                required: ["month", "date", "hour"],
-              },
-            },
-          },
-
-          {
-            type: "function",
-            function: {
-              name: "connect_to_human",
-              description:
-                "The user wants to connect to a human and would like to continue conversation with him/her now or the user said 'I love humans'.",
-              parameters: {
-                type: "object",
-                properties: {},
-              },
-            },
-          },
-        ],
+        // model: "gpt-3.5-turbo-1106",
+        model: "gpt-4",
+        tools,
         messages: messages,
         temperature: 0.8,
         max_tokens: 100,
@@ -366,11 +408,11 @@ async function handleReponse(request, response) {
 
       const assistantMessage = completion.choices[0].message;
 
-      // console.log("assistantMessage.content", assistantMessage.content);
-      // console.log(
-      //   " assistantMessage.tool_calls?.[0]",
-      //   assistantMessage.tool_calls?.[0]
-      // );
+      console.log("assistantMessage.content", assistantMessage.content);
+      console.log(
+        " assistantMessage.tool_calls?.[0]",
+        assistantMessage.tool_calls?.[0]
+      );
 
       const shouldCallFunction =
         (assistantMessage.content === null ||
@@ -378,7 +420,7 @@ async function handleReponse(request, response) {
           assistantMessage.content?.includes('{"name":')) &&
         assistantMessage?.tool_calls?.length > 0;
 
-      // console.log("shouldCallFunction", shouldCallFunction);
+      console.log("shouldCallFunction", shouldCallFunction);
 
       if (!shouldCallFunction) {
         return assistantMessage.content;
@@ -387,7 +429,7 @@ async function handleReponse(request, response) {
       if (
         assistantMessage?.tool_calls?.[0].function.name === "connect_to_human"
       ) {
-        return functionName;
+        return assistantMessage?.tool_calls?.[0].function.name;
       }
 
       assistantMessage.content = JSON.stringify(
@@ -554,25 +596,41 @@ async function executeFunctionCall(assistantMessage, twiml, request) {
     return await getSlotsForNextDate(assistantMessage);
   } else if (functionName === "connect_to_human") {
     return await connectToHuman(twiml);
-  }
-}
+  } else if (functionName === "send_sms_with_form_link") {
+    return await sendSMS(assistantMessage, request);
+  } else if (functionName === "is_user_registered") {
+    let result = await isUserRegistered(request);
 
-async function checkSlotAvailability(assistantMessage, request) {
-  const result = await isUserRegistered(request);
+    result =
+      result === false
+        ? "User has not yet created an account."
+        : "User has already created an account.";
 
-  console.log("checkSlotAvailability");
-
-  if (!result) {
     return {
       role: "tool",
       tool_call_id: assistantMessage.tool_calls[0].id,
       name: assistantMessage.tool_calls[0].function.name,
-      // content:
-      //   "Please first create an account at cheetah.com. After successful registration, come back and I will get your meeting scheduled.",
-      content:
-        "User has not yet created an account. User must create an account at cheetah.com before he can request to schedule a meeting.",
+      content: result,
     };
   }
+}
+
+async function checkSlotAvailability(assistantMessage, request) {
+  // const result = await isUserRegistered(request);
+
+  console.log("checkSlotAvailability");
+
+  // if (!result) {
+  //   return {
+  //     role: "tool",
+  //     tool_call_id: assistantMessage.tool_calls[0].id,
+  //     name: assistantMessage.tool_calls[0].function.name,
+  //     // content:
+  //     //   "Please first create an account at cheetah.com. After successful registration, come back and I will get your meeting scheduled.",
+  //     content:
+  //       "User has not yet created an account. User must create an account at cheetah.com before he can request to schedule a meeting.",
+  //   };
+  // }
 
   const { month, date, hour } = JSON.parse(
     assistantMessage?.tool_calls?.[0].function.arguments
@@ -647,7 +705,7 @@ async function getSlotsForNextDate(assistantMessage) {
 }
 
 async function scheduleMeeting(assistantMessage, request) {
-  const { month, date, hour } = JSON.parse(
+  const { month, date, hour, projectType } = JSON.parse(
     assistantMessage?.tool_calls?.[0].function.arguments
   );
 
@@ -687,18 +745,12 @@ async function scheduleMeeting(assistantMessage, request) {
   console.log("meetingEndTime", moment(meetingEndTime).format("hh:mm a"));
   console.log("format(dddd)", moment(meetingEndTime).format("dddd"));
 
-  // return {
-  //   role: "tool",
-  //   tool_call_id: assistantMessage.tool_calls[0].id,
-  //   name: assistantMessage.tool_calls[0].function.name,
-  //   content: `Meeting has been scheduled. Inform the user.`,
-  // };
-
   const email = await isUserRegistered(request);
 
   await addEventToGoogleCalendar(
     email,
     "Cheetah AI",
+    projectType,
     meetingStartTime.toISOString(),
     meetingEndTime.toISOString()
   );
@@ -744,7 +796,9 @@ async function handleDial(request, response) {
   return response.send(twiml.toString());
 }
 
-function initializeConversation() {
+function initializeConversation(isPhoneCall) {
+  console.log("isPhoneCall", isPhoneCall);
+
   return [
     {
       role: "system",
@@ -757,31 +811,37 @@ function initializeConversation() {
       Keep in mind the following points when answering questions:
       1. Please provide engaging but concise responses.
       2. Don't make assumptions about what values to plug into functions. Ask for clarification if a user request is ambiguous.
-      3. When the user indicates that he would like to schedule a meeting, first ask the user to provide specific month (January to       December), then ask for date of the month, and finally the hour in 24-hour format. After the user has provided month, date and hour, call the appropriate functions with these details to get available slots. 
+      3. Meetings can only be schedule for registered users. So, when the user asks to schedule a meeting, first of all, call the 'is_user_registered' function', without letting the user know, to check if the user has created an account with Cheetah Agency. If the result of 'is_user_registered' function indicates that the user is registered, proceed with the schedule meeting process. Otherwise, ${
+        isPhoneCall
+          ? "call the 'send_sms_with_form_link' function that sends an SMS with a url to a form that the user can fill to provide his information. Then, inform the user to provide his information by visiting the url in the SMS and then come back again to get his meeting scheduled."
+          : "inform the user that he must first create an account with Cheetah Agency and then come back again to get his meeting scheduled."
+      }
+      4. Meetings are to be scheduled for specific projects. So, when the user asks to schedule a meeting, and the user has already created an account,first of all ask the user if this is a creative project, marketing project or a technical project.
+      5. When the user indicates that he would like to schedule a meeting, first ask the user to provide specific month (January to December), then ask for date of the month, and finally the hour in 24-hour format. After the user has provided month, date and hour, call the appropriate functions with these details to get available slots. 
         Suppose the user provided folowing values of December for month, 28 for date and 19 for hour. Here's an example the workflow to follow based on the given values:
 
-        3.1. First, call the 'check_slot_availability' function with the date, month and hour provided by the user. If the function's result indicates that the slot on December 28 at 19:00 is available, call the 'schedule_meeting' function to schedule the meeting and then inform the user.
+        5.1. First, call the 'check_slot_availability' function with the date, month and hour provided by the user. If the function's result indicates that the slot on December 28 at 19:00 is available, call the 'schedule_meeting' function to schedule the meeting and then inform the user.
 
-        3.2. If the result of 'check_slot_availability' function indicates that the slot on December 28 at 19:00 is unavailable and provides the next available slot, for example 21:00, suggest this next slot to the user.If the user accepted next available slot, that is 21:00, call the 'schedule_meeting' function to schedule the meeting and then inform the user.
+        5.2. If the result of 'check_slot_availability' function indicates that the slot on December 28 at 19:00 is unavailable and provides the next available slot, for example 21:00, suggest this next slot to the user.If the user accepted next available slot, that is 21:00, call the 'schedule_meeting' function to schedule the meeting and then inform the user.
 
-        3.3. If the user refuses the suggested slot, directly call the 'get_next_three_slots' function to get the next three available slots on December 28 and present these slots to the user, without letting the user know that you are going to get the next three available slots. If the user refuses the suggested slots, call the 'get_next_three_slots' functions again with the same month and date as provided by the user but with the hour that is the last of the three slots returned by the 'get_next_three_slots' function. After getting the slots from the 'get_next_three_slots' function, suggest these slots to the user again. If the user refuses the suggested slots again, call the 'get_next_three_slots' function again with the same month and date but with the hour that is the last of the newest three slots. So you the get the idea, keep calling the 'get_next_three_slots' function until its result indicates that there are not slots left on December 28.
+        5.3. If the user refuses the suggested slot, directly call the 'get_next_three_slots' function to get the next three available slots on December 28 and present these slots to the user, without letting the user know that you are going to get the next three available slots. If the user refuses the suggested slots, call the 'get_next_three_slots' functions again with the same month and date as provided by the user but with the hour that is the last of the three slots returned by the 'get_next_three_slots' function. After getting the slots from the 'get_next_three_slots' function, suggest these slots to the user again. If the user refuses the suggested slots again, call the 'get_next_three_slots' function again with the same month and date but with the hour that is the last of the newest three slots. So you the get the idea, keep calling the 'get_next_three_slots' function until its result indicates that there are not slots left on December 28.
 
-        3.4. If the result of 'get_next_three_slots' function indicates that no slots left on December 28, move to the next 29 (and month also if needed).
+        5.4. If the result of 'get_next_three_slots' function indicates that no slots left on December 28, move to the next 29 (and month also if needed).
         
-        3.5. After moving to the next date, that is December 29, call the 'get_slots_for_next_date' function with the next date to get three slots on December 29, without letting the user know that you are going to get the available slots on December 29, and suggest available slots to the user. You need to call 'get_slots_for_next_date' function only when the result of 'get_next_three_slots' indicated that no slots are left for the previous date, that is Decmber 28.
+        5.5. After moving to the next date, that is December 29, call the 'get_slots_for_next_date' function with the next date to get three slots on December 29, without letting the user know that you are going to get the available slots on December 29, and suggest available slots to the user. You need to call 'get_slots_for_next_date' function only when the result of 'get_next_three_slots' indicated that no slots are left for the previous date, that is Decmber 28.
         
-        3.6. If the user refuses suggested slots on the December 29, then keep getting next three slots on the current date (29) by calling the 'get_next_three_slots' function and keep communicating these slots to the user until either the user accepts one of the suggested or there are not slots left on December 29, too. 
+        5.6. If the user refuses suggested slots on the December 29, then keep getting next three slots on the current date (29) by calling the 'get_next_three_slots' function and keep communicating these slots to the user until either the user accepts one of the suggested or there are not slots left on December 29, too. 
         
-        3.7. If the 'get_next_three_slots' function's result indicates no slots for the December 29, too, then start the workflow again from step 3.4.
+        5.7. If the 'get_next_three_slots' function's result indicates no slots for the December 29, too, then start the workflow again from step 5.4.
 
-        3.8. Finally, when the user has accepted or confirmed a time slot, call the 'schedule_meeting' function with the correct month, date and hour that the user accepted for scheduling the meeting.
+        5.8. Finally, when the user has accepted or confirmed a time slot, call the 'schedule_meeting' function with the correct month, date and hour that the user accepted for scheduling the meeting.
 
 
         Remember that if the result of any of the function calls during the schedule meeting workflow tell you that the user has not yet created an account, do not proceed with the schedule meeting process. User must have account because the meeting will be schedule based on the user's email.
         When the user accepts one of the available slots, you should call the 'schedule_meeting' function and then inform the user about status of the meeting.
         Ensure clear and concise communication with the user at each step, and handle user refusals appropriately. Your goal is to successfully schedule a meeting for the user based on the provided criteria.
 
-      3. Use the following information about Cheetah Agency's history to answers questions about the agency:
+      6. Use the following information about Cheetah Agency's history to answers questions about the agency:
 
         Summary of Cheetah Agency's History:
 
@@ -919,6 +979,30 @@ function handleCallDisconnect(request) {
   }
 
   deleteConversation(callerId);
+}
+
+async function sendSMS(assistantMessage, request) {
+  let toPhoneNumber = request.body.From;
+  // let toPhoneNumber = "+923055952372";
+
+  // if (callerId?.startsWith("client:")) {
+  //   return;
+  // }
+
+  const message = await twilioClient.messages.create({
+    body: "Hi, it seems you would like to schedule a meeting with Cheetah Agency. Please visit https://ai-frontend-sand.vercel.app to register with Cheetah Agency.",
+    messagingServiceSid: MESSAGING_SERVICE_SID,
+    to: toPhoneNumber,
+  });
+
+  console.log("message sid", message.sid);
+
+  return {
+    role: "tool",
+    tool_call_id: assistantMessage.tool_calls[0].id,
+    name: assistantMessage.tool_calls[0].function.name,
+    content: `SMS sent to the user's phone number.`,
+  };
 }
 
 module.exports = {
