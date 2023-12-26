@@ -27,8 +27,10 @@ async function handleTranscription(request, response) {
 
   let callerId = request.body.From;
 
-  let isPhoneCall = true;
+  const isRegistered = await isUserRegistered(request);
+  response.cookie("isUserRegistered", isRegistered ? true : false);
 
+  let isPhoneCall = true;
   if (callerId?.startsWith("client:")) {
     callerId = callerId.split(":")[1];
     isPhoneCall = false;
@@ -41,10 +43,10 @@ async function handleTranscription(request, response) {
 
     addConversation(callerId, initializeConversation(isPhoneCall));
 
-    // https://ai-backend-five.vercel.app
+    // https://1558-119-73-99-27.ngrok-free.app
 
     twiml.play(
-      "https://ai-backend-five.vercel.app/public/greeting-message-michael.mp3"
+      "https://1558-119-73-99-27.ngrok-free.app/public/greeting-message-michael.mp3"
     );
   }
 
@@ -52,7 +54,7 @@ async function handleTranscription(request, response) {
     speechTimeout: "auto",
     speechModel: "experimental_conversations",
     input: "speech",
-    action: "https://ai-backend-five.vercel.app/twilio/respond",
+    action: "https://1558-119-73-99-27.ngrok-free.app/twilio/respond",
     actionOnEmptyResult: true,
   });
 
@@ -62,6 +64,11 @@ async function handleTranscription(request, response) {
 
 async function handleReponse(request, response) {
   let callerId = request.body.From;
+
+  console.log(
+    "request.cookies.isUserRegistered",
+    request.cookies.isUserRegistered
+  );
 
   let isPhoneCall = true;
 
@@ -80,7 +87,7 @@ async function handleReponse(request, response) {
   if (!voiceInput) {
     // twiml.say("It's been a pleasure assisting you. Goodbye!");
     twiml.play(
-      "https://ai-backend-five.vercel.app/public/goodbye-message-michael.mp3"
+      "https://1558-119-73-99-27.ngrok-free.app/public/goodbye-message-michael.mp3"
     );
 
     twiml.hangup();
@@ -139,7 +146,7 @@ async function handleReponse(request, response) {
     twiml
       .dial({
         callerId: "+923055952372",
-        action: "https://ai-backend-five.vercel.app/twilio/dial",
+        action: "https://1558-119-73-99-27.ngrok-free.app/twilio/dial",
         method: "POST",
       })
       .number("+923055952372");
@@ -149,7 +156,7 @@ async function handleReponse(request, response) {
       {
         method: "POST",
       },
-      `https://ai-backend-five.vercel.app/twilio/transcribe`
+      `https://1558-119-73-99-27.ngrok-free.app/twilio/transcribe`
     );
   }
 
@@ -597,12 +604,10 @@ async function executeFunctionCall(assistantMessage, twiml, request) {
   } else if (functionName === "connect_to_human") {
     return await connectToHuman(twiml);
   } else if (functionName === "send_sms_with_form_link") {
-    return await sendSMS(assistantMessage, request);
+    return sendSMS(assistantMessage, request);
   } else if (functionName === "is_user_registered") {
-    let result = await isUserRegistered(request);
-
-    result =
-      result === false
+    let result =
+      request.cookies.isUserRegistered === "false"
         ? "User has not yet created an account."
         : "User has already created an account.";
 
@@ -770,7 +775,7 @@ async function connectToHuman(twiml) {
     .dial({
       // callerId: "+923055952372",
       callerId: "+14697074725",
-      action: "https://ai-backend-five.vercel.app/twilio/dial",
+      action: "https://1558-119-73-99-27.ngrok-free.app/twilio/dial",
       method: "POST",
     })
     .number("+923055952372");
@@ -981,7 +986,7 @@ function handleCallDisconnect(request) {
   deleteConversation(callerId);
 }
 
-async function sendSMS(assistantMessage, request) {
+function sendSMS(assistantMessage, request) {
   let toPhoneNumber = request.body.From;
   // let toPhoneNumber = "+923055952372";
 
@@ -989,7 +994,7 @@ async function sendSMS(assistantMessage, request) {
   //   return;
   // }
 
-  const message = await twilioClient.messages.create({
+  const message = twilioClient.messages.create({
     body: "Hi, it seems you would like to schedule a meeting with Cheetah Agency. Please visit https://ai-frontend-sand.vercel.app to register with Cheetah Agency.",
     messagingServiceSid: MESSAGING_SERVICE_SID,
     to: toPhoneNumber,
