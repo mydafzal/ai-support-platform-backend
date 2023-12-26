@@ -10,7 +10,9 @@ function getConversationByUserId(userId) {
 
 function updateConversation(userId, conversation) {
   const index = conversations.findIndex((item) => item.userId === userId);
-  conversations[index].conversation = conversation;
+  if (conversation?.[index]?.conversation) {
+    conversations[index].conversation = conversation;
+  }
 }
 
 function deleteConversation(userId) {
