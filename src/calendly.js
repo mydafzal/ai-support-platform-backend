@@ -72,9 +72,10 @@ async function getAvailableTimeSlots(
   const slots = data.collection?.map((item) => {
     let time = new Date(item.start_time);
 
-    if (hoursDifference !== 0) {
-      time = moment(time).subtract(5, "hours").toDate();
-    }
+    // if (hoursDifference !== 0) {
+    //   time = moment(time).subtract(5, "hours").toDate();
+    // }
+    time = moment(time).subtract(5, "hours").toDate();
 
     const formattedTime = moment(time).format("HH:mm");
 

@@ -97,7 +97,7 @@ async function handleReponse(request, response) {
     aiResponse = await generateAIResponse(conversation);
   }
 
-  console.log("aiResponse", aiResponse);
+  // console.log("aiResponse", aiResponse);
 
   let connectToHuman = false;
   if (aiResponse === "connect_to_human") {
@@ -117,8 +117,8 @@ async function handleReponse(request, response) {
 
   const textToSpeechFileURL = await convertTextToSpeech(cleanedAiResponse);
 
-  console.log("cleanedAiResponse", cleanedAiResponse);
-  console.log("textToSpeechFileURL", textToSpeechFileURL);
+  // console.log("cleanedAiResponse", cleanedAiResponse);
+  // console.log("textToSpeechFileURL", textToSpeechFileURL);
 
   twiml.play(textToSpeechFileURL);
 
@@ -366,11 +366,11 @@ async function handleReponse(request, response) {
 
       const assistantMessage = completion.choices[0].message;
 
-      console.log("assistantMessage.content", assistantMessage.content);
-      console.log(
-        " assistantMessage.tool_calls?.[0]",
-        assistantMessage.tool_calls?.[0]
-      );
+      // console.log("assistantMessage.content", assistantMessage.content);
+      // console.log(
+      //   " assistantMessage.tool_calls?.[0]",
+      //   assistantMessage.tool_calls?.[0]
+      // );
 
       const shouldCallFunction =
         (assistantMessage.content === null ||
@@ -378,7 +378,7 @@ async function handleReponse(request, response) {
           assistantMessage.content?.includes('{"name":')) &&
         assistantMessage?.tool_calls?.length > 0;
 
-      console.log("shouldCallFunction", shouldCallFunction);
+      // console.log("shouldCallFunction", shouldCallFunction);
 
       if (!shouldCallFunction) {
         return assistantMessage.content;
@@ -560,6 +560,8 @@ async function executeFunctionCall(assistantMessage, twiml, request) {
 async function checkSlotAvailability(assistantMessage, request) {
   const result = await isUserRegistered(request);
 
+  console.log("checkSlotAvailability");
+
   if (!result) {
     return {
       role: "tool",
@@ -578,6 +580,8 @@ async function checkSlotAvailability(assistantMessage, request) {
 
   const convertedDate = constructDate(month, date, hour);
   const slots = await getAvailableTimeSlots(convertedDate);
+
+  console.log("getAvailableTimeSlots - response", slots);
 
   return {
     role: "tool",
@@ -647,9 +651,7 @@ async function scheduleMeeting(assistantMessage, request) {
 
   let meetingStartTime =
     timezoneDifferenceInHours === 0
-      ? moment(convertedDate)
-          .subtract(timezoneDifferenceInHours, "hours")
-          .toDate()
+      ? moment(convertedDate).subtract(5, "hours").toDate()
       : convertedDate;
 
   meetingStartTime = moment(meetingStartTime).add(1, "minute").toDate();
