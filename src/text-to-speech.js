@@ -41,7 +41,7 @@ async function convertTextToSpeech(text) {
   };
 
   const response = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
+    `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}?optimize_streaming_latency=4`,
     options
   );
 
@@ -55,7 +55,10 @@ async function convertTextToSpeech(text) {
   // const filePath = path.join(__dirname, "..", "public", fileName);
   // fs.writeFileSync(filePath, buffer);
 
+  // const fileUrl = `https://1558-119-73-99-27.ngrok-free.app/public/${fileName}`;
   // const fileUrl = `https://ai-backend-five.vercel.app/public/${fileName}`;
+
+  // console.log("text-to-speech.....");
 
   // return fileUrl;
 
