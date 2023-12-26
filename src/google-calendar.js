@@ -204,7 +204,8 @@ async function addEventToGoogleCalendar(callerEmail, eventName, start, end) {
         return;
       }
 
-      console.log("Event created", event);
+      console.log("Event created");
+      // console.log("Event created", event);
     }
   );
 }
