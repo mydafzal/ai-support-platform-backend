@@ -13,7 +13,6 @@ const AUTH_TOKEN = "67f9c2f8b811476eb04321d59f68ff91";
 const twilio = require("twilio");
 
 app.use(express.json());
-// app.use("/public", express.static("public"));
 app.use(
   "/public",
   express.static(path.join(__dirname, "public"), {
@@ -33,6 +32,7 @@ const { quickstart } = require("./src/speech-to-text");
 const { getAvailableTimeSlots } = require("./src/calendly");
 const { getUserById } = require("./src/firestore");
 const { scheduleMeeting } = require("./src/controller");
+const { addVerifiedCallerId } = require("./src/twilio.controller");
 
 app.get("/speech", async (req, res) => {
   const response = await convertTextToSpeech(
@@ -52,14 +52,14 @@ app.get("/calendar", async (req, res) => {
 });
 
 app.get("/text", async (req, res) => {
-  res.status(200).json({ response: "" });
+  const response = await addVerifiedCallerId();
+  res.status(200).json({ response });
 });
 
 app.use("/auth", authRouter);
 app.use("/twilio", twilioRouter);
 
 app.get("/", (req, res) => {
-  // res.send("Hello, Express!");
   res.status(200).json({ token: "token 123" });
 });
 

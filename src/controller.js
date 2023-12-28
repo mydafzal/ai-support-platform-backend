@@ -43,10 +43,10 @@ async function handleTranscription(request, response) {
 
     addConversation(callerId, initializeConversation(isPhoneCall));
 
-    // https://ai-backend-five.vercel.app
+    // https://62a1-119-73-99-27.ngrok-free.app
 
     twiml.play(
-      "https://ai-backend-five.vercel.app/public/greeting-message-adam.mp3"
+      "https://62a1-119-73-99-27.ngrok-free.app/public/greeting-message-michael.mp3"
     );
   }
 
@@ -54,7 +54,7 @@ async function handleTranscription(request, response) {
     speechTimeout: "auto",
     speechModel: "experimental_conversations",
     input: "speech",
-    action: "https://ai-backend-five.vercel.app/twilio/respond",
+    action: "https://62a1-119-73-99-27.ngrok-free.app/twilio/respond",
     actionOnEmptyResult: true,
   });
 
@@ -87,7 +87,7 @@ async function handleReponse(request, response) {
   if (!voiceInput) {
     // twiml.say("It's been a pleasure assisting you. Goodbye!");
     twiml.play(
-      "https://ai-backend-five.vercel.app/public/goodbye-message-michael.mp3"
+      "https://62a1-119-73-99-27.ngrok-free.app/public/goodbye-message-michael.mp3"
     );
 
     twiml.hangup();
@@ -142,11 +142,18 @@ async function handleReponse(request, response) {
 
   twiml.play(textToSpeechFileURL);
 
+  // twiml.say(
+  //   {
+  //     voice: "Google.en-US-Neural2-D",
+  //   },
+  //   cleanedAiResponse
+  // );
+
   if (connectToHuman === true) {
     twiml
       .dial({
         callerId: "+923055952372",
-        action: "https://ai-backend-five.vercel.app/twilio/dial",
+        action: "https://62a1-119-73-99-27.ngrok-free.app/twilio/dial",
         method: "POST",
       })
       .number("+923055952372");
@@ -156,7 +163,7 @@ async function handleReponse(request, response) {
       {
         method: "POST",
       },
-      `https://ai-backend-five.vercel.app/twilio/transcribe`
+      `https://62a1-119-73-99-27.ngrok-free.app/twilio/transcribe`
     );
   }
 
@@ -405,12 +412,13 @@ async function handleReponse(request, response) {
 
     try {
       const completion = await openai.chat.completions.create({
-        // model: "gpt-3.5-turbo-1106",
-        model: "gpt-4",
+        model: "gpt-3.5-turbo-1106",
+        // model: "gpt-4",
         tools,
         messages: messages,
         temperature: 0.8,
-        max_tokens: 100,
+        // max_tokens: 100,
+        max_tokens: 50,
       });
 
       const assistantMessage = completion.choices[0].message;
@@ -775,7 +783,7 @@ async function connectToHuman(twiml) {
     .dial({
       // callerId: "+923055952372",
       callerId: "+14697074725",
-      action: "https://ai-backend-five.vercel.app/twilio/dial",
+      action: "https://62a1-119-73-99-27.ngrok-free.app/twilio/dial",
       method: "POST",
     })
     .number("+923055952372");
