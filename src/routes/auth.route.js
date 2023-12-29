@@ -11,7 +11,7 @@ router.get("/oauth-url", (req, res) => {
 router.post("/oauth-access-token", async (req, res) => {
   const { userId, code } = req.body;
 
-  const response = await storeAccessToken(userId, req.body.code);
+  const response = await storeAccessToken(userId, code);
   res.status(200).send(response);
 });
 

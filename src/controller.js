@@ -11,6 +11,7 @@ const {
 } = require("./datastore");
 const { addEventToGoogleCalendar } = require("./google-calendar");
 const moment = require("moment");
+const { sendSMS } = require("./controllers/twilio.controller");
 
 const OPENAI_API_KEY = "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"; // cheetah account
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
@@ -612,7 +613,7 @@ async function executeFunctionCall(assistantMessage, twiml, request) {
   } else if (functionName === "connect_to_human") {
     return await connectToHuman(twiml);
   } else if (functionName === "send_sms_with_form_link") {
-    return sendSMS(assistantMessage, request);
+    return handleSendSMS(assistantMessage, request);
   } else if (functionName === "is_user_registered") {
     let result =
       request.cookies.isUserRegistered === "false"
@@ -994,7 +995,7 @@ function handleCallDisconnect(request) {
   deleteConversation(callerId);
 }
 
-function sendSMS(assistantMessage, request) {
+function handleSendSMS(assistantMessage, request) {
   let toPhoneNumber = request.body.From;
   // let toPhoneNumber = "+923055952372";
 
@@ -1002,13 +1003,10 @@ function sendSMS(assistantMessage, request) {
   //   return;
   // }
 
-  const message = twilioClient.messages.create({
-    body: "Hi, it seems you would like to schedule a meeting with Cheetah Agency. Please visit https://ai-frontend-sand.vercel.app to register with Cheetah Agency.",
-    messagingServiceSid: MESSAGING_SERVICE_SID,
-    to: toPhoneNumber,
-  });
+  const message =
+    "Hi, it seems you would like to schedule a meeting with Cheetah Agency. Please visit https://ai-frontend-sand.vercel.app to register with Cheetah Agency.";
 
-  console.log("message sid", message.sid);
+  sendSMS(toPhoneNumber, message);
 
   return {
     role: "tool",

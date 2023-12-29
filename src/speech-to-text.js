@@ -1,18 +1,18 @@
 const speech = require("@google-cloud/speech");
 const got = require("got").default;
 
-const projectId = "riderz-1669024061001";
+const projectId = "";
 
 const client = new speech.SpeechClient({
   projectId,
   keyFilename: "./keyfile.json",
 });
 
-const accountSid = "AC38de205937ab33d281c52f95f796107b";
-const authToken = "d2d93597795c1f90612e073e5ce413a8";
+const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
+const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 
 async function convertSpeechToText(recordingUrl) {
-  const auth = `${accountSid}:${authToken}`;
+  const auth = `${ACCOUNT_SID}:${AUTH_TOKEN}`;
   const base64Auth = Buffer.from(auth).toString("base64");
 
   let file;
@@ -29,15 +29,12 @@ async function convertSpeechToText(recordingUrl) {
 
   if (!file) return false;
 
-  console.log("file", file.rawBody);
-
   const audio = {
     content: file.rawBody,
   };
 
   const config = {
     encoding: "LINEAR16",
-    // sampleRateHertz: 16000,
     languageCode: "en-US",
   };
 
@@ -51,8 +48,6 @@ async function convertSpeechToText(recordingUrl) {
   const transcription = response.results
     .map((result) => result.alternatives[0].transcript)
     .join("\n");
-
-  console.log(`Transcription: ${transcription}`);
 
   return transcription;
 }

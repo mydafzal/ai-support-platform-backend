@@ -1,20 +1,20 @@
 const AWS = require("aws-sdk");
 
 AWS.config.update({
-  accessKeyId: "AKIARQEZ7TXVMYQM23IY",
-  secretAccessKey: "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",
+  accessKeyId: process.env.S3_ACCESS_KEY_ID,
+  secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
   region: "us-east-1",
 });
 
 const s3 = new AWS.S3({});
 
-const bucketName = "psychix";
+const BUCKET_NAME = process.env.S3_BUCKET_NAME;
 
 async function uploadToS3(file, fileName) {
   const buffer = Buffer.from(file);
 
   const params = {
-    Bucket: bucketName,
+    Bucket: BUCKET_NAME,
     Key: `ai-bot/${fileName}`,
     Body: buffer,
     ACL: "public-read",
@@ -25,7 +25,7 @@ async function uploadToS3(file, fileName) {
 
   console.log("Uploaded to S3 => url: ", Location);
   console.log("key ", Key);
-  console.log("url ", `https://${bucketName}.s3.amazonaws.com/${Key}`);
+  console.log("url ", `https://${BUCKET_NAME}.s3.amazonaws.com/${Key}`);
 
   return Location;
 }
