@@ -38,17 +38,15 @@ router.post("/verification-check", async (req, res) => {
 });
 
 router.post("/incoming-call", async (req, res) => {
-  const { cookie, data } = await handleIncomingCall(req);
+  const result = await handleIncomingCall(req);
 
-  response.cookie(cookie);
   res.type("application/xml");
-  res.send(data);
+  res.send(result);
 });
 
 router.post("/gather-speech", async (req, res) => {
   const result = await gatherSpeechInput(req);
 
-  res.cookie(request.cookies);
   res.type("application/xml");
   res.send(result);
 });
