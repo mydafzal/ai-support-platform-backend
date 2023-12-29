@@ -5,6 +5,8 @@ const bodyParser = require("body-parser");
 const path = require("path");
 require("dotenv").config();
 
+require("./src/redis");
+
 const app = express();
 
 app.use(express.json());
@@ -24,6 +26,15 @@ const authRouter = require("./src/authRouter");
 const twilioRouter = require("./src/twilioRouter");
 const { convertTextToSpeech } = require("./src/text-to-speech");
 const { addVerifiedCallerId } = require("./src/controllers/twilio.controller");
+const {
+  storeData,
+  getData,
+  updateData,
+  storeCallData,
+  getCallData,
+  deleteCallData,
+  updateCallData,
+} = require("./src/redis");
 
 app.get("/speech", async (req, res) => {
   const response = await convertTextToSpeech(
@@ -37,8 +48,20 @@ app.get("/speech", async (req, res) => {
 });
 
 app.get("/text", async (req, res) => {
-  const response = await addVerifiedCallerId();
-  res.status(200).json({ response });
+  await storeCallData("customer-1", {
+    name: "Hammad",
+    data: 123,
+  });
+
+  const response1 = await getCallData("customer-1");
+
+  // await updateCallData("customer-1", "data", "xyz");
+  // const response2 = await getCallData("customer-1");
+
+  // await deleteCallData("customer-1");
+  // const response3 = await getCallData("customer-1");
+
+  res.status(200).json({ response1 });
 });
 
 app.use("/auth", authRouter);
