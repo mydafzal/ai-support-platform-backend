@@ -165,7 +165,6 @@ async function handleIncomingCall(request) {
     checkIsPhoneCall(request),
     modelName,
     companyName,
-    companyHistory,
     companyHistory
   );
 

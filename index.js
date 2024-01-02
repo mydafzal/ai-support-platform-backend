@@ -24,17 +24,19 @@ app.use(cors());
 
 const authRouter = require("./src/authRouter");
 const twilioRouter = require("./src/twilioRouter");
+const customerRouter = require("./src/routes/customer.route");
+
 const { convertTextToSpeech } = require("./src/text-to-speech");
 const { addVerifiedCallerId } = require("./src/controllers/twilio.controller");
 const {
-  storeData,
-  getData,
-  updateData,
   storeCallData,
   getCallData,
   deleteCallData,
   updateCallData,
 } = require("./src/redis");
+
+const { connecteToDb } = require("./src/loaders/db");
+connecteToDb();
 
 app.get("/speech", async (req, res) => {
   const response = await convertTextToSpeech(
@@ -66,6 +68,7 @@ app.get("/text", async (req, res) => {
 
 app.use("/auth", authRouter);
 app.use("/twilio", twilioRouter);
+app.use("/customers", customerRouter);
 
 app.get("/", (req, res) => {
   res.status(200).json({ token: "token 123" });

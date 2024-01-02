@@ -1,4 +1,6 @@
 const AWS = require("aws-sdk");
+const { getUnixTime } = require("date-fns");
+const { v4: uuidv4 } = require("uuid");
 
 AWS.config.update({
   accessKeyId: process.env.S3_ACCESS_KEY_ID,
@@ -7,10 +9,12 @@ AWS.config.update({
 });
 
 const s3 = new AWS.S3({});
-
 const BUCKET_NAME = process.env.S3_BUCKET_NAME;
 
-async function uploadToS3(file, fileName) {
+const fileExtension = "mp3";
+
+async function uploadToS3(file) {
+  const fileName = generateFilename(fileExtension);
   const buffer = Buffer.from(file);
 
   const params = {
@@ -21,13 +25,18 @@ async function uploadToS3(file, fileName) {
     ContentType: "audio/mpeg",
   };
 
-  const { Location, Key } = await s3.upload(params).promise();
-
+  const { Location } = await s3.upload(params).promise();
   console.log("Uploaded to S3 => url: ", Location);
-  console.log("key ", Key);
-  console.log("url ", `https://${BUCKET_NAME}.s3.amazonaws.com/${Key}`);
 
   return Location;
+}
+
+function generateFilename(fileExtension) {
+  const uniqueId = uuidv4();
+  const timestamp = getUnixTime(new Date());
+
+  const uniqueFilename = `${timestamp}_${uniqueId}.${fileExtension}`;
+  return uniqueFilename;
 }
 
 module.exports = { uploadToS3 };

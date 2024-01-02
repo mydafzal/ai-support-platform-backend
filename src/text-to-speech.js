@@ -20,7 +20,7 @@ const API_KEY = "126cd91db93cc56a188c321abb9d48c5";
 
 const fileExtension = "mp3";
 
-async function convertTextToSpeech(text) {
+async function convertTextToSpeech(text, voiceId) {
   const options = {
     method: "POST",
     headers: {
@@ -64,7 +64,9 @@ async function convertTextToSpeech(text) {
 
   // return await uploadFile(fileName, arrayBuffer);
 
-  return await uploadToS3(arrayBuffer, fileName);
+  return arrayBuffer;
+
+  // return await uploadToS3(arrayBuffer, fileName);
 }
 
 function generateFilename(fileExtension) {
