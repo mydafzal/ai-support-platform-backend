@@ -22,8 +22,8 @@ app.use(bodyParser.json());
 app.use(cookieParser());
 app.use(cors());
 
-const authRouter = require("./src/authRouter");
-const twilioRouter = require("./src/twilioRouter");
+const authRouter = require("./src/routes/auth.route");
+const twilioRouter = require("./src/routes/twilio.route");
 const customerRouter = require("./src/routes/customer.route");
 
 const { convertTextToSpeech } = require("./src/text-to-speech");

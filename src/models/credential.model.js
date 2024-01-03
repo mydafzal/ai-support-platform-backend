@@ -1,5 +1,6 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../loaders/db");
+const Customer = require("./customer.model");
 
 const OAuthCredentials = sequelize.define(
   "OAuthCredentials",
@@ -19,5 +20,9 @@ const OAuthCredentials = sequelize.define(
   },
   {}
 );
+
+OAuthCredentials.belongsTo(Customer, { foreignKey: "customerId" });
+
+// OAuthCredentials.sync({ force: true });
 
 module.exports = OAuthCredentials;

@@ -1,8 +1,5 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../loaders/db");
-const User = require("./user.model");
-const Assistant = require("./assistant.model");
-const OAuthCredentials = require("./credential.model");
 
 const Customer = sequelize.define(
   "Customer",
@@ -20,10 +17,6 @@ const Customer = sequelize.define(
       type: DataTypes.STRING,
       allowNull: false,
     },
-    companyHistory: {
-      type: DataTypes.STRING,
-      allowNull: false,
-    },
     twilioNumber: {
       type: DataTypes.STRING,
       allowNull: false,
@@ -36,10 +29,6 @@ const Customer = sequelize.define(
   {}
 );
 
-Customer.hasMany(User);
-Customer.hasOne(Assistant);
-Customer.hasOne(OAuthCredentials);
-
-Customer.sync({ force: true });
+// Customer.sync({ force: true });
 
 module.exports = Customer;

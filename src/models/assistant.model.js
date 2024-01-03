@@ -1,5 +1,6 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../loaders/db");
+const Customer = require("./customer.model");
 
 const Assistant = sequelize.define(
   "Assistant",
@@ -9,7 +10,7 @@ const Assistant = sequelize.define(
       allowNull: false,
     },
     voice: {
-      type: DataTypes.STRING,
+      type: DataTypes.ENUM("Rachel", "Bill", "Daniel", "Antoni", "Glinda"),
       allowNull: false,
     },
     greetingMessageUrl: {
@@ -24,6 +25,8 @@ const Assistant = sequelize.define(
   {}
 );
 
-Assistant.sync({ force: true });
+Assistant.belongsTo(Customer, { foreignKey: "customerId" });
+
+// Assistant.sync({ force: true });
 
 module.exports = Assistant;

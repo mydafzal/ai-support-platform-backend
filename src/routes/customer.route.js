@@ -1,4 +1,6 @@
 const Assistant = require("../models/assistant.model");
+const CompanyHistory = require("../models/companyHistory.model");
+const OAuthCredentials = require("../models/credential.model");
 const Customer = require("../models/customer.model");
 const { uploadToS3 } = require("../s3-storage");
 const { convertTextToSpeech } = require("../text-to-speech");
@@ -24,60 +26,90 @@ router.post("/", async (req, res) => {
       name: customerName,
       email,
       companyName,
-      companyHistory,
       twilioNumber,
       phoneNumbers,
     });
 
-    let promises = [
-      convertTextToSpeech(greetingMessage),
-      convertTextToSpeech(farewellMessage),
-    ];
+    const companyHistoryObjects = companyHistory?.map((item) => ({
+      ...item,
+      customerId: customer.id,
+    }));
 
+    const history = await CompanyHistory.bulkCreate(companyHistoryObjects);
+
+    let promises = [
+      convertTextToSpeech(greetingMessage, voice),
+      convertTextToSpeech(farewellMessage, voice),
+    ];
     const [greetingMessageSpeech, farewellMessageSpeech] = await Promise.all(
       promises
     );
 
     promises = [
-      uploadToS3(greetingMessageSpeech),
-      uploadToS3(farewellMessageSpeech),
+      uploadToS3(greetingMessageSpeech, customer.id, "greetingMessage.mp3"),
+      uploadToS3(farewellMessageSpeech, customer.id, "farewellMessage.mp3"),
     ];
-
     const [greetingMessageUrl, farewellMessageUrl] = await Promise.all(
       promises
     );
 
     const assistant = await Assistant.create({
-    //   customerId: customer.id,
+      customerId: customer.id,
       name: assistantName,
       voice,
       greetingMessageUrl,
       farewellMessageUrl,
     });
 
-    res.status(201).json({ customer, assistant });
+    res.status(201).json({ customer, assistant, history });
   } catch (error) {
     console.error("Error adding customer:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
-// Route to get a specific customer by ID
 router.get("/:email", async (req, res) => {
   try {
     const { email } = req.params;
 
-    const customer = await Customer.findOne({
+    let customer = await Customer.findOne({
       where: {
         email,
       },
     });
 
+    const assistant = await Assistant.findOne({
+      where: {
+        customerId: customer.id,
+      },
+    });
+
+    const history = await CompanyHistory.findAll({
+      where: {
+        customerId: customer.id,
+      },
+    });
+
+    const credentials = await OAuthCredentials.findOne({
+      where: {
+        customerId: customer.id,
+      },
+    });
+
+    customer = customer.toJSON();
+    customer.history = history.map((item) => item.toJSON());
+    customer.assistant = assistant.toJSON();
+    customer.credentials = credentials.toJSON();
+
     if (!customer) {
       return res.status(404).json({ error: "Customer not found" });
     }
 
-    res.status(200).json(customer);
+    const formattedHistory = customer.history
+      .map((entry) => `${entry.section}:\n${entry.content}`)
+      .join("\n\n");
+
+    res.status(200).json(formattedHistory);
   } catch (error) {
     console.error("Error fetching customer:", error);
     res.status(500).json({ error: "Internal Server Error" });

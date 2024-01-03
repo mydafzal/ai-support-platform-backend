@@ -30,14 +30,9 @@ router.post("/verification-check", async (req, res) => {
   res.status(200).send(isVerified);
 });
 
-router.post("/verification-check", async (req, res) => {
-  const { code, phoneNumber } = req.body;
-
-  const isVerified = await checkVerification(code, phoneNumber);
-  res.status(200).send(isVerified);
-});
-
 router.post("/incoming-call", async (req, res) => {
+  console.log("incoming call....");
+
   const result = await handleIncomingCall(req);
 
   res.type("application/xml");
@@ -65,9 +60,9 @@ router.post("/empty-recording", async (req, res) => {
 router.post("/disconnect", async (req, res) => {
   console.log("call-status - request.body.from", req.body.From);
 
-  if (req.body.CallStatus === "completed") {
-    handleCallDisconnect(req);
-  }
+  // if (req.body.CallStatus === "completed") {
+  //   handleCallDisconnect(req);
+  // }
 
   res.status(200).send();
 });

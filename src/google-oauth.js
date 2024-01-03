@@ -1,5 +1,6 @@
 const { google } = require("googleapis");
 const oauthCredentials = require("../credentials.json");
+const OAuthCredentials = require("./models/credential.model");
 
 const SCOPES = ["https://www.googleapis.com/auth/calendar.events"];
 
@@ -17,16 +18,23 @@ function generateOAuthUrl() {
   });
 }
 
-async function storeAccessToken(userId, code) {
+async function storeAccessToken(customerId, code) {
   try {
-    // If not credentials in database, it means the user have not authorized yet.
-    let credentials = await getTokenAsync(oAuth2Client, code);
+    let credentials = await getTokenAsync(code);
 
-    // Then save token object to database based on userId...
+    console.log("credentials", credentials);
+    console.log("customerId", customerId);
 
-    return credentials;
+    await OAuthCredentials.create({
+      customerId,
+      accessToken: credentials.access_token,
+      refreshToken: credentials.refresh_token,
+      expiryDate: credentials.expiry_date,
+    });
+
+    // return credentials;
   } catch (error) {
-    console.log("error");
+    console.log("storeAccessToken error", error);
   }
 }
 

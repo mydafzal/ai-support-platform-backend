@@ -1,10 +1,8 @@
 const { getUnixTime } = require("date-fns");
 const { v4: uuidv4 } = require("uuid");
-const { uploadFile } = require("./google-cloud-storage");
 
 const fs = require("fs");
 const path = require("path");
-const { uploadToS3 } = require("./s3-storage");
 
 const MODEL_ID = "eleven_turbo_v2"; //eleven_multilingual_v2
 // const MODEL_ID = "eleven_multilingual_v2"; //eleven_multilingual_v2
@@ -12,21 +10,25 @@ const SIMILARITY_BOOST = 0.75;
 const STABILITY = 0.5;
 const USE_SPEAKER_BOOST = false;
 const STYLE = 0.0;
-// const VOICE_ID = "oWAxZDx7w5VEj9dCyTzz";
-// const VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; //Rachel
-const VOICE_ID = "pqHfZKP75CvOlQylNhV4"; //Bill
-// const API_KEY = "a595fbf5f52043a4347ada24eafc6c3d";
+
 const API_KEY = "126cd91db93cc56a188c321abb9d48c5";
+
+const voicesMap = {
+  Rachel: "21m00Tcm4TlvDq8ikWAM",
+  Bill: "pqHfZKP75CvOlQylNhV4",
+  Daniel: "onwK4e9ZLuTAKqWW03F9",
+  Antoni: "ErXwobaYiN019PkySvjV",
+  Glinda: "z9fAnlkpzviPz146aGWa",
+};
 
 const fileExtension = "mp3";
 
-async function convertTextToSpeech(text, voiceId) {
+async function convertTextToSpeech(text, voiceName) {
   const options = {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "xi-api-key": API_KEY,
-      // Accept: "audio/mpeg",
     },
     body: JSON.stringify({
       model_id: MODEL_ID,
@@ -40,8 +42,10 @@ async function convertTextToSpeech(text, voiceId) {
     }),
   };
 
+  const voiceId = voicesMap[voiceName];
+
   const response = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}?optimize_streaming_latency=4`,
+    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?optimize_streaming_latency=4`,
     options
   );
 

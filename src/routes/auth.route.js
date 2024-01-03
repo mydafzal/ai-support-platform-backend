@@ -9,10 +9,10 @@ router.get("/oauth-url", (req, res) => {
 });
 
 router.post("/oauth-access-token", async (req, res) => {
-  const { userId, code } = req.body;
+  const { customerId, code } = req.body;
 
-  const response = await storeAccessToken(userId, code);
-  res.status(200).send(response);
+  await storeAccessToken(customerId, code);
+  res.status(200).send("OAuth credentials stored.");
 });
 
 module.exports = router;

@@ -18,11 +18,18 @@ const {
   storeCallData,
   getCallData,
   updateCallConversation,
+  deleteCallData,
 } = require("../redis");
 const {
   generateAIResponse,
   initializeConversation,
 } = require("./ai-model.controller");
+const Customer = require("../models/customer.model");
+const Assistant = require("../models/assistant.model");
+const CompanyHistory = require("../models/companyHistory.model");
+const OAuthCredentials = require("../models/credential.model");
+const { convertTextToSpeech } = require("../text-to-speech");
+const { uploadToS3 } = require("../s3-storage");
 
 async function buyPhoneNumber() {
   const availableNumbers = await client
@@ -147,37 +154,71 @@ async function handleIncomingCall(request) {
   const customerId = request.body.customerId;
   const customerPhoneNumber = request.body.To;
 
-  // Identify saas customer based on the current caller, that is based on 'From' value.
-  // Get customerId, company information and history, greeting and goodbye messages urls, phone numbers to connect with human agents, google o-auth info for scheduling meetings.
-  // Set all this information in cookies.
+  let customer;
+
+  if (customerId) {
+    customer = await Customer.findByPk(customerId);
+  } else {
+    customer = await Customer.findOne({
+      where: { twilioNumber: customerPhoneNumber },
+    });
+  }
+
+  let assistant = await Assistant.findOne({
+    where: {
+      customerId: customer.id,
+    },
+  });
+
+  let history = await CompanyHistory.findAll({
+    where: {
+      customerId: customer.id,
+    },
+  });
+
+  let oauthCredentials = await OAuthCredentials.findOne({
+    where: {
+      customerId: customer.id,
+    },
+  });
+
+  customer = customer.toJSON();
+  assistant = assistant.toJSON();
+  history = history.map((item) => item.toJSON());
+  oauthCredentials = oauthCredentials.toJSON();
+
+  const formattedHistory = history
+    .map((entry) => `${entry.section}:\n${entry.content}`)
+    .join("\n\n");
+
+  console.log("formattedHistory", formattedHistory);
 
   // get user by the 'From' value, either phone number or callerId, from the database.
   const isRegistered = true;
-  const companyHistory = "";
-  const companyName = "";
-  const modelName = "";
-  const greetingMessageUrl = "";
-  const goodbyeMessageUrl = "";
-  const phoneNumbers = [];
 
   const callerId = getCallerIdFromRequest(request);
   const conversation = initializeConversation(
     checkIsPhoneCall(request),
-    modelName,
-    companyName,
-    companyHistory
+    assistant.name,
+    customer.companyName,
+    formattedHistory
   );
 
   storeCallData(callerId, {
+    modelName: assistant.name,
+    companyHistory: formattedHistory,
+    companyName: customer.companyName,
     conversation,
-    customerId,
+    customerId: customer.id,
     isUserRegistered: isRegistered,
-    greetingMessageUrl,
-    goodbyeMessageUrl,
-    phoneNumbers,
+    greetingMessageUrl: assistant.greetingMessageUrl,
+    farewellMessageUrl: assistant.farewellMessageUrl,
+    phoneNumbers: customer.phoneNumbers,
+    oauthCredentials,
+    voice: assistant.voice,
   });
 
-  twiml.play(greetingMessageUrl);
+  twiml.play(assistant.greetingMessageUrl);
 
   twiml.gather({
     speechTimeout: "auto",
@@ -214,18 +255,25 @@ async function handleSpeechInput(request) {
   const voiceInput = request.body.SpeechResult;
   console.log("voice input", voiceInput);
 
+  const callData = await getCallData(callerId);
+
   let {
-    goodbyeMessageUrl,
+    farewellMessageUrl,
     conversation,
     phoneNumbers,
     companyHistory,
     companyName,
     modelName,
-  } = await getCallData(callerId);
+    voice,
+    customerId,
+  } = callData;
 
   if (!voiceInput) {
-    twiml.play(goodbyeMessageUrl);
+    twiml.play(farewellMessageUrl);
     twiml.hangup();
+
+    deleteCallData(callerId);
+
     return twiml.toString();
   }
 
@@ -234,7 +282,6 @@ async function handleSpeechInput(request) {
       isPhoneCall,
       modelName,
       companyName,
-      companyHistory,
       companyHistory
     );
     updateCallConversation(callerId, conversation);
@@ -261,14 +308,19 @@ async function handleSpeechInput(request) {
     conversation.shift();
   }
 
-  const textToSpeechFileURL = await convertTextToSpeech(cleanedAiResponse);
+  const generatedSpeechFile = await convertTextToSpeech(
+    cleanedAiResponse,
+    voice
+  );
+
+  const textToSpeechFileURL = await uploadToS3(generatedSpeechFile, customerId);
 
   console.log("cleanedAiResponse", cleanedAiResponse);
   console.log("textToSpeechFileURL", textToSpeechFileURL);
 
   twiml.play(textToSpeechFileURL);
 
-  if (aiResponse === "connect_to_human") {
+  if (aiResponse === "connect_to_human" && phoneNumbers?.length > 0) {
     twiml
       .dial({
         callerId: phoneNumbers[0],
@@ -277,15 +329,19 @@ async function handleSpeechInput(request) {
       })
       .number(phoneNumbers[0]);
   } else {
+    console.log("redirect true - gather -speech");
+
     twiml.redirect(
       {
         method: "POST",
       },
-      `${BASE_URL}/twilio/gather-input`
+      `${BASE_URL}/twilio/gather-speech`
     );
   }
 
+  callData.conversation = conversation;
   updateCallConversation(callerId, conversation);
+
   return twiml.toString();
 }
 
