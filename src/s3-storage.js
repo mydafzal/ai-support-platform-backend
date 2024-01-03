@@ -13,13 +13,18 @@ const BUCKET_NAME = process.env.S3_BUCKET_NAME;
 
 const fileExtension = "mp3";
 
-async function uploadToS3(file) {
-  const fileName = generateFilename(fileExtension);
+async function uploadToS3(file, customerId, fileName) {
+  if (!fileName) {
+    fileName = generateFilename(fileExtension);
+  }
+
   const buffer = Buffer.from(file);
+  const filePath = `ai-bot/customer-${customerId}/${fileName}`;
 
   const params = {
     Bucket: BUCKET_NAME,
-    Key: `ai-bot/${fileName}`,
+    // Key: `ai-bot/${fileName}`,
+    Key: filePath,
     Body: buffer,
     ACL: "public-read",
     ContentType: "audio/mpeg",
