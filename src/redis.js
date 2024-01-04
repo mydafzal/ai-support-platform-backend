@@ -17,7 +17,7 @@ const client = createClient({
 
 async function storeCallData(key, data) {
   try {
-    console.log("Data", data);
+    // console.log("Data", data);
     await client.set(key, JSON.stringify(data));
   } catch (error) {
     console.log("storeCallData error", error);

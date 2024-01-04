@@ -24,7 +24,9 @@ app.use(cors());
 
 const authRouter = require("./src/routes/auth.route");
 const twilioRouter = require("./src/routes/twilio.route");
-const customerRouter = require("./src/routes/customer.route");
+const customersRouter = require("./src/routes/customer.route");
+const usersRouter = require("./src/routes/user.route");
+const meetingEventsRouter = require("./src/routes/meetingEvent.route");
 
 const { convertTextToSpeech } = require("./src/text-to-speech");
 const { addVerifiedCallerId } = require("./src/controllers/twilio.controller");
@@ -36,7 +38,6 @@ const {
 } = require("./src/redis");
 
 const { connecteToDb } = require("./src/loaders/db");
-connecteToDb();
 
 app.get("/speech", async (req, res) => {
   const response = await convertTextToSpeech(
@@ -50,25 +51,15 @@ app.get("/speech", async (req, res) => {
 });
 
 app.get("/text", async (req, res) => {
-  await storeCallData("customer-1", {
-    name: "Hammad",
-    data: 123,
-  });
-
-  const response1 = await getCallData("customer-1");
-
-  // await updateCallData("customer-1", "data", "xyz");
-  // const response2 = await getCallData("customer-1");
-
-  // await deleteCallData("customer-1");
-  // const response3 = await getCallData("customer-1");
-
-  res.status(200).json({ response1 });
+  const response = ""
+  res.status(200).json({ response });
 });
 
 app.use("/auth", authRouter);
 app.use("/twilio", twilioRouter);
-app.use("/customers", customerRouter);
+app.use("/customers", customersRouter);
+app.use("/users", usersRouter);
+app.use("/meeting-events", meetingEventsRouter);
 
 app.get("/", (req, res) => {
   res.status(200).json({ token: "token 123" });

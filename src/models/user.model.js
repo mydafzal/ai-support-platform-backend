@@ -1,5 +1,6 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../loaders/db");
+const Customer = require("./customer.model");
 
 const User = sequelize.define(
   "User",
@@ -21,12 +22,12 @@ const User = sequelize.define(
       type: DataTypes.STRING,
       allowNull: false,
     },
-    customerId: {
-      type: DataTypes.STRING,
-      allowNull: false,
-    },
   },
   {}
 );
+
+User.belongsTo(Customer, { foreignKey: "customerId" });
+
+// User.sync({ force: true });
 
 module.exports = User;

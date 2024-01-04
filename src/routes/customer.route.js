@@ -1,3 +1,4 @@
+const { buyPhoneNumber } = require("../controllers/twilio.controller");
 const Assistant = require("../models/assistant.model");
 const CompanyHistory = require("../models/companyHistory.model");
 const OAuthCredentials = require("../models/credential.model");
@@ -14,7 +15,6 @@ router.post("/", async (req, res) => {
       email,
       companyName,
       companyHistory,
-      twilioNumber,
       phoneNumbers,
       assistantName,
       voice,
@@ -22,7 +22,19 @@ router.post("/", async (req, res) => {
       farewellMessage,
     } = req.body;
 
-    const customer = await Customer.create({
+    let customer = await Customer.findOne({
+      where: {
+        email,
+      },
+    });
+
+    if (customer.toJSON()?.email) {
+      return res.status(400).json({ message: "Email already exists." });
+    }
+
+    const twilioNumber = await buyPhoneNumber();
+
+    customer = await Customer.create({
       name: customerName,
       email,
       companyName,
