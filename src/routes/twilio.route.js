@@ -16,7 +16,7 @@ router.get("/access-token/:id?", (req, res) => {
   res.status(200).json(result);
 });
 
-router.post("/verification/:phoneNumber", async (req, res) => {
+router.post("/verification", async (req, res) => {
   const { phoneNumber } = req.body;
 
   const result = await createVerification(phoneNumber);
