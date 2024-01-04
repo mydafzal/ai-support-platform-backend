@@ -30,21 +30,28 @@ const CompanyHistory = require("../models/companyHistory.model");
 const OAuthCredentials = require("../models/credential.model");
 const { convertTextToSpeech } = require("../text-to-speech");
 const { uploadToS3 } = require("../s3-storage");
+const User = require("../models/user.model");
+const MeetingEvent = require("../models/meetingEvent.model");
 
 async function buyPhoneNumber() {
   const availableNumbers = await client
     .availablePhoneNumbers("US")
     .local.list();
 
-  const phoneNumberToPurchase = availableNumbers[0].phoneNumber;
+  console.log("number to purchase", availableNumbers?.[0]?.phoneNumber);
 
-  //   const purchasedNumber = await client.incomingPhoneNumbers.create({
-  //     phoneNumber: phoneNumberToPurchase,
-  //     friendlyName: "My Twilio Number",
-  //   });
+  // const phoneNumberToPurchase = availableNumbers[0].phoneNumber;
 
-  //   console.log("purchasedNumber.sid", purchasedNumber.sid);
-  console.log("available numbers", availableNumbers);
+  // const purchasedNumber = await client.incomingPhoneNumbers.create({
+  //   phoneNumber: phoneNumberToPurchase,
+  //   friendlyName: "My Twilio Number",
+  // });
+
+  // console.log("purchasedNumber.phoneNumber", purchasedNumber.phoneNumber);
+
+  // return purchasedNumber.phoneNumber;
+
+  return "+14697074725";
 }
 
 async function addVerifiedCallerId(phoneNumber) {
@@ -151,6 +158,9 @@ async function handleIncomingCall(request) {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
+  const callerId = getCallerIdFromRequest(request);
+  const isPhoneCall = checkIsPhoneCall(request);
+
   const customerId = request.body.customerId;
   const customerPhoneNumber = request.body.To;
 
@@ -182,23 +192,41 @@ async function handleIncomingCall(request) {
     },
   });
 
+  let meetingEvent = await MeetingEvent.findOne({
+    where: {
+      customerId: customer.id,
+    },
+  });
+
   customer = customer.toJSON();
   assistant = assistant.toJSON();
   history = history.map((item) => item.toJSON());
   oauthCredentials = oauthCredentials.toJSON();
+  meetingEvent = meetingEvent.toJSON();
 
   const formattedHistory = history
     .map((entry) => `${entry.section}:\n${entry.content}`)
     .join("\n\n");
 
-  console.log("formattedHistory", formattedHistory);
+  let user;
+  if (isPhoneCall) {
+    user = await User.findOne({
+      where: {
+        phoneNumber: callerId,
+      },
+    });
+  } else {
+    user = await User.findOne({
+      where: {
+        callerId,
+      },
+    });
+  }
 
-  // get user by the 'From' value, either phone number or callerId, from the database.
-  const isRegistered = true;
+  user = user.toJSON();
 
-  const callerId = getCallerIdFromRequest(request);
   const conversation = initializeConversation(
-    checkIsPhoneCall(request),
+    isPhoneCall,
     assistant.name,
     customer.companyName,
     formattedHistory
@@ -210,12 +238,15 @@ async function handleIncomingCall(request) {
     companyName: customer.companyName,
     conversation,
     customerId: customer.id,
-    isUserRegistered: isRegistered,
+    customerEmail: customer.email,
+    isUserRegistered: user ? true : false,
+    userEmail: user?.email,
     greetingMessageUrl: assistant.greetingMessageUrl,
     farewellMessageUrl: assistant.farewellMessageUrl,
     phoneNumbers: customer.phoneNumbers,
     oauthCredentials,
     voice: assistant.voice,
+    meetingEvent,
   });
 
   twiml.play(assistant.greetingMessageUrl);
@@ -266,6 +297,7 @@ async function handleSpeechInput(request) {
     modelName,
     voice,
     customerId,
+    isUserRegistered,
   } = callData;
 
   if (!voiceInput) {
@@ -284,15 +316,21 @@ async function handleSpeechInput(request) {
       companyName,
       companyHistory
     );
-    updateCallConversation(callerId, conversation);
+
+    callData.conversation = conversation;
+    updateCallConversation(callerId, callData);
   }
 
   conversation.push({ role: "user", content: `${voiceInput}` });
-  let aiResponse = await generateAIResponse(isPhoneCall, conversation);
+  let aiResponse = await generateAIResponse(
+    isPhoneCall,
+    conversation,
+    callData
+  );
 
   while (aiResponse?.role === "tool") {
     conversation.push(aiResponse);
-    aiResponse = await generateAIResponse(isPhoneCall, conversation);
+    aiResponse = await generateAIResponse(isPhoneCall, conversation, callData);
   }
 
   console.log("aiResponse", aiResponse);
@@ -340,7 +378,7 @@ async function handleSpeechInput(request) {
   }
 
   callData.conversation = conversation;
-  updateCallConversation(callerId, conversation);
+  updateCallConversation(callerId, callData);
 
   return twiml.toString();
 }
