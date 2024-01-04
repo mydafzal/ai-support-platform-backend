@@ -4,12 +4,13 @@ const {
   checkSlotAvailability,
   getNextThreeSlots,
   getSlotsForNextDate,
+  scheduleMeeting,
 } = require("./meeting-scheduler.controller");
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
-const tools = getTools();
+async function generateAIResponse(isPhoneCall, messages, callData) {
+  const tools = getTools();
 
-async function generateAIResponse(isPhoneCall, messages, request) {
   if (isPhoneCall) {
     tools.push({
       type: "function",
@@ -28,10 +29,10 @@ async function generateAIResponse(isPhoneCall, messages, request) {
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       tools,
-      messages: messages,
+      messages,
       temperature: 0.8,
       // max_tokens: 100,
-      max_tokens: 50,
+      max_tokens: 75,
     });
 
     const assistantMessage = completion.choices[0].message;
@@ -43,16 +44,26 @@ async function generateAIResponse(isPhoneCall, messages, request) {
         assistantMessage.content?.includes('{"name":')) &&
       assistantMessage?.tool_calls?.length > 0;
 
-    if (!shouldCallFunction) return assistantMessage.content;
+    console.log("shouldCallFunction", shouldCallFunction);
+    console.log("functionName", functionName);
+
+    if (!shouldCallFunction && !functionName) return assistantMessage.content;
 
     if (functionName === "connect_to_human") return functionName;
 
     assistantMessage.content = JSON.stringify(
       assistantMessage.tool_calls[0].function
     );
-    conversation.push(assistantMessage);
+    messages.push(assistantMessage);
 
-    return await executeFunctionCall(assistantMessage, request);
+    const functionCallRespose = await executeFunctionCall(
+      assistantMessage,
+      callData
+    );
+
+    console.log("functionCallRespose", functionCallRespose);
+
+    return functionCallRespose;
   } catch (error) {}
 }
 
@@ -176,7 +187,7 @@ function getTools() {
       function: {
         name: "schedule_meeting",
         description:
-          "Schedule the user's meeting based on the time slot accepted by the user.",
+          "Schedule the user's meeting based on the time slot accepted by the user. Provide month, date and hour all three to schedule the meeting.",
         parameters: {
           type: "object",
           properties: {
@@ -201,14 +212,15 @@ function getTools() {
                 "The specific hour between 0 to 23 at which the user would like to get his/her meeting scheduled.",
             },
 
-            projectType: {
-              type: "string",
-              enum: ["Creative", "Technical", "Marketing"],
-              description:
-                "The type of project about which the user would like to discuss in the scheduled meeting.",
-            },
+            // projectType: {
+            //   type: "string",
+            //   enum: ["Creative", "Technical", "Marketing"],
+            //   description:
+            //     "The type of project about which the user would like to discuss in the scheduled meeting.",
+            // },
           },
-          required: ["month", "date", "hour", "projectType"],
+          // required: ["month", "date", "hour", "projectType"],
+          required: ["month", "date", "hour"],
         },
       },
     },
@@ -217,8 +229,7 @@ function getTools() {
       type: "function",
       function: {
         name: "is_user_registered",
-        description:
-          "Check if the user has created an account with ${companyName}.",
+        description: `Check if the user has created an account.`,
         parameters: {
           type: "object",
           properties: {},
@@ -260,7 +271,7 @@ function initializeConversation(
         3. Meetings can only be scheduled for registered users. So, when the user asks to schedule a meeting, first of all, call the 'is_user_registered' function', without letting the user know, to check if the user has created an account with ${companyName}. If the result of 'is_user_registered' function indicates that the user is registered, proceed with the schedule meeting process. Otherwise, ${
         isPhoneCall
           ? "call the 'send_sms_with_form_link' function that sends an SMS with a url to a form that the user can fill to provide his information. Then, inform the user to provide his information by visiting the url in the SMS and then come back again to get his meeting scheduled."
-          : "inform the user that he must first create an account with ${companyName} and then come back again to get his meeting scheduled."
+          : `inform the user that he must first create an account with ${companyName} and then come back again to get his meeting scheduled.`
       }
         4. Meetings are to be scheduled for specific projects. So, when the user asks to schedule a meeting, and the user has already created an account,first of all ask the user if this is a creative project, marketing project or a technical project.
         5. When the user indicates that he would like to schedule a meeting, first ask the user to provide specific month (January to December), then ask for date of the month, and finally the hour in 24-hour format. After the user has provided month, date and hour, call the appropriate functions with these details to get available slots. 
@@ -294,27 +305,32 @@ function initializeConversation(
   ];
 }
 
-async function executeFunctionCall(assistantMessage, request) {
+async function executeFunctionCall(assistantMessage, callData) {
   const functionName = assistantMessage?.tool_calls?.[0].function.name;
+
+  console.log("Executing functiona clll....", functionName);
 
   let result;
 
   if (functionName === "schedule_meeting") {
-    result = await scheduleMeeting(assistantMessage, request);
+    result = await scheduleMeeting(assistantMessage, callData);
   } else if (functionName === "check_slot_availability") {
-    result = await checkSlotAvailability(assistantMessage, request);
+    result = await checkSlotAvailability(assistantMessage, callData);
   } else if (functionName === "get_next_three_slots") {
-    result = await getNextThreeSlots(assistantMessage);
+    result = await getNextThreeSlots(assistantMessage, callData);
   } else if (functionName === "get_slots_for_next_date") {
-    result = await getSlotsForNextDate(assistantMessage);
+    result = await getSlotsForNextDate(assistantMessage, callData);
   } else if (functionName === "send_sms_with_form_link") {
-    result = handleSendSMS(assistantMessage, request);
+    result = handleSendSMS(assistantMessage);
   } else if (functionName === "is_user_registered") {
-    result =
-      isUserRegistered === "false"
-        ? "User has not yet created an account."
-        : "User has already created an account.";
+    console.log("is_user_registered - result", callData.isUserRegistered);
+
+    result = !callData.isUserRegistered
+      ? "User has not yet created an account."
+      : "User has already created an account.";
   }
+
+  console.log("returning toollll...");
 
   return {
     role: "tool",
