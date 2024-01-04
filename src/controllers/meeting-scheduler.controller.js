@@ -1,35 +1,94 @@
 const moment = require("moment");
+const {
+  getAvailableTimeSlots,
+  addEventToGoogleCalendar,
+} = require("./googleCalendar.controller");
 
-async function checkSlotAvailability(assistantMessage) {
+async function checkSlotAvailability(assistantMessage, callData) {
+  const {
+    oauthCredentials: { accessToken, refreshToken, expiryDate },
+    customerEmail: calendarId,
+    meetingEvent,
+  } = callData;
+
   const { month, date, hour } = extractArguments(assistantMessage);
 
   let convertedDate = constructDate(month, date, hour);
   convertedDate = handleTimeZoneDifference(convertedDate);
 
-  const slots = await getAvailableTimeSlots(convertedDate);
+  const slots = await getAvailableTimeSlots(
+    accessToken,
+    refreshToken,
+    expiryDate,
+    calendarId,
+    convertedDate,
+    meetingEvent.availabilityEndTime
+  );
+
   console.log("getAvailableTimeSlots - response", slots);
   return slots;
 }
 
-async function getNextThreeSlots(assistantMessage) {
+async function getNextThreeSlots(assistantMessage, callData) {
+  console.log("get next three slots -----called....");
+  console.log("calldata", callData);
+
+  const {
+    oauthCredentials: { accessToken, refreshToken, expiryDate },
+    customerEmail: calendarId,
+    meetingEvent,
+  } = callData;
+
   let { month, date, hour } = extractArguments(assistantMessage);
+
+  console.log("args", month, date, hour);
 
   hour = parseInt(hour) + 1;
   let convertedDate = constructDate(month, date, hour);
   convertedDate = handleTimeZoneDifference(convertedDate);
 
-  const slots = await getAvailableTimeSlots(convertedDate, "", true);
-  console.log("getNextThreeSlots - response", slots);
-  return slots;
+  console.log("getting slots now................");
+
+  const response = await getAvailableTimeSlots(
+    accessToken,
+    refreshToken,
+    expiryDate,
+    calendarId,
+    convertedDate,
+    meetingEvent.availabilityEndTime,
+    true
+  );
+
+  console.log("getNextThreeSlots - response", response);
+  return response;
 }
 
-async function getSlotsForNextDate(assistantMessage) {
+async function getSlotsForNextDate(assistantMessage, callData) {
+  const {
+    oauthCredentials: { accessToken, refreshToken, expiryDate },
+    customerEmail: calendarId,
+    meetingEvent,
+  } = callData;
+
   let { month, date } = extractArguments(assistantMessage);
 
-  let convertedDate = constructDate(month, date);
+  let convertedDate = constructDate(
+    month,
+    date,
+    meetingEvent.availabilityStartTime
+  );
   convertedDate = handleTimeZoneDifference(convertedDate);
 
-  const slots = await getAvailableTimeSlots(convertedDate, "", true);
+  const slots = await getAvailableTimeSlots(
+    accessToken,
+    refreshToken,
+    expiryDate,
+    calendarId,
+    convertedDate,
+    meetingEvent.availabilityEndTime,
+    true
+  );
+
   console.log("getSlotsForNextDate - response", slots);
   return slots;
 }
@@ -51,7 +110,7 @@ function constructDate(month, date, hour) {
   };
 
   date = parseInt(date);
-  hour = hour ? parseInt(hour) - 1 : null;
+  // hour = hour ? parseInt(hour) - 1 : null;
 
   const convertedDate = new Date();
 
@@ -60,7 +119,8 @@ function constructDate(month, date, hour) {
   convertedDate.setDate(date);
 
   if (hour || hour === 0) {
-    convertedDate.setHours(hour, 59, 59, 59);
+    // convertedDate.setHours(hour, 59, 59, 59);
+    convertedDate.setHours(hour, 0, 0, 0);
   }
 
   console.log("convertedDate", convertedDate, convertedDate.toString());
@@ -82,17 +142,30 @@ function handleTimeZoneDifference(date) {
   return date;
 }
 
-async function scheduleMeeting(assistantMessage, request) {
-  const { month, date, hour, projectType } = extractArguments(assistantMessage);
+async function scheduleMeeting(assistantMessage, callData) {
+  console.log("schedule meeting called.....");
+
+  const {
+    oauthCredentials: { accessToken, refreshToken, expiryDate },
+    customerEmail: calendarId,
+    meetingEvent,
+    userEmail,
+  } = callData;
+
+  console.log("call data", callData);
+  console.log("assistant Message", assistantMessage?.tool_calls?.[0].function);
+
+  const extractedArgs = extractArguments(assistantMessage);
+  console.log("extractedArgs", extractedArgs);
+
+  const { month, date, hour, projectType } = extractedArgs;
+
+  console.log("args", month, date, hour, projectType);
 
   const convertedDate = constructDate(month, date, hour);
 
-  console.log("scheduleMeeting convertedDate", convertedDate.toString());
-
   const timezoneDifferenceInHours =
     Math.abs(convertedDate?.getTimezoneOffset()) / 60;
-
-  console.log("timezoneDifferenceInHours", timezoneDifferenceInHours);
 
   // const meetingStartTime =
   //   timezoneDifferenceInHours !== 0
@@ -118,12 +191,14 @@ async function scheduleMeeting(assistantMessage, request) {
   console.log("meetingEndTime", moment(meetingEndTime).format("hh:mm a"));
   console.log("format(dddd)", moment(meetingEndTime).format("dddd"));
 
-  const email = await isUserRegistered(request);
-
   await addEventToGoogleCalendar(
-    email,
-    "Cheetah AI",
-    projectType,
+    accessToken,
+    refreshToken,
+    expiryDate,
+    calendarId,
+    userEmail,
+    meetingEvent.name,
+    meetingEvent.description,
     meetingStartTime.toISOString(),
     meetingEndTime.toISOString()
   );
@@ -135,4 +210,5 @@ module.exports = {
   getNextThreeSlots,
   getSlotsForNextDate,
   checkSlotAvailability,
+  scheduleMeeting,
 };
