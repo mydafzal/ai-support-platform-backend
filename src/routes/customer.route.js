@@ -28,7 +28,7 @@ router.post("/", async (req, res) => {
       },
     });
 
-    if (customer.toJSON()?.email) {
+    if (customer?.toJSON()?.email) {
       return res.status(400).json({ message: "Email already exists." });
     }
 

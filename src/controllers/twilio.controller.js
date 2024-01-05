@@ -198,11 +198,11 @@ async function handleIncomingCall(request) {
     },
   });
 
-  customer = customer.toJSON();
-  assistant = assistant.toJSON();
+  customer = customer?.toJSON();
+  assistant = assistant?.toJSON();
   history = history.map((item) => item.toJSON());
-  oauthCredentials = oauthCredentials.toJSON();
-  meetingEvent = meetingEvent.toJSON();
+  oauthCredentials = oauthCredentials?.toJSON();
+  meetingEvent = meetingEvent?.toJSON();
 
   const formattedHistory = history
     .map((entry) => `${entry.section}:\n${entry.content}`)
@@ -223,7 +223,7 @@ async function handleIncomingCall(request) {
     });
   }
 
-  user = user.toJSON();
+  user = user?.toJSON();
 
   const conversation = initializeConversation(
     isPhoneCall,
@@ -297,7 +297,6 @@ async function handleSpeechInput(request) {
     modelName,
     voice,
     customerId,
-    isUserRegistered,
   } = callData;
 
   if (!voiceInput) {

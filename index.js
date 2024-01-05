@@ -5,6 +5,8 @@ const bodyParser = require("body-parser");
 const path = require("path");
 require("dotenv").config();
 
+const moment = require("moment");
+
 require("./src/redis");
 
 const app = express();
@@ -51,8 +53,9 @@ app.get("/speech", async (req, res) => {
 });
 
 app.get("/text", async (req, res) => {
-  const response = ""
-  res.status(200).json({ response });
+  const response = "";
+
+  res.status(200).json({ response: moment(new Date()).format("dddd") });
 });
 
 app.use("/auth", authRouter);

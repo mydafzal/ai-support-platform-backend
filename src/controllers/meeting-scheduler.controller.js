@@ -16,6 +16,17 @@ async function checkSlotAvailability(assistantMessage, callData) {
   let convertedDate = constructDate(month, date, hour);
   convertedDate = handleTimeZoneDifference(convertedDate);
 
+  const day = moment(convertedDate).format("dddd");
+
+  if (
+    !meetingEvent.availableDays.includes(day) ||
+    parseInt(hour) < meetingEvent.availabilityStartTime ||
+    parseInt(hour) > meetingEvent.availabilityEndTime
+  ) {
+    console.log("cannot schedule meeting outside of working hours");
+    return `Cannot schedule meeting at this time. Meetings can only be scheduled between ${meetingEvent.availabilityStartTime}:00 and ${meetingEvent.availabilityEndTime}:00 on ${meetingEvent.availableDays}`;
+  }
+
   const slots = await getAvailableTimeSlots(
     accessToken,
     refreshToken,
@@ -179,11 +190,11 @@ async function scheduleMeeting(assistantMessage, callData) {
       ? moment(convertedDate).subtract(5, "hours").toDate()
       : convertedDate;
 
-  meetingStartTime = moment(meetingStartTime).add(1, "minute").toDate();
+  meetingStartTime = moment(meetingStartTime).toDate();
 
   let meetingEndTime = new Date(
     new Date(meetingStartTime).setTime(
-      meetingStartTime.getTime() + 30 * 60 * 1000
+      meetingStartTime.getTime() + 60 * 60 * 1000
     )
   );
 

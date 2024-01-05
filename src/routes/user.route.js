@@ -6,7 +6,17 @@ router.post("/", async (req, res) => {
     const { name, email, phoneNumber, callerId, customerId } = req.body;
     console.log("add user", req.body);
 
-    const user = await User.create({
+    let user = await User.findOne({
+      where: {
+        email,
+      },
+    });
+
+    if (user?.toJSON()?.email) {
+      return res.status(400).json({ message: "Email already exists." });
+    }
+
+    user = await User.create({
       name,
       email,
       phoneNumber,
