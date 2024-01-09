@@ -8,6 +8,7 @@ const {
   gatherSpeechInput,
   handleSpeechInput,
 } = require("../controllers/twilio.controller");
+const Customer = require("../models/customer.model");
 
 const router = Router();
 
@@ -17,9 +18,12 @@ router.get("/access-token/:id?", (req, res) => {
 });
 
 router.post("/verification", async (req, res) => {
-  const { phoneNumber } = req.body;
+  const { phoneNumber, customerId } = req.body;
 
-  const result = await createVerification(phoneNumber);
+  let customer = await Customer.findByPk(customerId);
+  customer = customer.toJSON();
+
+  const result = await createVerification(phoneNumber, customer.verifyServiceId);
   res.status(200).send(result);
 });
 

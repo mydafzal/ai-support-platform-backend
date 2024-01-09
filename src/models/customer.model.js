@@ -25,6 +25,10 @@ const Customer = sequelize.define(
       type: DataTypes.ARRAY(DataTypes.STRING),
       allowNull: false,
     },
+    verifyServiceId: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
   },
   {}
 );

@@ -4,7 +4,6 @@ const API_KEY = process.env.TWILIO_API_KEY;
 const API_SECRET = process.env.TWILIO_API_SECRET;
 const TWIML_APP_SID = process.env.TWIML_APP_SID;
 const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
-const VERIFY_SERVICE_SID = process.env.TWILIO_VERIFY_SERVICE_SID;
 const BASE_URL = process.env.BASE_URL;
 
 const twilio = require("twilio");
@@ -32,6 +31,20 @@ const { convertTextToSpeech } = require("../text-to-speech");
 const { uploadToS3 } = require("../s3-storage");
 const User = require("../models/user.model");
 const MeetingEvent = require("../models/meetingEvent.model");
+
+async function createVerifyService(companyName) {
+  try {
+    const service = await client.verify.v2.services.create({
+      friendlyName: companyName,
+      codeLength: 4,
+    });
+
+    console.log("Verify service created - sid", service.sid);
+    return service.sid;
+  } catch (error) {
+    console.error("Error sending verification code:", error.message);
+  }
+}
 
 async function buyPhoneNumber() {
   const availableNumbers = await client
@@ -102,10 +115,10 @@ function getTwilioAccessToken(userId) {
   return result;
 }
 
-async function createVerification(phoneNumber) {
+async function createVerification(phoneNumber, verifyServiceId) {
   try {
     const verification = await client.verify.v2
-      .services(VERIFY_SERVICE_SID)
+      .services(verifyServiceId)
       .verifications.create({
         to: phoneNumber,
         channel: "sms",
@@ -383,6 +396,7 @@ async function handleSpeechInput(request) {
 }
 
 module.exports = {
+  createVerifyService,
   addVerifiedCallerId,
   buyPhoneNumber,
   getTwilioAccessToken,

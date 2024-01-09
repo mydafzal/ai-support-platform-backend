@@ -1,4 +1,7 @@
-const { buyPhoneNumber } = require("../controllers/twilio.controller");
+const {
+  buyPhoneNumber,
+  createVerifyService,
+} = require("../controllers/twilio.controller");
 const Assistant = require("../models/assistant.model");
 const CompanyHistory = require("../models/companyHistory.model");
 const OAuthCredentials = require("../models/credential.model");
@@ -33,6 +36,7 @@ router.post("/", async (req, res) => {
     }
 
     const twilioNumber = await buyPhoneNumber();
+    const verifyServiceId = await createVerifyService(companyName);
 
     customer = await Customer.create({
       name: customerName,
@@ -40,6 +44,7 @@ router.post("/", async (req, res) => {
       companyName,
       twilioNumber,
       phoneNumbers,
+      verifyServiceId,
     });
 
     const companyHistoryObjects = companyHistory?.map((item) => ({
