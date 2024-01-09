@@ -7,6 +7,8 @@ const {
   handleIncomingCall,
   gatherSpeechInput,
   handleSpeechInput,
+  handleCallDisconnect,
+  disconnectRedirectedCall,
 } = require("../controllers/twilio.controller");
 const Customer = require("../models/customer.model");
 
@@ -23,7 +25,10 @@ router.post("/verification", async (req, res) => {
   let customer = await Customer.findByPk(customerId);
   customer = customer.toJSON();
 
-  const result = await createVerification(phoneNumber, customer.verifyServiceId);
+  const result = await createVerification(
+    phoneNumber,
+    customer.verifyServiceId
+  );
   res.status(200).send(result);
 });
 
@@ -57,23 +62,22 @@ router.post("/speech-input", async (req, res) => {
   res.send(result);
 });
 
-router.post("/empty-recording", async (req, res) => {
-  return await handleEmptyRecording(req, res);
-});
-
-router.post("/disconnect", async (req, res) => {
+router.post("/disconnect", (req, res) => {
   console.log("call-status - request.body.from", req.body.From);
 
-  // if (req.body.CallStatus === "completed") {
-  //   handleCallDisconnect(req);
-  // }
+  if (req.body.CallStatus === "completed") {
+    handleCallDisconnect(req);
+  }
 
   res.status(200).send();
 });
 
-router.post("/call-end", async (req, res) => {
-  console.log("call ended...");
-  return await handleDial(req, res);
+router.post("/redirected-call-disconnect", (req, res) => {
+  console.log("redirected call has been disconnected...");
+  const result = disconnectRedirectedCall(req, res);
+
+  res.type("application/xml");
+  res.status(200).send(result);
 });
 
 module.exports = router;

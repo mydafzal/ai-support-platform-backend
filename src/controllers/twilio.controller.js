@@ -347,8 +347,10 @@ async function handleSpeechInput(request) {
 
   console.log("aiResponse", aiResponse);
 
+  let shouldRedirectCall = false;
   if (aiResponse === "connect_to_human") {
     aiResponse = "You are now being connected to a human agent.";
+    shouldRedirectCall = true;
   }
 
   const cleanedAiResponse = aiResponse.replace(/^\w+:\s*/i, "").trim();
@@ -370,11 +372,13 @@ async function handleSpeechInput(request) {
 
   twiml.play(textToSpeechFileURL);
 
-  if (aiResponse === "connect_to_human" && phoneNumbers?.length > 0) {
+  if (shouldRedirectCall && phoneNumbers.length > 0) {
+    console.log("Dialing the human agent's number...");
+
     twiml
       .dial({
         callerId: phoneNumbers[0],
-        action: `${BASE_URL}/twilio/dial`,
+        action: `${BASE_URL}/twilio/redirected-call-disconnect`,
         method: "POST",
       })
       .number(phoneNumbers[0]);
@@ -395,6 +399,24 @@ async function handleSpeechInput(request) {
   return twiml.toString();
 }
 
+function disconnectRedirectedCall(request) {
+  const VoiceResponse = twilio.twiml.VoiceResponse;
+  const twiml = new VoiceResponse();
+
+  const callerId = getCallerIdFromRequest(request);
+
+  twiml.hangup();
+
+  deleteCallData(callerId);
+
+  return twiml.toString();
+}
+
+function handleCallDisconnect(request) {
+  const callerId = getCallerIdFromRequest(request);
+  deleteCallData(callerId);
+}
+
 module.exports = {
   createVerifyService,
   addVerifiedCallerId,
@@ -406,4 +428,6 @@ module.exports = {
   handleIncomingCall,
   gatherSpeechInput,
   handleSpeechInput,
+  handleCallDisconnect,
+  disconnectRedirectedCall,
 };
