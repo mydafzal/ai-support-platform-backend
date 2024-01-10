@@ -40,6 +40,7 @@ const {
 } = require("./src/redis");
 
 const { connecteToDb } = require("./src/loaders/db");
+const { uploadToBlobStorage } = require("./src/azure-storage");
 
 app.get("/speech", async (req, res) => {
   const response = await convertTextToSpeech(
@@ -53,9 +54,13 @@ app.get("/speech", async (req, res) => {
 });
 
 app.get("/text", async (req, res) => {
-  const response = "";
+  // const response = "";
 
-  res.status(200).json({ response: moment(new Date()).format("dddd") });
+  let response = await convertTextToSpeech("Hi, how are you doing?", "Bill");
+
+  await uploadToBlobStorage(response);
+
+  res.status(200).json({ response: "uploaded..." });
 });
 
 app.use("/auth", authRouter);
