@@ -5,8 +5,6 @@ const bodyParser = require("body-parser");
 const path = require("path");
 require("dotenv").config();
 
-const moment = require("moment");
-
 require("./src/redis");
 
 const app = express();
@@ -29,18 +27,22 @@ const twilioRouter = require("./src/routes/twilio.route");
 const customersRouter = require("./src/routes/customer.route");
 const usersRouter = require("./src/routes/user.route");
 const meetingEventsRouter = require("./src/routes/meetingEvent.route");
+const dataLoaderRouter = require("./src/routes/data-loader.route");
 
 const { convertTextToSpeech } = require("./src/text-to-speech");
-const { addVerifiedCallerId } = require("./src/controllers/twilio.controller");
-const {
-  storeCallData,
-  getCallData,
-  deleteCallData,
-  updateCallData,
-} = require("./src/redis");
 
 const { connecteToDb } = require("./src/loaders/db");
 const { uploadToBlobStorage } = require("./src/azure-storage");
+const {
+  initializeLangChain,
+  generateAgentResponse,
+  scrapeAndPersistData,
+  readFileAndPersistData,
+} = require("./src/experimentation/langchain");
+const {
+  addDataToChromaDB,
+  getDataToChromaDB,
+} = require("./src/experimentation/chroma-db");
 
 app.get("/speech", async (req, res) => {
   const response = await convertTextToSpeech(
@@ -53,14 +55,22 @@ app.get("/speech", async (req, res) => {
   res.status(200).json({ response });
 });
 
-app.get("/text", async (req, res) => {
-  // const response = "";
+app.post("/test", async (req, res) => {
+  const { question } = req.body;
+  console.log("question", question);
 
-  let response = await convertTextToSpeech("Hi, how are you doing?", "Bill");
+  // const response = await initializeLangChain();
+  // const response = await addDataToChromaDB("");
 
-  await uploadToBlobStorage(response);
+  // const response = await scrapeAndPersistData(
+  //   "https://cheetahagency.com/our-history/"
+  // );
 
-  res.status(200).json({ response: "uploaded..." });
+  // const response = await readFileAndPersistData();
+
+  // const response = await generateAgentResponse("What is Cheetah Agency?");
+  const response = await generateAgentResponse(question);
+  res.status(200).json({ response });
 });
 
 app.use("/auth", authRouter);
@@ -68,6 +78,7 @@ app.use("/twilio", twilioRouter);
 app.use("/customers", customersRouter);
 app.use("/users", usersRouter);
 app.use("/meeting-events", meetingEventsRouter);
+app.use("/data-loader", dataLoaderRouter);
 
 app.get("/", (req, res) => {
   res.status(200).json({ token: "token 123" });
