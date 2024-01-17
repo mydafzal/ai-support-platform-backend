@@ -43,6 +43,9 @@ const {
   addDataToChromaDB,
   getDataToChromaDB,
 } = require("./src/experimentation/chroma-db");
+const {
+  generateTrainingAgentResponse,
+} = require("./src/experimentation/teach");
 
 app.get("/speech", async (req, res) => {
   const response = await convertTextToSpeech(
@@ -69,7 +72,9 @@ app.post("/test", async (req, res) => {
   // const response = await readFileAndPersistData();
 
   // const response = await generateAgentResponse("What is Cheetah Agency?");
-  const response = await generateAgentResponse(question);
+  // const response = await generateAgentResponse(question);
+
+  const response = await generateTrainingAgentResponse(question);
   res.status(200).json({ response });
 });
 
