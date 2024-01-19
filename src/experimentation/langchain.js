@@ -199,6 +199,9 @@ async function initializeAgent() {
 async function generateAgentResponse(userQuery) {
   const vectorStore = await getVectoreStore("test-collection");
   const similarityResponse = await vectorStore.similaritySearch(userQuery, 2);
+
+  console.log("similarity response", similarityResponse[0].metadata.loc);
+
   const formattedResponse = formatDocumentsAsString(similarityResponse);
 
   if (!agent) {

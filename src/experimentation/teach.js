@@ -34,6 +34,7 @@ let agent;
 
 async function initializeAgent() {
   const vectorStore = await getVectoreStore("test-collection");
+
   const retriever = vectorStore.asRetriever();
 
   const retrieverTool = createRetrieverTool(retriever, {

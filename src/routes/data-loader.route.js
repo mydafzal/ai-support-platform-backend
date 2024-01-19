@@ -9,7 +9,10 @@ const {
 } = require("../experimentation/langchain");
 const upload = multer({ dest: "documents/" });
 
-const { deleteCollection } = require("../experimentation/chroma-db");
+const {
+  deleteCollection,
+  addTextToVectoreStore,
+} = require("../experimentation/chroma-db");
 
 router.post("/web", async (req, res) => {
   try {
@@ -73,6 +76,30 @@ router.post("/ask", async (req, res) => {
     res.status(200).send(response);
   } catch (error) {
     console.error("Error fetching customer:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+router.post("/create-flow", async (req, res) => {
+  try {
+    await addTextToVectoreStore(`
+    User: Can you help me find a laptop?
+    AI: Hello! I'd be happy to help you find the perfect laptop. To get started, could you please tell me a bit more about your preferences?
+    
+    User: I need a laptop for gaming.
+    AI: Great choice! Gaming laptops have unique features. What's your preferred budget range, and are there any specific brands you're interested in?
+
+    User: "Customer specifies a budget and mentions a preferred brand."
+    AI: Awesome! Given your budget and preference for [Brand], I recommend considering the [Model A] or [Model B]. These both offer excellent performance for gaming.
+
+    User: "Customer asks for more information about [Model A]."
+    AI: Certainly! [Model A] features [specifications], and customers have praised its performance for gaming. Additionally, we currently have a promotion that includes [details].
+    
+    User: "Customer expresses interest in purchasing [Model A]."
+    AI: Fantastic choice! I can help you with the order. Would you like to proceed with the purchase, or do you have any other questions?`);
+    res.status(200).send("added.");
+  } catch (error) {
+    console.error("Error adding text to vector store.", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });

@@ -46,6 +46,9 @@ const {
 const {
   generateTrainingAgentResponse,
 } = require("./src/experimentation/teach");
+const {
+  generateConversationFlowAgentResponse,
+} = require("./src/experimentation/conversation-flow");
 
 app.get("/speech", async (req, res) => {
   const response = await convertTextToSpeech(
@@ -75,6 +78,14 @@ app.post("/test", async (req, res) => {
   // const response = await generateAgentResponse(question);
 
   const response = await generateTrainingAgentResponse(question);
+  res.status(200).json({ response });
+});
+
+app.post("/conversation-flow", async (req, res) => {
+  const { question } = req.body;
+  console.log("question", question);
+
+  const response = await generateConversationFlowAgentResponse(question);
   res.status(200).json({ response });
 });
 
