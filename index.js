@@ -28,27 +28,19 @@ const customersRouter = require("./src/routes/customer.route");
 const usersRouter = require("./src/routes/user.route");
 const meetingEventsRouter = require("./src/routes/meetingEvent.route");
 const dataLoaderRouter = require("./src/routes/data-loader.route");
+const hubspotCRMRouter = require("./src/experimentation/hubspotCRM.route");
 
 const { convertTextToSpeech } = require("./src/text-to-speech");
 
-const { connecteToDb } = require("./src/loaders/db");
-const { uploadToBlobStorage } = require("./src/azure-storage");
-const {
-  initializeLangChain,
-  generateAgentResponse,
-  scrapeAndPersistData,
-  readFileAndPersistData,
-} = require("./src/experimentation/langchain");
-const {
-  addDataToChromaDB,
-  getDataToChromaDB,
-} = require("./src/experimentation/chroma-db");
 const {
   generateTrainingAgentResponse,
 } = require("./src/experimentation/teach");
 const {
   generateConversationFlowAgentResponse,
 } = require("./src/experimentation/conversation-flow");
+const {
+  readAllProperties,
+} = require("./src/experimentation/hubspotCRM.controller");
 
 app.get("/speech", async (req, res) => {
   const response = await convertTextToSpeech(
@@ -77,7 +69,10 @@ app.post("/test", async (req, res) => {
   // const response = await generateAgentResponse("What is Cheetah Agency?");
   // const response = await generateAgentResponse(question);
 
-  const response = await generateTrainingAgentResponse(question);
+  // const response = await generateTrainingAgentResponse(question);
+
+  const response = await readAllProperties();
+
   res.status(200).json({ response });
 });
 
@@ -95,6 +90,7 @@ app.use("/customers", customersRouter);
 app.use("/users", usersRouter);
 app.use("/meeting-events", meetingEventsRouter);
 app.use("/data-loader", dataLoaderRouter);
+app.use("/hubspot", hubspotCRMRouter);
 
 app.get("/", (req, res) => {
   res.status(200).json({ token: "token 123" });

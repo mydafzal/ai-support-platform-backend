@@ -4,12 +4,19 @@ const {
   getTwilioAccessToken,
   createVerification,
   checkVerification,
-  handleIncomingCall,
-  gatherSpeechInput,
-  handleSpeechInput,
+  // handleIncomingCall,
+  // gatherSpeechInput,
+  // handleSpeechInput,
   handleCallDisconnect,
   disconnectRedirectedCall,
 } = require("../controllers/twilio.controller");
+
+const {
+  handleIncomingCall,
+  handleSpeechInput,
+  gatherSpeechInput,
+} = require("../experimentation/call-handler.controller");
+
 const Customer = require("../models/customer.model");
 
 const router = Router();
@@ -49,7 +56,7 @@ router.post("/incoming-call", async (req, res) => {
 });
 
 router.post("/gather-speech", async (req, res) => {
-  const result = await gatherSpeechInput(req);
+  const result = await gatherSpeechInput();
 
   res.type("application/xml");
   res.send(result);
