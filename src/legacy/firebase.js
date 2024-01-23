@@ -4,7 +4,7 @@ const { getStorage } = require("firebase/storage");
 
 var admin = require("firebase-admin");
 
-var serviceAccount = require("../firebase-admin-service-key.json");
+var serviceAccount = require("../../firebase-admin-service-key.json");
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),

@@ -1,7 +1,7 @@
 const Twilio = require("twilio");
 const { OpenAI } = require("openai");
 const { convertTextToSpeech } = require("./text-to-speech");
-const { getAvailableTimeSlots } = require("./calendly");
+const { getAvailableTimeSlots } = require("../calendly");
 const { getUser } = require("./firestore");
 const {
   getConversationByUserId,
@@ -9,9 +9,9 @@ const {
   addConversation,
   deleteConversation,
 } = require("./datastore");
-const { addEventToGoogleCalendar } = require("./google-calendar");
+const { addEventToGoogleCalendar } = require("../google-calendar");
 const moment = require("moment");
-const { sendSMS } = require("./controllers/twilio.controller");
+const { sendSMS } = require("../controllers/twilio.controller");
 
 const OPENAI_API_KEY = "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"; // cheetah account
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });

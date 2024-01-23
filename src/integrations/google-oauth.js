@@ -1,6 +1,6 @@
 const { google } = require("googleapis");
-const oauthCredentials = require("../credentials.json");
-const OAuthCredentials = require("./models/credential.model");
+const oauthCredentials = require("../../credentials.json");
+const OAuthCredentials = require("../models/credential.model");
 
 const SCOPES = ["https://www.googleapis.com/auth/calendar.events"];
 
