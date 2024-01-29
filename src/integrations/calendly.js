@@ -1,5 +1,12 @@
 const moment = require("moment/moment");
 const fetch = require("node-fetch");
+const { URLSearchParams } = require("url");
+
+const authHeader =
+  "Basic " +
+  Buffer.from(
+    `${process.env.CALENDLY_CLIENT_ID}:${process.env.CALENDLY_CLIENT_SECRET}`
+  ).toString("base64");
 
 let url =
   "https://api.calendly.com/event_types?user=https://api.calendly.com/users/65559c9d-b8e4-4d3f-84f0-4d06dff4ce37";
@@ -12,6 +19,11 @@ async function getAvailableTimeSlots(
   email,
   nextThreeSlots = false
 ) {
+  // if (hasAccessTokenExpired(expirationTime)) {
+  //   accessToken = await refreshCalendlyAccessToken(refreshToken);
+  //   // Save to db.
+  // }
+
   const requestedSlot = `${moment(requestedDate).format("HH")}:00`;
 
   const hoursDifference = Math.abs(requestedDate?.getTimezoneOffset()) / 60;
@@ -54,28 +66,9 @@ async function getAvailableTimeSlots(
   );
 
   data = await response.json();
-  // console.log("data", data);
-
-  // if (data?.collection?.length < 1) {
-  //   return getAvailableTimeSlots(
-  //     new Date(requestedDate.setDate(new Date().getDate() + 1))
-  //   );
-  // }
-
-  // data.collection?.forEach((item) => {
-  //   const time = new Date(item.start_time);
-
-  //   const formattedTime = moment(time).format("HH:mm");
-  //   console.log("slot", formattedTime);
-  // });
 
   const slots = data.collection?.map((item) => {
     let time = new Date(item.start_time);
-
-    // if (hoursDifference !== 0) {
-    //   time = moment(time).subtract(5, "hours").toDate();
-    // }
-    // time = moment(time).subtract(5, "hours").toDate();
 
     const formattedTime = moment(time).format("HH:mm");
 
@@ -123,4 +116,118 @@ async function getAvailableTimeSlots(
   }
 }
 
-module.exports = { getAvailableTimeSlots };
+async function getCalendlyAccessToken(code, redirecUri) {
+  const encodedParams = new URLSearchParams();
+  encodedParams.append("grant_type", "authorization_code");
+  encodedParams.append("code", code);
+  encodedParams.append("redirect_uri", redirecUri);
+
+  console.log("encoded", encodedParams);
+
+  try {
+    const response = await fetch("https://auth.calendly.com/oauth/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: authHeader,
+      },
+      body: encodedParams,
+    });
+
+    const data = await response.json();
+    console.log("getCalendlyAccessToken - response", data);
+
+    return data;
+  } catch (error) {
+    console.log("Error getting calendly access token", error);
+  }
+}
+
+async function refreshCalendlyAccessToken(refreshToken) {
+  const encodedParams = new URLSearchParams();
+  encodedParams.append("grant_type", "refresh_token");
+  encodedParams.append("refresh_token", refreshToken);
+
+  console.log("encoded", encodedParams);
+
+  try {
+    const response = await fetch("https://auth.calendly.com/oauth/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: authHeader,
+      },
+      body: encodedParams,
+    });
+
+    const data = await response.json();
+    console.log("refreshCalendlyAccessToken - response", data);
+
+    return data;
+  } catch (error) {
+    console.log("Error getting calendly access token", error);
+  }
+}
+
+function hasAccessTokenExpired(expirationTime) {
+  return new Date() >= new Date(expirationTime);
+}
+
+async function getCalendlyAccountDetails(accessToken) {
+  const response = await fetch("https://api.calendly.com/users/me", {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  return await response.json();
+}
+
+async function getOrganizationMember(
+  accessToken,
+  email,
+  expirationTime,
+  refreshToken
+) {
+  if (hasAccessTokenExpired(expirationTime)) {
+    const updatedCredentials = await refreshCalendlyAccessToken(refreshToken);
+    accessToken = updatedCredentials.access_token;
+
+    // Save to db.
+  }
+
+  const calendlyAccountDetails = await getCalendlyAccountDetails(accessToken);
+  const organizationUri = calendlyAccountDetails.resource.current_organization;
+
+  console.log("organizationUri", organizationUri);
+
+  const response = await fetch(
+    `https://api.calendly.com/organization_memberships?organization=${organizationUri}`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+    }
+  );
+
+  const data = await response.json();
+  console.log("data", data);
+
+  const members = data?.collection;
+
+  if (members?.length > 0) {
+    return members.filter((user) => user.user.email === email);
+  }
+}
+
+module.exports = {
+  getAvailableTimeSlots,
+  getCalendlyAccessToken,
+  refreshCalendlyAccessToken,
+  getCalendlyAccountDetails,
+  getOrganizationMember,
+};
