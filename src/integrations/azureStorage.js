@@ -2,6 +2,7 @@ const { BlobServiceClient } = require("@azure/storage-blob");
 
 const key =
   "BpY/qs2L3bws9QLL6rUxPmbtNUntYVtePfgm3JM5+jtp6mIX/EEBl7KnKfbG4TQ252ptnBTq0OnF+AStbNMfUw==";
+
 const connectionString =
   "DefaultEndpointsProtocol=https;AccountName=chatbotagent;AccountKey=BpY/qs2L3bws9QLL6rUxPmbtNUntYVtePfgm3JM5+jtp6mIX/EEBl7KnKfbG4TQ252ptnBTq0OnF+AStbNMfUw==;EndpointSuffix=core.windows.net";
 const containerName = "chatbotagent";

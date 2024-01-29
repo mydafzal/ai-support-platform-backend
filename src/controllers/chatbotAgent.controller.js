@@ -10,8 +10,6 @@ const {
   AgentExecutor,
 } = require("langchain/agents");
 
-const { formatDocumentsAsString } = require("langchain/util/document");
-
 const { ChatMessageHistory } = require("langchain/stores/message/in_memory");
 const { RunnableWithMessageHistory } = require("@langchain/core/runnables");
 
@@ -25,12 +23,6 @@ const { z } = require("zod");
 let agent;
 
 async function initializeAgent() {
-  //   const retrieverTool = createRetrieverTool(retriever, {
-  //     name: "langsmith_search",
-  //     description:
-  //       "Search for information about LangSmith. For any questions about LangSmith, you must use this tool!",
-  //   });
-
   const vectorStore = await getVectoreStore("test-collection");
   const retriever = vectorStore.asRetriever();
 

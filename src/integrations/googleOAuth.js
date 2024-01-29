@@ -1,6 +1,6 @@
 const { google } = require("googleapis");
 const oauthCredentials = require("../../credentials.json");
-const OAuthCredentials = require("../models/credential.model");
+const Integration = require("../models/integration.model");
 
 const SCOPES = ["https://www.googleapis.com/auth/calendar.events"];
 
@@ -11,21 +11,21 @@ const oAuth2Client = new google.auth.OAuth2(
   redirect_uris[0]
 );
 
-function generateOAuthUrl() {
+function generateGoogleOAuthUrl() {
   return oAuth2Client.generateAuthUrl({
     access_type: "offline",
     scope: SCOPES,
   });
 }
 
-async function storeAccessToken(customerId, code) {
+async function storeGoogleOAuthAccessToken(customerId, code) {
   try {
     let credentials = await getTokenAsync(code);
 
     console.log("credentials", credentials);
     console.log("customerId", customerId);
 
-    await OAuthCredentials.create({
+    await Integration.create({
       customerId,
       accessToken: credentials.access_token,
       refreshToken: credentials.refresh_token,
@@ -38,7 +38,7 @@ async function storeAccessToken(customerId, code) {
   }
 }
 
-async function getAccessToken(userId) {
+async function getGoogleOAuthAccessToken(userId) {
   try {
     // Get credentials from database based on userId...
     let credentials = {
@@ -93,4 +93,8 @@ async function refreshAccessToken(userId) {
   }
 }
 
-module.exports = { generateOAuthUrl, getAccessToken, storeAccessToken };
+module.exports = {
+  generateGoogleOAuthUrl,
+  getGoogleOAuthAccessToken,
+  storeGoogleOAuthAccessToken,
+};

@@ -1,9 +1,3 @@
-const { RecursiveCharacterTextSplitter } = require("langchain/text_splitter");
-const {
-  CheerioWebBaseLoader,
-} = require("langchain/document_loaders/web/cheerio");
-
-const { createRetrieverTool } = require("langchain/tools/retriever");
 const {
   ChatPromptTemplate,
   MessagesPlaceholder,
@@ -17,51 +11,44 @@ const {
 
 const { z } = require("zod");
 
-const { PDFLoader } = require("langchain/document_loaders/fs/pdf");
-
-const { formatDocumentsAsString } = require("langchain/util/document");
-
-const { ChatMessageHistory } = require("langchain/stores/message/in_memory");
 const { RunnableWithMessageHistory } = require("@langchain/core/runnables");
-
-const path = require("path");
-const { addToVectoreStore, getVectoreStore } = require("./chroma-db");
 const { ChatOpenAI } = require("@langchain/openai");
-
 const { DynamicStructuredTool } = require("@langchain/community/tools/dynamic");
+const { addTextToVectoreStore } = require("../integrations/chromaDB");
 
-let agent;
+const {
+  RedisChatMessageHistory,
+} = require("@langchain/community/stores/message/redis");
+
+const { createClient } = require("redis");
+const redisClient = createClient();
 
 async function initializeAgent() {
-  const vectorStore = await getVectoreStore("test-collection");
-
-  const retriever = vectorStore.asRetriever();
-
-  const retrieverTool = createRetrieverTool(retriever, {
-    name: "langsmith_search",
-    description:
-      "Search for information about LangSmith. For any questions about LangSmith, you must use this tool!",
-  });
-
   const informationSaverTool = new DynamicStructuredTool({
     name: "information-saver",
     description:
-      //   "call this whenever the information provided by the business makes a new meaningful unit of information.",
-      //   "call this  whenever some new meaningful information is provided by the business.",
       "Anytime you learn some new information, you must call this tool to save that information.",
     schema: z.object({
-      newInformation: z.string().describe(
-        //   "Some new information about the business that makes sense and is meaningful to the business."
-        "Some new information about the business."
-      ),
+      newInformation: z
+        .string()
+        .describe("Some new information about the business."),
+      collectionName: z
+        .string()
+        .describe(
+          "Name of the collection in which to store the new information."
+        ),
     }),
-    func: ({ newInformation }) => {
+    func: async ({ newInformation, collectionName }) => {
       console.log("new info", newInformation);
+      console.log("collectionName", collectionName);
+
+      await addTextToVectoreStore(newInformation, collectionName);
+
       return "";
     },
   });
 
-  const tools = [retrieverTool, informationSaverTool];
+  const tools = [informationSaverTool];
 
   const chatModel = new ChatOpenAI({
     modelName: "gpt-3.5-turbo-1106",
@@ -70,7 +57,7 @@ async function initializeAgent() {
 
   const systemTemplate = `You are an AI designed to learn about businesses through conversation. Your goal is to understand and reason about the information provided by the business. Continuously ask dynamic and insightful questions to gather more details, seek clarification, and make sense of the given information. Adapt your responses based on the context of the conversation. Your role is to simulate a learning process, so be inquisitive, thoughtful, and engaging. If the business introduces new concepts, adapt your questions to explore those areas. Always strive to deepen your understanding and maintain a conversational flow. 
   
-  You must continuously keep calling the 'information-saver' tool to save any new meaningful information about the business or anything related to the business.
+  You must continuously keep calling the 'information-saver' tool to save any new meaningful information about the business or anything related to the business. Here is the value of 'collectionName' you will need to pass to the 'information-saver' tool: {collectionName}
   
   Here are a few examples demonstrating how the conversation will be happening:
   
@@ -147,11 +134,14 @@ async function initializeAgent() {
     tools,
   });
 
-  const messageHistory = new ChatMessageHistory();
-
   const agentWithChatHistory = new RunnableWithMessageHistory({
     runnable: agentExecutor,
-    getMessageHistory: (_sessionId) => messageHistory,
+    // getMessageHistory: (_sessionId) => messageHistory,
+    getMessageHistory: (sessionId) =>
+      new RedisChatMessageHistory({
+        sessionId,
+        client: redisClient,
+      }),
     inputMessagesKey: "input",
     historyMessagesKey: "chat_history",
   });
@@ -169,6 +159,7 @@ async function generateTrainingAgentResponse(userQuery) {
   const response = await agent.invoke(
     {
       input: userQuery,
+      collectionName: "test-collection-123",
     },
     {
       configurable: {

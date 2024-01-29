@@ -18,17 +18,18 @@ const {
   getCallData,
   updateCallConversation,
   deleteCallData,
-} = require("../redis");
+} = require("../integrations/redis");
 const {
   generateAIResponse,
   initializeConversation,
 } = require("./ai-model.controller");
+
 const Customer = require("../models/customer.model");
 const Assistant = require("../models/assistant.model");
 const CompanyHistory = require("../models/companyHistory.model");
-const OAuthCredentials = require("../models/credential.model");
-const { convertTextToSpeech } = require("../text-to-speech");
-const { uploadToS3 } = require("../s3-storage");
+const Integration = require("../models/integration.model");
+const { convertTextToSpeech } = require("../integrations/textToSpeech");
+const { uploadToS3 } = require("../integrations/s3Storage");
 const User = require("../models/user.model");
 const MeetingEvent = require("../models/meetingEvent.model");
 
@@ -199,7 +200,7 @@ async function handleIncomingCall(request) {
     },
   });
 
-  let oauthCredentials = await OAuthCredentials.findOne({
+  let oauthCredentials = await Integration.findOne({
     where: {
       customerId: customer.id,
     },

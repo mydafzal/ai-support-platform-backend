@@ -1,13 +1,13 @@
 const {
   buyPhoneNumber,
   createVerifyService,
-} = require("../controllers/twilio.controller");
+} = require("../controllers/call.controller");
 const Assistant = require("../models/assistant.model");
 const CompanyHistory = require("../models/companyHistory.model");
-const OAuthCredentials = require("../models/credential.model");
-const Customer = require("../models/customer.model");
-const { uploadToS3 } = require("../s3-storage");
-const { convertTextToSpeech } = require("../text-to-speech");
+const Integration = require("../models/integration.model");
+const Business = require("../models/business.model");
+const { uploadToS3 } = require("../integrations/s3Storage");
+const { convertTextToSpeech } = require("../integrations/textToSpeech");
 
 const router = require("express").Router();
 
@@ -25,7 +25,7 @@ router.post("/", async (req, res) => {
       farewellMessage,
     } = req.body;
 
-    let customer = await Customer.findOne({
+    let customer = await Business.findOne({
       where: {
         email,
       },
@@ -38,7 +38,7 @@ router.post("/", async (req, res) => {
     const twilioNumber = await buyPhoneNumber();
     const verifyServiceId = await createVerifyService(companyName);
 
-    customer = await Customer.create({
+    customer = await Business.create({
       name: customerName,
       email,
       companyName,
@@ -89,7 +89,7 @@ router.get("/:email", async (req, res) => {
   try {
     const { email } = req.params;
 
-    let customer = await Customer.findOne({
+    let customer = await Business.findOne({
       where: {
         email,
       },
@@ -107,7 +107,7 @@ router.get("/:email", async (req, res) => {
       },
     });
 
-    const credentials = await OAuthCredentials.findOne({
+    const credentials = await Integration.findOne({
       where: {
         customerId: customer.id,
       },

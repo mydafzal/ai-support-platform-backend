@@ -1,13 +1,15 @@
 const { createClient } = require("redis");
 
-const client = createClient({
-  password: "PxoKvHS2vngB0c2yfvm1pRHpntbYNF9m",
-  legacyMode: false,
-  socket: {
-    host: "redis-18874.c321.us-east-1-2.ec2.cloud.redislabs.com",
-    port: 18874,
-  },
-});
+// const client = createClient({
+//   password: "PxoKvHS2vngB0c2yfvm1pRHpntbYNF9m",
+//   legacyMode: false,
+//   socket: {
+//     host: "redis-18874.c321.us-east-1-2.ec2.cloud.redislabs.com",
+//     port: 18874,
+//   },
+// });
+
+const client = createClient();
 
 (() => {
   client.connect().then(() => {
@@ -17,7 +19,6 @@ const client = createClient({
 
 async function storeCallData(key, data) {
   try {
-    // console.log("Data", data);
     await client.set(key, JSON.stringify(data));
   } catch (error) {
     console.log("storeCallData error", error);
@@ -25,7 +26,6 @@ async function storeCallData(key, data) {
 }
 
 async function getCallData(key) {
-  // return await client.hGetAll(key);
   const data = await client.get(key);
   return JSON.parse(data);
 }
@@ -35,7 +35,6 @@ async function deleteCallData(key) {
 }
 
 async function updateCallConversation(key, data) {
-  // return await client.hSet(key, "conversation", updatedConversation);
   return await client.set(key, JSON.stringify(data));
 }
 

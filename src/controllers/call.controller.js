@@ -10,22 +10,21 @@ const path = require("path");
 const fs = require("fs");
 
 const twilio = require("twilio");
-const client = twilio(ACCOUNT_SID, AUTH_TOKEN);
-const AccessToken = twilio.jwt.AccessToken;
-const VoiceGrant = AccessToken.VoiceGrant;
 
-const uuid = require("uuid");
-const { getContactByPhoneNumber } = require("./hubspotCRM.controller");
-const { generateCallAgentResponse } = require("./ai-response-generator");
-const { deleteCallData, storeCallData, getCallData } = require("../redis");
-const { uploadToS3 } = require("../s3-storage");
-const { convertTextToSpeech } = require("../text-to-speech");
+const { getContactByPhoneNumber } = require("../integrations/hubspotCRM");
 
-// Call comes in.
-// Retreive customers phone number from the request.
-// Retreive customers details from the crm.
-// Initialize conversation with a system prompt that contains business and customer's details.
-//
+const {
+  generateCallAnsweringAgentResponse,
+} = require("./callAnsweringAgent.controller");
+
+const {
+  deleteCallData,
+  storeCallData,
+  getCallData,
+} = require("../integrations/redis");
+const { uploadToS3 } = require("../integrations/s3Storage");
+const { convertTextToSpeech } = require("../integrations/textToSpeech");
+const { formatHubSpotContactDetails } = require("../utils/formatters");
 
 async function handleIncomingCall(request) {
   const VoiceResponse = twilio.twiml.VoiceResponse;
@@ -33,6 +32,7 @@ async function handleIncomingCall(request) {
 
   const customerPhoneNumber = request.body.customerPhoneNumber;
   const businessPhoneNumber = request.body.To;
+  const callId = request.body.CallSid;
 
   let businessDetails = {
     businessName: "Cheetah",
@@ -59,7 +59,7 @@ async function handleIncomingCall(request) {
   );
 
   const formattedCustomerDetails = contact
-    ? formatCustomerDetails(contact)
+    ? formatHubSpotContactDetails(contact)
     : "";
 
   //   const conversation = initializeConversation(formattedCustomerDetails);
@@ -70,6 +70,8 @@ async function handleIncomingCall(request) {
     customerName: contact
       ? `${contact.properties.firstname} ${contact.properties.lastname}`
       : "",
+
+    callId,
   });
 
   twiml.play(businessDetails.greetingMessageUrl);
@@ -83,19 +85,6 @@ async function handleIncomingCall(request) {
   });
 
   return twiml.toString();
-}
-
-function formatCustomerDetails(customer) {
-  const properties = customer.properties;
-
-  const formattedDetails = `
-      - Name: ${properties.firstname} ${properties.lastname}
-      - Email: ${properties.email}
-      - Phone: ${properties.phone}
-      - Customer ID: ${customer.id}
-    `;
-
-  return formattedDetails;
 }
 
 async function gatherSpeechInput() {
@@ -132,6 +121,7 @@ async function handleSpeechInput(request) {
     assistantName,
     customerDetails,
     voice,
+    callId,
   } = callData;
 
   if (!voiceInput) {
@@ -143,27 +133,14 @@ async function handleSpeechInput(request) {
     return twiml.toString();
   }
 
-  //   if (!conversation) {
-  //     conversation = initializeConversation();
-
-  //     callData.conversation = conversation;
-  //     updateCallConversation(callerId, callData);
-  //   }
-
-  // conversation.push({ role: "user", content: `${voiceInput}` });
-
-  let aiResponse = await generateCallAgentResponse(
+  let aiResponse = await generateCallAnsweringAgentResponse(
     voiceInput,
     businessName,
     customerName,
     assistantName,
-    customerDetails
+    customerDetails,
+    callId
   );
-
-  //   while (aiResponse?.role === "tool") {
-  //     conversation.push(aiResponse);
-  //     aiResponse = await generateAIResponse(isPhoneCall, conversation, callData);
-  //   }
 
   console.log("aiResponse", aiResponse);
 
@@ -174,11 +151,6 @@ async function handleSpeechInput(request) {
   }
 
   const cleanedAiResponse = aiResponse.replace(/^\w+:\s*/i, "").trim();
-  //   conversation.push({ role: "assistant", content: `${aiResponse}` });
-
-  //   while (conversation.length > 20) {
-  //     conversation.shift();
-  //   }
 
   const generatedSpeechFile = await convertTextToSpeech(
     cleanedAiResponse,
@@ -216,4 +188,135 @@ async function handleSpeechInput(request) {
   return twiml.toString();
 }
 
-module.exports = { handleIncomingCall, handleSpeechInput, gatherSpeechInput };
+async function createVerifyService(companyName) {
+  try {
+    const service = await client.verify.v2.services.create({
+      friendlyName: companyName,
+      codeLength: 4,
+    });
+
+    console.log("Verify service created - sid", service.sid);
+    return service.sid;
+  } catch (error) {
+    console.error("Error sending verification code:", error.message);
+  }
+}
+
+async function buyPhoneNumber() {
+  const availableNumbers = await client
+    .availablePhoneNumbers("US")
+    .local.list();
+
+  console.log("number to purchase", availableNumbers?.[0]?.phoneNumber);
+
+  // const phoneNumberToPurchase = availableNumbers[0].phoneNumber;
+
+  // const purchasedNumber = await client.incomingPhoneNumbers.create({
+  //   phoneNumber: phoneNumberToPurchase,
+  //   friendlyName: "My Twilio Number",
+  // });
+
+  // console.log("purchasedNumber.phoneNumber", purchasedNumber.phoneNumber);
+
+  // return purchasedNumber.phoneNumber;
+
+  return "+14697074725";
+}
+
+async function addVerifiedCallerId(phoneNumber) {
+  const validationRequest = await client.validationRequests.create({
+    friendlyName: "My Home Phone Number 2",
+    phoneNumber: "+923055952372",
+    // phoneNumber: "+923141560434",
+  });
+
+  const message = `Your 6-digit verification code is: ${validationRequest.validationCode}`;
+  await sendSMS(phoneNumber, message);
+
+  console.log("validationCode=====", validationRequest.validationCode);
+}
+
+async function sendSMS(phoneNumber, body) {
+  const message = await client.messages.create({
+    body,
+    messagingServiceSid: MESSAGING_SERVICE_SID,
+    to: phoneNumber,
+  });
+
+  console.log("message.sid=====", message.sid);
+}
+
+function getTwilioAccessToken(userId) {
+  if (!userId) {
+    userId = uuid.v4();
+  }
+
+  const accessToken = new AccessToken(ACCOUNT_SID, API_KEY, API_SECRET, {
+    identity: userId,
+  });
+
+  const grant = new VoiceGrant({
+    outgoingApplicationSid: TWIML_APP_SID,
+    incomingAllow: true,
+  });
+
+  accessToken.addGrant(grant);
+  console.log("access token: ", accessToken);
+
+  const result = {
+    token: accessToken.toJwt(),
+    userId,
+  };
+
+  return result;
+}
+
+async function createVerification(phoneNumber, verifyServiceId) {
+  try {
+    const verification = await client.verify.v2
+      .services(verifyServiceId)
+      .verifications.create({
+        to: phoneNumber,
+        channel: "sms",
+      });
+
+    console.log("Verification code sent:", verification.sid);
+    return "Verification code sent.";
+  } catch (error) {
+    console.error("Error sending verification code:", error.message);
+  }
+}
+
+async function checkVerification(code, phoneNumber) {
+  let isVerified = false;
+
+  try {
+    const verificationCheck = await client.verify.v2
+      .services(VERIFY_SERVICE_SID)
+      .verificationChecks.create({
+        to: phoneNumber,
+        code: code,
+      });
+
+    if (verificationCheck.status === "approved") {
+      isVerified = true;
+    }
+  } catch (error) {
+    console.error("Error checking verification code:", error.message);
+  }
+
+  return isVerified;
+}
+
+module.exports = {
+  handleIncomingCall,
+  handleSpeechInput,
+  gatherSpeechInput,
+  createVerification,
+  checkVerification,
+  getTwilioAccessToken,
+  buyPhoneNumber,
+  addVerifiedCallerId,
+  createVerification,
+  createVerifyService,
+};

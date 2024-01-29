@@ -5,7 +5,7 @@ const bodyParser = require("body-parser");
 const path = require("path");
 require("dotenv").config();
 
-require("./src/redis");
+require("./src/integrations/redis");
 
 const app = express();
 
@@ -23,24 +23,15 @@ app.use(cookieParser());
 app.use(cors());
 
 const authRouter = require("./src/routes/auth.route");
-const twilioRouter = require("./src/routes/twilio.route");
+// const twilioRouter = require("./src/routes/twilio.route");
 const customersRouter = require("./src/routes/customer.route");
 const usersRouter = require("./src/routes/user.route");
 const meetingEventsRouter = require("./src/routes/meetingEvent.route");
-const dataLoaderRouter = require("./src/routes/data-loader.route");
+// const dataLoaderRouter = require("./src/routes/data-loader.route");
 const hubspotCRMRouter = require("./src/experimentation/hubspotCRM.route");
+const agentsRouter = require("./src/routes/agent.route");
 
-const { convertTextToSpeech } = require("./src/text-to-speech");
-
-const {
-  generateTrainingAgentResponse,
-} = require("./src/experimentation/teach");
-const {
-  generateConversationFlowAgentResponse,
-} = require("./src/experimentation/conversation-flow");
-const {
-  readAllProperties,
-} = require("./src/experimentation/hubspotCRM.controller");
+const { convertTextToSpeech } = require("./src/integrations/textToSpeech");
 
 app.get("/speech", async (req, res) => {
   const response = await convertTextToSpeech(
@@ -57,40 +48,17 @@ app.post("/test", async (req, res) => {
   const { question } = req.body;
   console.log("question", question);
 
-  // const response = await initializeLangChain();
-  // const response = await addDataToChromaDB("");
-
-  // const response = await scrapeAndPersistData(
-  //   "https://cheetahagency.com/our-history/"
-  // );
-
-  // const response = await readFileAndPersistData();
-
-  // const response = await generateAgentResponse("What is Cheetah Agency?");
-  // const response = await generateAgentResponse(question);
-
-  // const response = await generateTrainingAgentResponse(question);
-
-  const response = await readAllProperties();
-
-  res.status(200).json({ response });
-});
-
-app.post("/conversation-flow", async (req, res) => {
-  const { question } = req.body;
-  console.log("question", question);
-
-  const response = await generateConversationFlowAgentResponse(question);
-  res.status(200).json({ response });
+  res.status(200).json({ response: "" });
 });
 
 app.use("/auth", authRouter);
-app.use("/twilio", twilioRouter);
+// app.use("/twilio", twilioRouter);
 app.use("/customers", customersRouter);
 app.use("/users", usersRouter);
 app.use("/meeting-events", meetingEventsRouter);
-app.use("/data-loader", dataLoaderRouter);
+// app.use("/data-loader", dataLoaderRouter);
 app.use("/hubspot", hubspotCRMRouter);
+app.use("/agents", agentsRouter);
 
 app.get("/", (req, res) => {
   res.status(200).json({ token: "token 123" });

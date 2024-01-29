@@ -1,8 +1,8 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../loaders/db");
 
-const Customer = sequelize.define(
-  "Customer",
+const Business = sequelize.define(
+  "Business",
   {
     name: {
       type: DataTypes.STRING,
@@ -12,6 +12,9 @@ const Customer = sequelize.define(
       type: DataTypes.STRING,
       allowNull: false,
       unique: true,
+      validate: {
+        isEmail: true,
+      },
     },
     companyName: {
       type: DataTypes.STRING,
@@ -24,6 +27,9 @@ const Customer = sequelize.define(
     phoneNumbers: {
       type: DataTypes.ARRAY(DataTypes.STRING),
       allowNull: false,
+      validate: {
+        isArray: true,
+      },
     },
     verifyServiceId: {
       type: DataTypes.STRING,
@@ -33,6 +39,6 @@ const Customer = sequelize.define(
   {}
 );
 
-// Customer.sync({ force: true });
+// Business.sync({ force: true });
 
-module.exports = Customer;
+module.exports = Business;

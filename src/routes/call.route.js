@@ -4,9 +4,6 @@ const {
   getTwilioAccessToken,
   createVerification,
   checkVerification,
-  // handleIncomingCall,
-  // gatherSpeechInput,
-  // handleSpeechInput,
   handleCallDisconnect,
   disconnectRedirectedCall,
 } = require("../controllers/twilio.controller");

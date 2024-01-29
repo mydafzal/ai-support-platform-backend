@@ -67,19 +67,6 @@ router.delete("/", async (req, res) => {
   }
 });
 
-router.post("/ask", async (req, res) => {
-  const { question } = req.body;
-  try {
-    console.log("files", req.files);
-
-    const response = await generateAgentResponse(question);
-    res.status(200).send(response);
-  } catch (error) {
-    console.error("Error fetching customer:", error);
-    res.status(500).json({ error: "Internal Server Error" });
-  }
-});
-
 router.post("/create-flow", async (req, res) => {
   try {
     await addTextToVectoreStore(`

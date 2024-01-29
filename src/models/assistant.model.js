@@ -1,6 +1,6 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../loaders/db");
-const Customer = require("./customer.model");
+const Customer = require("./business.model");
 
 const Assistant = sequelize.define(
   "Assistant",
