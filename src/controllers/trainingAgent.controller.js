@@ -23,6 +23,8 @@ const {
 const { createClient } = require("redis");
 const redisClient = createClient();
 
+let agent;
+
 async function initializeAgent() {
   const informationSaverTool = new DynamicStructuredTool({
     name: "information-saver",
@@ -43,7 +45,6 @@ async function initializeAgent() {
       console.log("collectionName", collectionName);
 
       await addTextToVectoreStore(newInformation, collectionName);
-
       return "";
     },
   });
@@ -149,7 +150,11 @@ async function initializeAgent() {
   return agentWithChatHistory;
 }
 
-async function generateTrainingAgentResponse(userQuery) {
+async function generateTrainingAgentResponse(
+  userQuery,
+  knowledgeBaseName,
+  threadId
+) {
   if (!agent) {
     agent = await initializeAgent();
   }
@@ -159,11 +164,11 @@ async function generateTrainingAgentResponse(userQuery) {
   const response = await agent.invoke(
     {
       input: userQuery,
-      collectionName: "test-collection-123",
+      collectionName: knowledgeBaseName,
     },
     {
       configurable: {
-        sessionId: "foo",
+        sessionId: threadId || "foo",
       },
     }
   );

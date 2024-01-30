@@ -1,12 +1,12 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../loaders/db");
-const Customer = require("./business.model");
+const Business = require("./business.model");
 
 const Integration = sequelize.define(
   "Integrations",
   {
-    expiryDate: {
-      type: DataTypes.BIGINT,
+    expirationTime: {
+      type: DataTypes.STRING,
       // allowNull: false,
     },
     accessToken: {
@@ -25,7 +25,7 @@ const Integration = sequelize.define(
   {}
 );
 
-Integration.belongsTo(Customer, { foreignKey: "businessId" });
+Integration.belongsTo(Business, { foreignKey: "businessId" });
 
 // Integration.sync({ force: true });
 

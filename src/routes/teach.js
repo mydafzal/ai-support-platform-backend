@@ -5,16 +5,15 @@ const multer = require("multer");
 const {
   scrapeAndPersistData,
   readFileAndPersistData,
-  generateAgentResponse,
-} = require("../experimentation/langchain");
+} = require("../controllers/dataLoader.controller");
 const upload = multer({ dest: "documents/" });
 
 const {
   deleteCollection,
   addTextToVectoreStore,
-} = require("../experimentation/chroma-db");
+} = require("../integrations/chromaDB");
 
-router.post("/web", async (req, res) => {
+router.post("/scrape", async (req, res) => {
   try {
     const { urls } = req.body;
 
@@ -26,14 +25,14 @@ router.post("/web", async (req, res) => {
 
     await Promise.all(promises);
 
-    res.status(200).send("Data loaded from provided urls.");
+    res.status(200).json({ message: "Data loaded from provided urls." });
   } catch (error) {
     console.error("Error fetching customer:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
-router.post("/documents", upload.array("files"), async (req, res) => {
+router.post("/upload", upload.array("files"), async (req, res) => {
   try {
     console.log("files", req.files);
 
@@ -43,13 +42,12 @@ router.post("/documents", upload.array("files"), async (req, res) => {
 
     const promises = req.files.map((file) => {
       const filePath = path.join(__dirname, "documents", file.filename);
-
       return readFileAndPersistData(filePath);
     });
 
     await Promise.all(promises);
 
-    res.status(200).send("Data loaded from provided files.");
+    res.status(200).json({ message: "Data loaded from provided files." });
   } catch (error) {
     console.error("Error fetching customer:", error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -58,7 +56,7 @@ router.post("/documents", upload.array("files"), async (req, res) => {
 
 router.delete("/", async (req, res) => {
   try {
-    await deleteCollection("");
+    await deleteCollection("test-collection-123");
 
     res.status(200).json({ response: "" });
   } catch (error) {

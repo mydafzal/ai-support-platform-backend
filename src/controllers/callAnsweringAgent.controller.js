@@ -108,7 +108,6 @@ async function generateCallAnsweringAgentResponse(
 ) {
   //   const vectorStore = await getVectoreStore("test-collection");
   //   const similarityResponse = await vectorStore.similaritySearch(userQuery, 2);
-
   //   const formattedResponse = formatDocumentsAsString(similarityResponse);
 
   if (!agent) {

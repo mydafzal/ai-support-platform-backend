@@ -39,7 +39,7 @@ async function handleIncomingCall(request) {
     businessEmail: "hammad@ccript.com",
     phoneNumbers: [],
     businessPhoneNumber,
-    voice: "Bill",
+    voiceId: "pqHfZKP75CvOlQylNhV4",
     greetingMessageUrl:
       "https://psychix.s3.amazonaws.com/ai-bot/customer-2/greetingMessage.mp3",
     farewellMessageUrl:
@@ -70,7 +70,6 @@ async function handleIncomingCall(request) {
     customerName: contact
       ? `${contact.properties.firstname} ${contact.properties.lastname}`
       : "",
-
     callId,
   });
 
@@ -120,7 +119,7 @@ async function handleSpeechInput(request) {
     customerName,
     assistantName,
     customerDetails,
-    voice,
+    voiceId,
     callId,
   } = callData;
 
@@ -154,7 +153,7 @@ async function handleSpeechInput(request) {
 
   const generatedSpeechFile = await convertTextToSpeech(
     cleanedAiResponse,
-    voice
+    voiceId
   );
 
   const textToSpeechFileURL = await uploadToS3(generatedSpeechFile, "123");

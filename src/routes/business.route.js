@@ -3,84 +3,83 @@ const {
   createVerifyService,
 } = require("../controllers/call.controller");
 const Assistant = require("../models/assistant.model");
-const CompanyHistory = require("../models/companyHistory.model");
 const Integration = require("../models/integration.model");
 const Business = require("../models/business.model");
 const { uploadToS3 } = require("../integrations/s3Storage");
 const { convertTextToSpeech } = require("../integrations/textToSpeech");
+const User = require("../models/user.model");
 
 const router = require("express").Router();
 
 router.post("/", async (req, res) => {
   try {
     const {
-      customerName,
+      name,
       email,
-      companyName,
-      companyHistory,
-      phoneNumbers,
+      businessName,
       assistantName,
-      voice,
+      voiceName,
+      voiceId,
       greetingMessage,
       farewellMessage,
+      externalId,
+      externalType,
     } = req.body;
 
-    let customer = await Business.findOne({
+    let user = await User.findOne({
       where: {
         email,
       },
     });
 
-    if (customer?.toJSON()?.email) {
+    if (user?.toJSON()?.email) {
       return res.status(400).json({ message: "Email already exists." });
     }
 
-    const twilioNumber = await buyPhoneNumber();
-    const verifyServiceId = await createVerifyService(companyName);
+    // const twilioNumber = await buyPhoneNumber();
+    // const verifyServiceId = await createVerifyService(companyName);
 
-    customer = await Business.create({
-      name: customerName,
-      email,
-      companyName,
-      twilioNumber,
-      phoneNumbers,
-      verifyServiceId,
+    const business = await Business.create({
+      businessName,
+      twilioNumber: "",
+      verifyServiceId: "",
     });
 
-    const companyHistoryObjects = companyHistory?.map((item) => ({
-      ...item,
-      customerId: customer.id,
-    }));
-
-    const history = await CompanyHistory.bulkCreate(companyHistoryObjects);
+    user = await User.create({
+      name,
+      email,
+      externalId,
+      externalType,
+    });
 
     let promises = [
-      convertTextToSpeech(greetingMessage, voice),
-      convertTextToSpeech(farewellMessage, voice),
+      convertTextToSpeech(greetingMessage, voiceId),
+      convertTextToSpeech(farewellMessage, voiceId),
     ];
+
     const [greetingMessageSpeech, farewellMessageSpeech] = await Promise.all(
       promises
     );
 
     promises = [
-      uploadToS3(greetingMessageSpeech, customer.id, "greetingMessage.mp3"),
-      uploadToS3(farewellMessageSpeech, customer.id, "farewellMessage.mp3"),
+      uploadToS3(greetingMessageSpeech, business.id, "greetingMessage.mp3"),
+      uploadToS3(farewellMessageSpeech, business.id, "farewellMessage.mp3"),
     ];
     const [greetingMessageUrl, farewellMessageUrl] = await Promise.all(
       promises
     );
 
     const assistant = await Assistant.create({
-      customerId: customer.id,
+      businessId: business.id,
       name: assistantName,
-      voice,
+      voiceName,
       greetingMessageUrl,
       farewellMessageUrl,
     });
 
-    res.status(201).json({ customer, assistant, history });
+    res.status(201).json({ business, assistant, history });
   } catch (error) {
-    console.error("Error adding customer:", error);
+    console.error("Error adding business:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
@@ -89,7 +88,7 @@ router.get("/:email", async (req, res) => {
   try {
     const { email } = req.params;
 
-    let customer = await Business.findOne({
+    let business = await Business.findOne({
       where: {
         email,
       },
@@ -97,36 +96,25 @@ router.get("/:email", async (req, res) => {
 
     const assistant = await Assistant.findOne({
       where: {
-        customerId: customer.id,
-      },
-    });
-
-    const history = await CompanyHistory.findAll({
-      where: {
-        customerId: customer.id,
+        customerId: business.id,
       },
     });
 
     const credentials = await Integration.findOne({
       where: {
-        customerId: customer.id,
+        customerId: business.id,
       },
     });
 
-    customer = customer.toJSON();
-    customer.history = history.map((item) => item.toJSON());
-    customer.assistant = assistant.toJSON();
-    customer.credentials = credentials.toJSON();
+    business = business.toJSON();
+    business.assistant = assistant.toJSON();
+    business.credentials = credentials.toJSON();
 
-    if (!customer) {
+    if (!business) {
       return res.status(404).json({ error: "Customer not found" });
     }
 
-    const formattedHistory = customer.history
-      .map((entry) => `${entry.section}:\n${entry.content}`)
-      .join("\n\n");
-
-    res.status(200).json(formattedHistory);
+    res.status(200).json({ response: "" });
   } catch (error) {
     console.error("Error fetching customer:", error);
     res.status(500).json({ error: "Internal Server Error" });

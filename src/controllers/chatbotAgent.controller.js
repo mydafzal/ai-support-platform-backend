@@ -5,6 +5,7 @@ const {
   SystemMessagePromptTemplate,
   HumanMessagePromptTemplate,
 } = require("@langchain/core/prompts");
+
 const {
   createOpenAIFunctionsAgent,
   AgentExecutor,
@@ -113,6 +114,9 @@ async function generateCallAgentResponse(
   if (!agent) {
     agent = await initializeAgent();
   }
+
+  const prompt =
+    "You are an AI assistant designed to talk to customers of the business. Assist customers in various inquiries and engage in informative conversations about business. Provide helpful information, answer queries, and guide customers through specific topics related to the business";
 
   const isNewCustomer = !customerName || !customerDetails;
   const systemPrompt = createSystemPrompt(

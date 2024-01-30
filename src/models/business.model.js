@@ -4,19 +4,7 @@ const { sequelize } = require("../loaders/db");
 const Business = sequelize.define(
   "Business",
   {
-    name: {
-      type: DataTypes.STRING,
-      allowNull: false,
-    },
-    email: {
-      type: DataTypes.STRING,
-      allowNull: false,
-      unique: true,
-      validate: {
-        isEmail: true,
-      },
-    },
-    companyName: {
+    businessName: {
       type: DataTypes.STRING,
       allowNull: false,
     },
@@ -26,14 +14,13 @@ const Business = sequelize.define(
     },
     phoneNumbers: {
       type: DataTypes.ARRAY(DataTypes.STRING),
-      allowNull: false,
+      // allowNull: false,
       validate: {
         isArray: true,
       },
     },
     verifyServiceId: {
       type: DataTypes.STRING,
-      allowNull: false,
     },
   },
   {}

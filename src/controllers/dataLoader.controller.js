@@ -6,7 +6,7 @@ const {
 const { PDFLoader } = require("langchain/document_loaders/fs/pdf");
 
 const path = require("path");
-const { addToVectoreStore } = require("./chroma-db");
+const { addToVectoreStore } = require("../integrations/chromaDB");
 
 async function scrapeAndPersistData(url) {
   // "https://docs.smith.langchain.com/overview"
@@ -16,7 +16,7 @@ async function scrapeAndPersistData(url) {
   const rawDocs = await loader.load();
 
   const docs = await splitDocuments(rawDocs);
-  await addToVectoreStore("test-collection", docs);
+  await addToVectoreStore("test-collection-123", docs);
 }
 
 async function readFileAndPersistData(filePath) {
@@ -26,7 +26,7 @@ async function readFileAndPersistData(filePath) {
   const rawDocs = await loader.load();
 
   const docs = await splitDocuments(rawDocs);
-  await addToVectoreStore("test-collection", docs);
+  await addToVectoreStore("test-collection-123", docs);
 }
 
 async function splitDocuments(rawDocs) {

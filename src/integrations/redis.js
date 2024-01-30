@@ -11,11 +11,10 @@ const { createClient } = require("redis");
 
 const client = createClient();
 
-(() => {
-  client.connect().then(() => {
-    console.log("connected redis");
-  });
-})();
+async function connectRedis() {
+  await client.connect();
+  console.log("connected redis");
+}
 
 async function storeCallData(key, data) {
   try {
@@ -39,6 +38,7 @@ async function updateCallConversation(key, data) {
 }
 
 module.exports = {
+  connectRedis,
   storeCallData,
   getCallData,
   deleteCallData,

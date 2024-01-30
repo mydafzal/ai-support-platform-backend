@@ -1,6 +1,6 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../loaders/db");
-const Customer = require("./business.model");
+const Business = require("./business.model");
 
 const MeetingEvent = sequelize.define(
   "MeetingEvent",
@@ -43,7 +43,7 @@ const MeetingEvent = sequelize.define(
   {}
 );
 
-MeetingEvent.belongsTo(Customer, { foreignKey: "customerId" });
+MeetingEvent.belongsTo(Business, { foreignKey: "businessId" });
 // MeetingEvent.sync({ force: true });
 
 module.exports = MeetingEvent;

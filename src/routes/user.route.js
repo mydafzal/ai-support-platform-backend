@@ -3,7 +3,7 @@ const User = require("../models/user.model");
 
 router.post("/", async (req, res) => {
   try {
-    const { name, email, phoneNumber, callerId, customerId } = req.body;
+    const { name, email } = req.body;
     console.log("add user", req.body);
 
     let user = await User.findOne({

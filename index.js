@@ -5,7 +5,8 @@ const bodyParser = require("body-parser");
 const path = require("path");
 require("dotenv").config();
 
-require("./src/integrations/redis");
+const { connectRedis } = require("./src/integrations/redis");
+connectRedis();
 
 const app = express();
 
@@ -23,15 +24,16 @@ app.use(cookieParser());
 app.use(cors());
 
 const authRouter = require("./src/routes/auth.route");
-// const twilioRouter = require("./src/routes/twilio.route");
-const customersRouter = require("./src/routes/customer.route");
+const callRouter = require("./src/routes/call.route");
 const usersRouter = require("./src/routes/user.route");
 const meetingEventsRouter = require("./src/routes/meetingEvent.route");
-// const dataLoaderRouter = require("./src/routes/data-loader.route");
-const hubspotCRMRouter = require("./src/experimentation/hubspotCRM.route");
+const teachRouter = require("./src/routes/teach");
 const agentsRouter = require("./src/routes/agent.route");
 
-const { convertTextToSpeech } = require("./src/integrations/textToSpeech");
+const {
+  convertTextToSpeech,
+  getElevenLabsVoices,
+} = require("./src/integrations/textToSpeech");
 
 app.get("/speech", async (req, res) => {
   const response = await convertTextToSpeech(
@@ -45,19 +47,16 @@ app.get("/speech", async (req, res) => {
 });
 
 app.post("/test", async (req, res) => {
-  const { question } = req.body;
-  console.log("question", question);
-
-  res.status(200).json({ response: "" });
+  const response = await getElevenLabsVoices();
+  res.status(200).json({ response });
 });
 
 app.use("/auth", authRouter);
-// app.use("/twilio", twilioRouter);
-app.use("/customers", customersRouter);
+app.use("/call", callRouter);
+// app.use("/customers", customersRouter);
 app.use("/users", usersRouter);
 app.use("/meeting-events", meetingEventsRouter);
-// app.use("/data-loader", dataLoaderRouter);
-app.use("/hubspot", hubspotCRMRouter);
+app.use("/teach", teachRouter);
 app.use("/agents", agentsRouter);
 
 app.get("/", (req, res) => {

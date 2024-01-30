@@ -1,6 +1,5 @@
 const { google } = require("googleapis");
 const oauthCredentials = require("../../credentials.json");
-const Integration = require("../models/integration.model");
 
 const SCOPES = ["https://www.googleapis.com/auth/calendar.events"];
 
@@ -18,21 +17,12 @@ function generateGoogleOAuthUrl() {
   });
 }
 
-async function storeGoogleOAuthAccessToken(customerId, code) {
+async function storeGoogleOAuthAccessToken(code) {
   try {
     let credentials = await getTokenAsync(code);
-
     console.log("credentials", credentials);
-    console.log("customerId", customerId);
 
-    await Integration.create({
-      customerId,
-      accessToken: credentials.access_token,
-      refreshToken: credentials.refresh_token,
-      expiryDate: credentials.expiry_date,
-    });
-
-    // return credentials;
+    return credentials;
   } catch (error) {
     console.log("storeAccessToken error", error);
   }

@@ -11,7 +11,7 @@ client.heartbeat().then((result) => {
 
 async function addToVectoreStore(collectionName, docs) {
   const vectorStore = await Chroma.fromDocuments(docs, new OpenAIEmbeddings(), {
-    collectionName: "test-collection",
+    collectionName,
     url: "http://localhost:8000",
   });
 

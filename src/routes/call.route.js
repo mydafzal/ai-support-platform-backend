@@ -4,17 +4,14 @@ const {
   getTwilioAccessToken,
   createVerification,
   checkVerification,
-  handleCallDisconnect,
-  disconnectRedirectedCall,
-} = require("../controllers/twilio.controller");
-
-const {
+  // handleCallDisconnect,
+  // disconnectRedirectedCall,
   handleIncomingCall,
   handleSpeechInput,
   gatherSpeechInput,
-} = require("../experimentation/call-handler.controller");
+} = require("../controllers/call.controller");
 
-const Customer = require("../models/customer.model");
+const Business = require("../models/business.model");
 
 const router = Router();
 
@@ -26,7 +23,7 @@ router.get("/access-token/:id?", (req, res) => {
 router.post("/verification", async (req, res) => {
   const { phoneNumber, customerId } = req.body;
 
-  let customer = await Customer.findByPk(customerId);
+  let customer = await Business.findByPk(customerId);
   customer = customer.toJSON();
 
   const result = await createVerification(
