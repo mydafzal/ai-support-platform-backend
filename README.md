@@ -40,7 +40,7 @@ Follow these steps to set up and run the Customer Bot backend on your local mach
    ```
 
 5. **Run the Application:**
-   If you have nodemon installed, run the following command:
+    <br /> If you have nodemon installed, run the following command:
    ```bash
    npx nodemon index.js
    ```
