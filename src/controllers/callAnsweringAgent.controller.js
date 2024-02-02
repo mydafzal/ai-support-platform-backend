@@ -22,8 +22,8 @@ const { z } = require("zod");
 
 let agent;
 
-async function initializeAgent() {
-  const vectorStore = await getVectoreStore("test-collection");
+async function initializeAgent(collectionName) {
+  const vectorStore = await getVectoreStore(collectionName);
   const retriever = vectorStore.asRetriever();
 
   const meetingSchedulerTool = new DynamicStructuredTool({
@@ -104,22 +104,27 @@ async function generateCallAnsweringAgentResponse(
   customerName,
   assistantName,
   customerDetails,
-  callId
+  callId,
+  collectionName
 ) {
   //   const vectorStore = await getVectoreStore("test-collection");
   //   const similarityResponse = await vectorStore.similaritySearch(userQuery, 2);
   //   const formattedResponse = formatDocumentsAsString(similarityResponse);
 
-  if (!agent) {
-    agent = await initializeAgent();
-  }
+  // if (!agent) {
+  //   agent = await initializeAgent();
+  // }
+
+  const agent = await initializeAgent(collectionName);
+  console.log("customerName", customerName);
+  console.log("customerDetails", customerDetails);
 
   const systemPrompt = createSystemPrompt(
-    false,
     businessName,
     assistantName,
     customerName,
-    customerDetails
+    customerDetails,
+    collectionName
   );
 
   console.log("executing agent now...");
@@ -129,10 +134,6 @@ async function generateCallAnsweringAgentResponse(
       input: userQuery,
       //   context: formattedResponse,
       systemPrompt,
-      businessName,
-      customerName,
-      assistantName,
-      customerDetails,
     },
     {
       configurable: {
@@ -145,21 +146,26 @@ async function generateCallAnsweringAgentResponse(
 }
 
 function createSystemPrompt(
-  isNewCustomer = false,
   businessName,
   assistantName,
   customerName,
-  customerDetails
+  customerDetails,
+  collectionName
 ) {
   let prompt;
+  let isNewCustomer = customerName ? false : true;
 
   if (!isNewCustomer) {
     prompt = `You are ${businessName}'s AI Assistant, ${assistantName}. You are talking to ${customerName}, a valued customer. You will help ${businessName}'s potential and current customers learn more about the business, connect customers to human agents of the business, and schedule customers' meetings with the team. Utilize the information available to personalize the interaction and provide a helpful response. Remember to maintain a friendly and professional tone throughout the conversation. Mostly importantly,provide concise responses, as concise as possible.
+
+    Here is the name of the collection from which to retrieve information: ${collectionName}
   
     Here is the customer's information:
     ${customerDetails}`;
   } else {
     prompt = `You are ${businessName}'s AI Assistant, ${assistantName}. You are engaging with a new customer who is eager to learn more about ${businessName}. Your goal is to provide an overview of the business, answer any initial questions, and guide the customer on how to connect with human agents for more personalized assistance. Utilize the information available to create an informative and welcoming introduction. Remember to maintain a friendly and professional tone throughout the conversation. Additionally, focus on capturing the customer's interest and encouraging further exploration of ${businessName}'s offerings. Mostly importantly, provide concise responses, as concise as possible.
+
+    Here is the name of the collection from which to retrieve information: ${collectionName}
     `;
   }
 

@@ -15,16 +15,16 @@ async function addToVectoreStore(collectionName, docs) {
     url: "http://localhost:8000",
   });
 
-  console.log("add to chroma - response", vectorStore);
+  console.log("add to chroma - response", vectorStore.collectionName);
 }
 
 async function addTextToVectoreStore(text, collectionName) {
   const vectorStore = await Chroma.fromTexts(
     [text],
-    [{ id: "my-custom-id-123" }],
+    [],
     new OpenAIEmbeddings(),
     {
-      collectionName: collectionName || "conversation-flows",
+      collectionName: collectionName,
     }
   );
 
@@ -34,7 +34,7 @@ async function addTextToVectoreStore(text, collectionName) {
 async function getVectoreStore(collectionName) {
   const vectorStore = await Chroma.fromExistingCollection(
     new OpenAIEmbeddings(),
-    { collectionName: collectionName || "test-collection" }
+    { collectionName: collectionName }
   );
 
   return vectorStore;
@@ -43,9 +43,9 @@ async function getVectoreStore(collectionName) {
 async function deleteCollection(collectionName) {
   const collections = await client.listCollections();
 
-  console.log("collections ", collections);
+  console.log("collections ", collections?.length);
 
-  await client.deleteCollection({ name: "test-collection" });
+  await client.deleteCollection({ name: collectionName });
 }
 
 module.exports = {

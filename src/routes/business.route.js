@@ -11,6 +11,8 @@ const User = require("../models/user.model");
 
 const router = require("express").Router();
 
+const { v4: uuidv4 } = require("uuid");
+
 router.post("/", async (req, res) => {
   try {
     const {
@@ -41,7 +43,7 @@ router.post("/", async (req, res) => {
 
     const business = await Business.create({
       businessName,
-      twilioNumber: "",
+      twilioNumber: "+14697074725",
       verifyServiceId: "",
     });
 
@@ -50,6 +52,7 @@ router.post("/", async (req, res) => {
       email,
       externalId,
       externalType,
+      businessId: business.toJSON().id,
     });
 
     let promises = [
@@ -73,11 +76,13 @@ router.post("/", async (req, res) => {
       businessId: business.id,
       name: assistantName,
       voiceName,
+      voiceId,
       greetingMessageUrl,
       farewellMessageUrl,
+      knowledgeBaseName: uuidv4(),
     });
 
-    res.status(201).json({ business, assistant, history });
+    res.status(201).json({ user, business, assistant });
   } catch (error) {
     console.error("Error adding business:", error);
     res.status(500).json({ error: "Internal Server Error" });

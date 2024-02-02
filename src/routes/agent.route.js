@@ -5,13 +5,20 @@ const {
 const {
   generateCallAnsweringAgentResponse,
 } = require("../controllers/callAnsweringAgent.controller");
+const Assistant = require("../models/assistant.model");
 
 router.post("/teach", async (req, res) => {
-  const { question } = req.body;
+  const { question, businessId } = req.body;
 
-  // Get assistant's knowledge base name either in request body or from db.
-  const knowledgeBaseName = "test-collection-123";
-  const threadId = ""; // Either teach thread's id or business's id if only single teach thread.
+  let assistant = await Assistant.findOne({
+    where: {
+      businessId,
+    },
+  });
+  assistant = assistant.toJSON();
+
+  const { knowledgeBaseName } = assistant;
+  const threadId = assistant.businessId; // Either teach thread's id or business's id if only single teach thread.
 
   try {
     const response = await generateTrainingAgentResponse(

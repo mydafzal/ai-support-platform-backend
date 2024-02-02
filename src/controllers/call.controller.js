@@ -9,7 +9,13 @@ const BASE_URL = process.env.BASE_URL;
 const path = require("path");
 const fs = require("fs");
 
+const uuid = require("uuid");
+
 const twilio = require("twilio");
+
+const client = twilio(ACCOUNT_SID, AUTH_TOKEN);
+const AccessToken = twilio.jwt.AccessToken;
+const VoiceGrant = AccessToken.VoiceGrant;
 
 const { getContactByPhoneNumber } = require("../integrations/hubspotCRM");
 
@@ -25,44 +31,65 @@ const {
 const { uploadToS3 } = require("../integrations/s3Storage");
 const { convertTextToSpeech } = require("../integrations/textToSpeech");
 const { formatHubSpotContactDetails } = require("../utils/formatters");
+const Business = require("../models/business.model");
+const Assistant = require("../models/assistant.model");
+const Integration = require("../models/integration.model");
 
 async function handleIncomingCall(request) {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
-  const customerPhoneNumber = request.body.customerPhoneNumber;
+  const customerPhoneNumber = request.body.From;
   const businessPhoneNumber = request.body.To;
   const callId = request.body.CallSid;
 
+  console.log("request.body.To", request.body);
+
+  let business = await Business.findOne({
+    where: {
+      twilioNumber: businessPhoneNumber,
+    },
+  });
+
+  business = business?.toJSON();
+
+  let assistant = await Assistant.findOne({
+    where: {
+      businessId: business.id,
+    },
+  });
+  assistant = assistant?.toJSON();
+
   let businessDetails = {
-    businessName: "Cheetah",
-    businessEmail: "hammad@ccript.com",
-    phoneNumbers: [],
+    businessId: business.id,
+    businessName: business.businessName,
     businessPhoneNumber,
-    voiceId: "pqHfZKP75CvOlQylNhV4",
-    greetingMessageUrl:
-      "https://psychix.s3.amazonaws.com/ai-bot/customer-2/greetingMessage.mp3",
-    farewellMessageUrl:
-      "https://psychix.s3.amazonaws.com/ai-bot/customer-2/farewellMessage.mp3",
-    assistantName: "Adam",
+    voiceId: assistant.voiceId,
+    greetingMessageUrl: assistant.greetingMessageUrl,
+    farewellMessageUrl: assistant.farewellMessageUrl,
+    assistantName: assistant.name,
+    collectionName: assistant.knowledgeBaseName,
   };
 
-  const filePath = path.join(__dirname, "token.json");
-  const token = fs.readFileSync(filePath, { encoding: "utf-8" });
-  const { accessToken, refreshToken, expirationTime } = JSON.parse(token);
+  let integration = await Integration.findOne({
+    where: {
+      businessId: business.id,
+      integrationType: "HubSpot",
+    },
+  });
+  integration = integration?.toJSON();
 
   const contact = await getContactByPhoneNumber(
-    accessToken,
-    refreshToken,
-    expirationTime,
-    customerPhoneNumber
+    integration.accessToken,
+    integration.refreshToken,
+    integration.expirationTime,
+    customerPhoneNumber,
+    business.id
   );
 
   const formattedCustomerDetails = contact
     ? formatHubSpotContactDetails(contact)
     : "";
-
-  //   const conversation = initializeConversation(formattedCustomerDetails);
 
   storeCallData(customerPhoneNumber, {
     ...businessDetails,
@@ -79,7 +106,7 @@ async function handleIncomingCall(request) {
     speechTimeout: "auto",
     speechModel: "experimental_conversations",
     input: "speech",
-    action: `${BASE_URL}/twilio/speech-input`,
+    action: `${BASE_URL}/call/speech-input`,
     actionOnEmptyResult: true,
   });
 
@@ -94,7 +121,7 @@ async function gatherSpeechInput() {
     speechTimeout: "auto",
     speechModel: "experimental_conversations",
     input: "speech",
-    action: `${BASE_URL}/twilio/speech-input`,
+    action: `${BASE_URL}/call/speech-input`,
     actionOnEmptyResult: true,
   });
 
@@ -105,7 +132,7 @@ async function handleSpeechInput(request) {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
-  const { customerPhoneNumber } = request.body;
+  const customerPhoneNumber = request.body.From;
 
   const voiceInput = request.body.SpeechResult;
   console.log("voice input", voiceInput);
@@ -113,6 +140,7 @@ async function handleSpeechInput(request) {
   const callData = await getCallData(customerPhoneNumber);
 
   let {
+    businessId,
     farewellMessageUrl,
     phoneNumbers,
     businessName,
@@ -121,6 +149,7 @@ async function handleSpeechInput(request) {
     customerDetails,
     voiceId,
     callId,
+    collectionName,
   } = callData;
 
   if (!voiceInput) {
@@ -138,7 +167,8 @@ async function handleSpeechInput(request) {
     customerName,
     assistantName,
     customerDetails,
-    callId
+    callId,
+    collectionName
   );
 
   console.log("aiResponse", aiResponse);
@@ -156,20 +186,20 @@ async function handleSpeechInput(request) {
     voiceId
   );
 
-  const textToSpeechFileURL = await uploadToS3(generatedSpeechFile, "123");
+  const textToSpeechFileURL = await uploadToS3(generatedSpeechFile, businessId);
 
   console.log("cleanedAiResponse", cleanedAiResponse);
   console.log("textToSpeechFileURL", textToSpeechFileURL);
 
   twiml.play(textToSpeechFileURL);
 
-  if (shouldRedirectCall && phoneNumbers.length > 0) {
+  if (shouldRedirectCall && phoneNumbers?.length > 0) {
     console.log("Dialing the human agent's number...");
 
     twiml
       .dial({
         callerId: phoneNumbers[0],
-        action: `${BASE_URL}/twilio/redirected-call-disconnect`,
+        action: `${BASE_URL}/call/redirected-call-disconnect`,
         method: "POST",
       })
       .number(phoneNumbers[0]);
@@ -180,7 +210,7 @@ async function handleSpeechInput(request) {
       {
         method: "POST",
       },
-      `${BASE_URL}/twilio/gather-speech`
+      `${BASE_URL}/call/gather-speech`
     );
   }
 
@@ -307,6 +337,11 @@ async function checkVerification(code, phoneNumber) {
   return isVerified;
 }
 
+function handleCallDisconnect(request) {
+  const customerPhoneNumber = request.body.From;
+  deleteCallData(customerPhoneNumber);
+}
+
 module.exports = {
   handleIncomingCall,
   handleSpeechInput,
@@ -318,4 +353,5 @@ module.exports = {
   addVerifiedCallerId,
   createVerification,
   createVerifyService,
+  handleCallDisconnect,
 };

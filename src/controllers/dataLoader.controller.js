@@ -4,11 +4,14 @@ const {
 } = require("langchain/document_loaders/web/cheerio");
 
 const { PDFLoader } = require("langchain/document_loaders/fs/pdf");
+const { TextLoader } = require("langchain/document_loaders/fs/text");
+const { CSVLoader } = require("langchain/document_loaders/fs/csv");
+const { DocxLoader } = require("langchain/document_loaders/fs/docx");
 
 const path = require("path");
 const { addToVectoreStore } = require("../integrations/chromaDB");
 
-async function scrapeAndPersistData(url) {
+async function scrapeAndPersistData(url, collectionName) {
   // "https://docs.smith.langchain.com/overview"
   // "https://cheetahagency.com/our-history/"
 
@@ -16,17 +19,31 @@ async function scrapeAndPersistData(url) {
   const rawDocs = await loader.load();
 
   const docs = await splitDocuments(rawDocs);
-  await addToVectoreStore("test-collection-123", docs);
+  await addToVectoreStore(collectionName, docs);
 }
 
-async function readFileAndPersistData(filePath) {
-  filePath = path.join(__dirname, "..", "..", "sample-file.pdf");
+async function readFileAndPersistData(filePath, collectionName) {
+  // filePath = path.join(__dirname, "..", "..", "sample-file.pdf");
 
-  const loader = new PDFLoader(filePath);
+  const fileExtension = path.extname(filePath);
+  console.log(`Extension: ${fileExtension}`);
+
+  let loader;
+  if (fileExtension === ".pdf") {
+    loader = new PDFLoader(filePath);
+  } else if (fileExtension === ".txt") {
+    loader = new TextLoader(filePath);
+  } else if (fileExtension === ".docx") {
+    loader = new DocxLoader(filePath);
+  } else if (fileExtension === ".csv") {
+    loader = new CSVLoader(filePath);
+  }
+
+  // const loader = new PDFLoader(file.buffer);
   const rawDocs = await loader.load();
 
   const docs = await splitDocuments(rawDocs);
-  await addToVectoreStore("test-collection-123", docs);
+  await addToVectoreStore(collectionName, docs);
 }
 
 async function splitDocuments(rawDocs) {

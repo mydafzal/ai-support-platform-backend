@@ -1,27 +1,51 @@
 const router = require("express").Router();
 const path = require("path");
 
-const multer = require("multer");
 const {
   scrapeAndPersistData,
   readFileAndPersistData,
 } = require("../controllers/dataLoader.controller");
-const upload = multer({ dest: "documents/" });
 
 const {
   deleteCollection,
   addTextToVectoreStore,
 } = require("../integrations/chromaDB");
+const Assistant = require("../models/assistant.model");
+
+const multer = require("multer");
+
+const storage = multer.diskStorage({
+  destination: "documents",
+  filename: (req, file, cb) => {
+    // let fileExtension = path.extname(file.originalname);
+
+    // let extArray = file.mimetype.split("/");
+    // fileExtension = extArray[extArray.length - 1];
+
+    cb(null, Date.now() + path.extname(file.originalname));
+  },
+});
+
+const upload = multer({ storage });
 
 router.post("/scrape", async (req, res) => {
   try {
-    const { urls } = req.body;
+    const { urls, businessId } = req.body;
 
     if (!urls || urls?.length < 1) {
       return res.status(400).send("Provide one or more urls.");
     }
 
-    const promises = urls.map((url) => scrapeAndPersistData(url));
+    let assistant = await Assistant.findOne({
+      where: {
+        businessId,
+      },
+    });
+    assistant = assistant.toJSON();
+
+    const promises = urls.map((url) =>
+      scrapeAndPersistData(url, assistant.knowledgeBaseName)
+    );
 
     await Promise.all(promises);
 
@@ -40,9 +64,22 @@ router.post("/upload", upload.array("files"), async (req, res) => {
       return res.status(400).send("Provide one or more files.");
     }
 
+    let assistant = await Assistant.findOne({
+      where: {
+        businessId: req.body.businessId,
+      },
+    });
+    assistant = assistant.toJSON();
+
     const promises = req.files.map((file) => {
-      const filePath = path.join(__dirname, "documents", file.filename);
-      return readFileAndPersistData(filePath);
+      const filePath = path.join(
+        __dirname,
+        "..",
+        "..",
+        "documents",
+        file.filename
+      );
+      return readFileAndPersistData(filePath, assistant.knowledgeBaseName);
     });
 
     await Promise.all(promises);
@@ -54,9 +91,16 @@ router.post("/upload", upload.array("files"), async (req, res) => {
   }
 });
 
-router.delete("/", async (req, res) => {
+router.delete("/:businessId", async (req, res) => {
   try {
-    await deleteCollection("test-collection-123");
+    let assistant = await Assistant.findOne({
+      where: {
+        businessId: req.params.businessId,
+      },
+    });
+    assistant = assistant.toJSON();
+
+    await deleteCollection(assistant.knowledgeBaseName);
 
     res.status(200).json({ response: "" });
   } catch (error) {

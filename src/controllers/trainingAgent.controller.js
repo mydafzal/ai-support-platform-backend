@@ -159,6 +159,8 @@ async function generateTrainingAgentResponse(
     agent = await initializeAgent();
   }
 
+  console.log("threadId", threadId);
+
   console.log("executing agent now...");
 
   const response = await agent.invoke(
@@ -168,7 +170,7 @@ async function generateTrainingAgentResponse(
     },
     {
       configurable: {
-        sessionId: threadId || "foo",
+        sessionId: threadId ? `${threadId}` : "foo",
       },
     }
   );

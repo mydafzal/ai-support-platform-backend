@@ -6,15 +6,15 @@ const Integration = sequelize.define(
   "Integrations",
   {
     expirationTime: {
-      type: DataTypes.STRING,
+      type: DataTypes.DATE,
       // allowNull: false,
     },
     accessToken: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
       // allowNull: false,
     },
     refreshToken: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
       // allowNull: false,
     },
     integrationType: {

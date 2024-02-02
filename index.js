@@ -26,6 +26,7 @@ app.use(cors());
 const authRouter = require("./src/routes/auth.route");
 const callRouter = require("./src/routes/call.route");
 const usersRouter = require("./src/routes/user.route");
+const businessesRouter = require("./src/routes/business.route");
 const meetingEventsRouter = require("./src/routes/meetingEvent.route");
 const teachRouter = require("./src/routes/teach");
 const agentsRouter = require("./src/routes/agent.route");
@@ -53,7 +54,7 @@ app.post("/test", async (req, res) => {
 
 app.use("/auth", authRouter);
 app.use("/call", callRouter);
-// app.use("/customers", customersRouter);
+app.use("/businesses", businessesRouter);
 app.use("/users", usersRouter);
 app.use("/meeting-events", meetingEventsRouter);
 app.use("/teach", teachRouter);

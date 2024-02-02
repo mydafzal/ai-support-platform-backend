@@ -9,6 +9,7 @@ const {
   handleIncomingCall,
   handleSpeechInput,
   gatherSpeechInput,
+  handleCallDisconnect,
 } = require("../controllers/call.controller");
 
 const Business = require("../models/business.model");

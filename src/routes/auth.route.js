@@ -43,10 +43,10 @@ router.post("/hubspot-access-token", async (req, res) => {
   await Integration.create({
     businessId,
     accessToken: response.accessToken,
-    accessToken: response.refreshToken,
-    expirationTime: moment(new Date())
+    refreshToken: response.refreshToken,
+    expirationTime: `${moment(new Date())
       .add(response.expiresIn, "seconds")
-      .toDate(),
+      .toDate()}`,
     integrationType: "HubSpot",
   });
 
@@ -55,22 +55,22 @@ router.post("/hubspot-access-token", async (req, res) => {
 
 router.get("/calendly-auth-url", (req, res) => {
   return res.status(200).json({
-    calendlyRedirectUrl: `https://calendly.com/oauth/authorize?client_id=${process.env.CALENDLY_CLIENT_ID}&response_type=code&redirect_uri=${process.env.BASE_URL}`,
+    calendlyRedirectUrl: `https://calendly.com/oauth/authorize?client_id=${process.env.CALENDLY_CLIENT_ID}&response_type=code&redirect_uri=http://localhost:5000/`,
   });
 });
 
 router.post("/calendly-access-token", async (req, res) => {
-  const { code, redirecUri, businessId } = req.body;
+  const { code, redirectUri, businessId } = req.body;
 
-  const response = await getCalendlyAccessToken(code, redirecUri);
+  const response = await getCalendlyAccessToken(code, redirectUri);
 
   await Integration.create({
     businessId,
     accessToken: response.access_token,
     refreshToken: response.refresh_token,
-    expirationTime: moment(new Date())
+    expirationTime: `${moment(new Date())
       .add(response.expires_in, "seconds")
-      .toDate(),
+      .toDate()}`,
     integrationType: "Calendly",
   });
 

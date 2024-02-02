@@ -2,6 +2,8 @@ const fs = require("fs");
 const path = require("path");
 
 const hubspot = require("@hubspot/api-client");
+const Integration = require("../models/integration.model");
+const moment = require("moment");
 const hubspotClient = new hubspot.Client({
   apiKey: process.env.HUBSPOT_API_KEY,
 });
@@ -11,7 +13,7 @@ async function getHubSpotAccessToken(code, redirecUri) {
     const response = await hubspotClient.oauth.tokensApi.create(
       "authorization_code",
       code,
-      "http://localhost:5000/crm/redirect",
+      redirecUri,
       process.env.HUBSPOT_CLIENT_ID,
       process.env.HUBSPOT_CLIENT_SECRET
     );
@@ -26,7 +28,8 @@ async function getContactByPhoneNumber(
   accessToken,
   refreshToken,
   expirationTime,
-  phoneNumber
+  phoneNumber,
+  businessId
 ) {
   const hubspot = require("@hubspot/api-client");
   const hubspotClient = new hubspot.Client({
@@ -37,11 +40,20 @@ async function getContactByPhoneNumber(
     console.log("token expired.....");
     const updatedToken = await refreshAccessToken(refreshToken);
 
-    console.log("updatedToken", updatedToken);
-    fs.writeFile(
-      `${__dirname}/token.json`,
-      JSON.stringify(updatedToken),
-      () => {}
+    await Integration.update(
+      {
+        accessToken: updatedToken.accessToken,
+        refreshToken: updatedToken.refreshToken,
+        expirationTime: moment(new Date())
+          .add(updatedToken.expiresIn, "seconds")
+          .toDate(),
+      },
+      {
+        where: {
+          businessId,
+          integrationType: "HubSpot",
+        },
+      }
     );
 
     hubspotClient.setAccessToken(updatedToken?.accessToken);
