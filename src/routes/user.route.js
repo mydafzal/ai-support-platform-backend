@@ -1,10 +1,33 @@
 const router = require("express").Router();
 const User = require("../models/user.model");
 
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
+
+const { z } = require("zod");
+
+const userValidationSchema = z.object({
+  email: z.string().email(),
+  password: z.string().optional(),
+  externalType: z.enum(["Google", "Apple"]),
+  externalId: z.string().optional(),
+  name: z.string().optional(),
+});
+
 router.post("/", async (req, res) => {
+  const { name, email, password, externalId, externalType } = req.body;
+  console.log("add user", req.body);
+
   try {
-    const { name, email } = req.body;
-    console.log("add user", req.body);
+    const { success, error } = await userValidationSchema.safeParseAsync(
+      req.body
+    );
+
+    if (!success) {
+      return res
+        .status(400)
+        .json({ success: false, message: error.errors[0].message });
+    }
 
     let user = await User.findOne({
       where: {
@@ -13,21 +36,25 @@ router.post("/", async (req, res) => {
     });
 
     if (user?.toJSON()?.email) {
-      return res.status(400).json({ message: "Email already exists." });
+      return res
+        .status(400)
+        .json({ success: false, message: "Email already exists." });
     }
+
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
 
     user = await User.create({
       name,
       email,
-      phoneNumber,
-      callerId,
-      customerId,
+      password: hashedPassword,
+      externalId,
+      externalType,
     });
 
-    res.status(201).json(user);
+    res.status(201).json({ success: true, data: user.toJSON() });
   } catch (error) {
     console.error("Error fetching customer:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });
 
