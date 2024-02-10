@@ -2,6 +2,7 @@ const Router = require("express").Router;
 const router = Router();
 
 const moment = require("moment");
+const bcrypt = require("bcrypt");
 
 const {
   generateGoogleOAuthUrl,
@@ -9,7 +10,84 @@ const {
 } = require("../integrations/googleOAuth");
 const { getHubSpotAccessToken } = require("../integrations/hubspotCRM");
 const { getCalendlyAccessToken } = require("../integrations/calendly");
+
 const Integration = require("../models/integration.model");
+const User = require("../models/user.model");
+const Business = require("../models/business.model");
+const Assistant = require("../models/assistant.model");
+
+const { z } = require("zod");
+
+const loginValidationSchema = z.object({
+  email: z.string().email(),
+  password: z.string().optional(),
+  externalType: z.enum(["Google", "Apple"]),
+});
+
+router.post("/token", async (req, res) => {
+  const { email, password, externalType } = req.body;
+
+  const { success, error } = await loginValidationSchema.safeParseAsync(
+    req.body
+  );
+
+  if (!success) {
+    return res.status(400).json({
+      success: false,
+      message: error.errors[0].message,
+    });
+  }
+
+  let user;
+  if (externalType === "Google" || externalType === "Apple") {
+    user = await User.findOne({
+      where: {
+        email,
+      },
+    });
+  } else {
+    user = await User.findOne({
+      where: {
+        email,
+      },
+    });
+
+    user = user.toJSON();
+
+    const result = await bcrypt.compare(password, user.password);
+
+    if (!result) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid email and/or password" });
+    }
+
+    let business = await Business.findOne({
+      where: {
+        userId: user.id,
+      },
+    });
+
+    business = business.toJSON();
+
+    let assistant = await Assistant.findOne({
+      where: {
+        userId: user.id,
+      },
+    });
+
+    assistant = assistant.toJSON();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        user,
+        business,
+        assistant,
+      },
+    });
+  }
+});
 
 router.get("/google-oauth-url", (req, res) => {
   const oauthUrl = generateGoogleOAuthUrl();
