@@ -1,13 +1,11 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../loaders/db");
-const Business = require("./business.model");
 
 const User = sequelize.define(
   "User",
   {
     name: {
       type: DataTypes.STRING,
-      allowNull: false,
     },
     email: {
       type: DataTypes.STRING,
@@ -17,7 +15,7 @@ const User = sequelize.define(
         isEmail: true,
       },
     },
-    phoneNumber: {
+    password: {
       type: DataTypes.STRING,
     },
     externalId: {
@@ -30,7 +28,7 @@ const User = sequelize.define(
   {}
 );
 
-User.belongsTo(Business, { foreignKey: "businessId" });
+// User.belongsTo(Business, { foreignKey: "businessId" });
 
 // User.sync({ force: true });
 

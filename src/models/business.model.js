@@ -1,5 +1,6 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../loaders/db");
+const User = require("./user.model");
 
 const Business = sequelize.define(
   "Business",
@@ -12,19 +13,14 @@ const Business = sequelize.define(
       type: DataTypes.STRING,
       allowNull: false,
     },
-    phoneNumbers: {
-      type: DataTypes.ARRAY(DataTypes.STRING),
-      // allowNull: false,
-      validate: {
-        isArray: true,
-      },
-    },
     verifyServiceId: {
       type: DataTypes.STRING,
     },
   },
   {}
 );
+
+Business.belongsTo(User, { foreignKey: "userId" });
 
 // Business.sync({ force: true });
 

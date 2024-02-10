@@ -1,6 +1,6 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../loaders/db");
-const Business = require("./business.model");
+const User = require("./user.model");
 
 const Assistant = sequelize.define(
   "Assistant",
@@ -33,7 +33,7 @@ const Assistant = sequelize.define(
   {}
 );
 
-Assistant.belongsTo(Business, { foreignKey: "businessId" });
+Assistant.belongsTo(User, { foreignKey: "userId" });
 
 // Assistant.sync({ force: true });
 
