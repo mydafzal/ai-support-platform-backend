@@ -9,7 +9,7 @@ const { z } = require("zod");
 const userValidationSchema = z.object({
   email: z.string().email(),
   password: z.string().optional(),
-  externalType: z.enum(["Google", "Apple"]),
+  externalType: z.enum(["Google", "Apple", ""]).optional(),
   externalId: z.string().optional(),
   name: z.string().optional(),
 });
@@ -47,8 +47,8 @@ router.post("/", async (req, res) => {
       name,
       email,
       password: hashedPassword,
-      externalId,
-      externalType,
+      externalId: externalId || null,
+      externalType: externalType || null,
     });
 
     res.status(201).json({ success: true, data: user.toJSON() });
