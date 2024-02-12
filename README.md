@@ -18,7 +18,7 @@ Follow these steps to set up and run the Customer Bot backend on your local mach
 
 1. **Clone the Repository:**
    ```bash
-   git clone https://github.com/your-username/customer-bot-backend.git
+   git clone https://github.com/ccriptdev9/customer-bot-backend.git
    cd customer-bot-backend
    ```
 
@@ -40,7 +40,7 @@ Follow these steps to set up and run the Customer Bot backend on your local mach
    ```
 
 5. **Run the Application:**
-   If you have nodemon installed, run the following command:
+    <br /> If you have nodemon installed, run the following command:
    ```bash
    npx nodemon index.js
    ```
