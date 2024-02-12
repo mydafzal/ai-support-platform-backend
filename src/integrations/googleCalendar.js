@@ -1,6 +1,6 @@
 const { google } = require("googleapis");
-const key = require("../keyfile.json");
-const credentials = require("../credentials.json");
+const key = require("../../keyfile.json");
+const credentials = require("../../credentials.json");
 const fs = require("fs");
 const readline = require("readline");
 
