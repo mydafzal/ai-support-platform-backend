@@ -7,6 +7,7 @@ const saltRounds = 10;
 const { z } = require("zod");
 const Document = require("../models/document.model");
 const Url = require("../models/url.model");
+const { redisClient } = require("../integrations/redis");
 
 const userValidationSchema = z.object({
   email: z.string().email(),
@@ -90,6 +91,31 @@ router.get("/:id/urls", async (req, res) => {
     res.status(200).json({ success: true, data: urls });
   } catch (error) {
     console.error("Error getting urls:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/teach-chat-messages", async (req, res) => {
+  const userId = req.params.id;
+
+  try {
+    let result = await redisClient.lRange(`teach-chat-${userId}`, 0, -1);
+
+    console.log("result", JSON.parse(result[0]).data);
+
+    result = result.map((item) => {
+      item = JSON.parse(item);
+
+      return {
+        type: item.type,
+        content: item.data.content,
+        timestamp: item.data?.additional_kwargs?.timestamp,
+      };
+    });
+
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    console.error("Error getting teach chat's messages:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });
