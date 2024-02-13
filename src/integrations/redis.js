@@ -43,4 +43,5 @@ module.exports = {
   getCallData,
   deleteCallData,
   updateCallConversation,
+  redisClient: client,
 };
