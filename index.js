@@ -30,11 +30,13 @@ const businessesRouter = require("./src/routes/business.route");
 const meetingEventsRouter = require("./src/routes/meetingEvent.route");
 const teachRouter = require("./src/routes/teach");
 const agentsRouter = require("./src/routes/agent.route");
+const voicesRouter = require("./src/routes/voice.route");
 
 const {
   convertTextToSpeech,
   getElevenLabsVoices,
 } = require("./src/integrations/textToSpeech");
+const { queryCollection } = require("./src/integrations/chromaDB");
 
 app.get("/speech", async (req, res) => {
   const response = await convertTextToSpeech(
@@ -48,8 +50,8 @@ app.get("/speech", async (req, res) => {
 });
 
 app.post("/test", async (req, res) => {
-  const response = await getElevenLabsVoices();
-  res.status(200).json({ response });
+  await queryCollection("5444d469-7033-44f1-ae18-c67081127243");
+  res.status(200).json({ response: "" });
 });
 
 app.use("/auth", authRouter);
@@ -59,6 +61,7 @@ app.use("/users", usersRouter);
 app.use("/meeting-events", meetingEventsRouter);
 app.use("/teach", teachRouter);
 app.use("/agents", agentsRouter);
+app.use("/voices", voicesRouter);
 
 app.get("/", (req, res) => {
   res.status(200).json({ token: "token 123" });

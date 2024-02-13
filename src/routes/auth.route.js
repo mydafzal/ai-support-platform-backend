@@ -3,6 +3,7 @@ const router = Router();
 
 const moment = require("moment");
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 
 const {
   generateGoogleOAuthUrl,
@@ -21,7 +22,7 @@ const { z } = require("zod");
 const loginValidationSchema = z.object({
   email: z.string().email(),
   password: z.string().optional(),
-  externalType: z.enum(["Google", "Apple"]),
+  externalType: z.enum(["Google", "Apple", ""]),
 });
 
 router.post("/token", async (req, res) => {
@@ -38,22 +39,21 @@ router.post("/token", async (req, res) => {
     });
   }
 
-  let user;
-  if (externalType === "Google" || externalType === "Apple") {
-    user = await User.findOne({
-      where: {
-        email,
-      },
-    });
-  } else {
-    user = await User.findOne({
-      where: {
-        email,
-      },
-    });
+  let user = await User.findOne({
+    where: {
+      email,
+    },
+  });
 
-    user = user.toJSON();
+  if (!user) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Invalid email and/or password." });
+  }
 
+  user = user.toJSON();
+
+  if (externalType !== "Google" && externalType !== "Apple") {
     const result = await bcrypt.compare(password, user.password);
 
     if (!result) {
@@ -61,32 +61,38 @@ router.post("/token", async (req, res) => {
         .status(400)
         .json({ success: false, message: "Invalid email and/or password" });
     }
-
-    let business = await Business.findOne({
-      where: {
-        userId: user.id,
-      },
-    });
-
-    business = business.toJSON();
-
-    let assistant = await Assistant.findOne({
-      where: {
-        userId: user.id,
-      },
-    });
-
-    assistant = assistant.toJSON();
-
-    res.status(200).json({
-      success: true,
-      data: {
-        user,
-        business,
-        assistant,
-      },
-    });
   }
+
+  delete user.password;
+
+  let business = await Business.findOne({
+    where: {
+      userId: user.id,
+    },
+  });
+
+  business = business.toJSON();
+
+  let assistant = await Assistant.findOne({
+    where: {
+      userId: user.id,
+    },
+  });
+
+  assistant = assistant.toJSON();
+
+  const token = jwt.sign(
+    { user, business, assistant },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: 86400,
+    }
+  );
+
+  res.status(200).json({
+    success: true,
+    data: token,
+  });
 });
 
 router.get("/google-oauth-url", (req, res) => {

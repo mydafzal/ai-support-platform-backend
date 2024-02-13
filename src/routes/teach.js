@@ -1,5 +1,6 @@
 const router = require("express").Router();
 const path = require("path");
+const fs = require("fs/promises");
 
 const {
   scrapeAndPersistData,
@@ -9,28 +10,45 @@ const {
 const {
   deleteCollection,
   addTextToVectoreStore,
+  deleteChunksByUrl,
+  deleteChunksByDocument,
 } = require("../integrations/chromaDB");
 const Assistant = require("../models/assistant.model");
+const Document = require("../models/document.model");
 
 const multer = require("multer");
 
 const storage = multer.diskStorage({
   destination: "documents",
   filename: (req, file, cb) => {
-    // let fileExtension = path.extname(file.originalname);
-
-    // let extArray = file.mimetype.split("/");
-    // fileExtension = extArray[extArray.length - 1];
-
-    cb(null, Date.now() + path.extname(file.originalname));
+    // cb(null, file.originalname + path.extname(file.originalname));
+    cb(null, file.originalname);
   },
 });
 
 const upload = multer({ storage });
 
-router.post("/scrape", async (req, res) => {
+const { z } = require("zod");
+const Url = require("../models/url.model");
+
+const urlsValidationSchema = z.object({
+  urls: z.array(z.string().url()),
+  userId: z.number(),
+});
+
+router.post("/urls", async (req, res) => {
   try {
-    const { urls, businessId } = req.body;
+    const { urls, userId } = req.body;
+
+    const { success, error } = await urlsValidationSchema.safeParseAsync(
+      req.body
+    );
+
+    if (!success) {
+      return res
+        .status(400)
+        .json({ success: false, message: error.errors[0].message });
+    }
 
     if (!urls || urls?.length < 1) {
       return res.status(400).send("Provide one or more urls.");
@@ -38,56 +56,180 @@ router.post("/scrape", async (req, res) => {
 
     let assistant = await Assistant.findOne({
       where: {
-        businessId,
+        userId,
       },
     });
+
+    if (!assistant) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid user id." });
+    }
+
     assistant = assistant.toJSON();
 
-    const promises = urls.map((url) =>
-      scrapeAndPersistData(url, assistant.knowledgeBaseName)
+    let addUrlsResult = await Url.bulkCreate(
+      urls.map((url) => ({
+        link: url,
+        userId,
+      }))
+    );
+
+    addUrlsResult = addUrlsResult.map((item) => item.toJSON());
+
+    let promises = addUrlsResult.map((url) =>
+      scrapeAndPersistData(url.link, assistant.knowledgeBaseName, url.id)
     );
 
     await Promise.all(promises);
 
-    res.status(200).json({ message: "Data loaded from provided urls." });
+    res
+      .status(201)
+      .json({ success: true, message: "Data loaded from provided urls." });
   } catch (error) {
     console.error("Error fetching customer:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    res
+      .status(500)
+      .json({ success: false, falsemessage: "Internal Server Error" });
   }
 });
 
-router.post("/upload", upload.array("files"), async (req, res) => {
-  try {
-    console.log("files", req.files);
+router.delete("/urls/:id", async (req, res) => {
+  const urlId = req.params.id;
+  const { userId } = req.body;
 
+  try {
+    await Url.destroy({
+      where: {
+        id: urlId,
+      },
+    });
+
+    let assistant = await Assistant.findOne({
+      where: {
+        userId,
+      },
+    });
+
+    assistant = assistant.toJSON();
+
+    await deleteChunksByUrl(assistant.knowledgeBaseName, urlId);
+
+    res
+      .status(200)
+      .json({ success: true, message: "Url deleted successfully." });
+  } catch (error) {
+    console.error("Error deleting document:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.post("/documents", upload.array("files"), async (req, res) => {
+  try {
     if (!req.files || req.files?.length < 1) {
-      return res.status(400).send("Provide one or more files.");
+      return res
+        .status(400)
+        .json({ success: false, message: "Provide one or more files." });
+    } else if (!req.body.userId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid user id." });
     }
 
     let assistant = await Assistant.findOne({
       where: {
-        businessId: req.body.businessId,
+        userId: req.body.userId,
       },
     });
+
     assistant = assistant.toJSON();
 
-    const promises = req.files.map((file) => {
+    let documents = await Document.bulkCreate(
+      req.files.map((file) => ({
+        name: file.originalname,
+        size: file.size,
+        type: file.mimetype,
+        userId: req.body.userId,
+      }))
+    );
+
+    documents = documents.map((doc) => doc.toJSON());
+
+    const promises = documents.map((document) => {
       const filePath = path.join(
         __dirname,
         "..",
         "..",
         "documents",
-        file.filename
+        document.name
       );
-      return readFileAndPersistData(filePath, assistant.knowledgeBaseName);
+
+      return readFileAndPersistData(
+        filePath,
+        assistant.knowledgeBaseName,
+        document.id
+      );
     });
 
     await Promise.all(promises);
 
-    res.status(200).json({ message: "Data loaded from provided files." });
+    console.log("files", req.files);
+
+    res
+      .status(201)
+      .json({ success: true, message: "Data loaded from provided files." });
   } catch (error) {
-    console.error("Error fetching customer:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error("Error uploading documents:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.delete("/documents/:id", async (req, res) => {
+  const documentId = req.params.id;
+  const { userId } = req.body;
+
+  try {
+    let document = await Document.findByPk(documentId);
+
+    if (!document) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid document id." });
+    }
+
+    document = document.toJSON();
+
+    await Document.destroy({
+      where: {
+        id: documentId,
+      },
+    });
+
+    const filePath = path.join(
+      __dirname,
+      "..",
+      "..",
+      "documents",
+      document.name
+    );
+
+    await fs.unlink(filePath);
+
+    let assistant = await Assistant.findOne({
+      where: {
+        userId,
+      },
+    });
+
+    assistant = assistant.toJSON();
+    await deleteChunksByDocument(assistant.knowledgeBaseName, documentId);
+
+    res
+      .status(200)
+      .json({ success: true, message: "Document deleted successfully." });
+  } catch (error) {
+    console.error("Error deleting document:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });
 

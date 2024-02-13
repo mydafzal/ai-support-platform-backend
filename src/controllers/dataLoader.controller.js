@@ -11,7 +11,7 @@ const { DocxLoader } = require("langchain/document_loaders/fs/docx");
 const path = require("path");
 const { addToVectoreStore } = require("../integrations/chromaDB");
 
-async function scrapeAndPersistData(url, collectionName) {
+async function scrapeAndPersistData(url, collectionName, urlId) {
   // "https://docs.smith.langchain.com/overview"
   // "https://cheetahagency.com/our-history/"
 
@@ -19,10 +19,13 @@ async function scrapeAndPersistData(url, collectionName) {
   const rawDocs = await loader.load();
 
   const docs = await splitDocuments(rawDocs);
+
+  docs.forEach((doc) => (doc.metadata.urlId = `url-${urlId}`));
+
   await addToVectoreStore(collectionName, docs);
 }
 
-async function readFileAndPersistData(filePath, collectionName) {
+async function readFileAndPersistData(filePath, collectionName, documentId) {
   // filePath = path.join(__dirname, "..", "..", "sample-file.pdf");
 
   const fileExtension = path.extname(filePath);
@@ -43,6 +46,9 @@ async function readFileAndPersistData(filePath, collectionName) {
   const rawDocs = await loader.load();
 
   const docs = await splitDocuments(rawDocs);
+
+  docs.forEach((doc) => (doc.metadata.documentId = `document-${documentId}`));
+
   await addToVectoreStore(collectionName, docs);
 }
 
