@@ -5,6 +5,8 @@ const bcrypt = require("bcrypt");
 const saltRounds = 10;
 
 const { z } = require("zod");
+const Document = require("../models/document.model");
+const Url = require("../models/url.model");
 
 const userValidationSchema = z.object({
   email: z.string().email(),
@@ -53,20 +55,42 @@ router.post("/", async (req, res) => {
 
     res.status(201).json({ success: true, data: user.toJSON() });
   } catch (error) {
+    console.error("Error adding user:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/documents", async (req, res) => {
+  try {
+    let documents = await Document.findAll({
+      where: {
+        userId: req.params.id,
+      },
+    });
+
+    documents = documents.map((item) => item.toJSON());
+
+    res.status(200).json({ success: true, data: documents });
+  } catch (error) {
     console.error("Error fetching customer:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });
 
-router.get("/:userId", async (req, res) => {
+router.get("/:id/urls", async (req, res) => {
   try {
-    const { userId } = req.params;
+    let urls = await Url.findAll({
+      where: {
+        userId: req.params.id,
+      },
+    });
 
-    const user = await User.findByPk(userId);
-    res.status(200).json(user);
+    urls = urls.map((item) => item.toJSON());
+
+    res.status(200).json({ success: true, data: urls });
   } catch (error) {
-    console.error("Error fetching customer:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error("Error getting urls:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });
 
