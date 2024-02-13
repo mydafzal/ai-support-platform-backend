@@ -1,6 +1,8 @@
 const { getUnixTime } = require("date-fns");
 const { v4: uuidv4 } = require("uuid");
 
+const { RedisChatMessageHistory } = require("langchain/stores/message/redis");
+
 function generateFilename(fileExtension) {
   const uniqueId = uuidv4();
 
@@ -10,4 +12,14 @@ function generateFilename(fileExtension) {
   return uniqueFilename;
 }
 
-module.exports = { generateFilename };
+class ExtendedRedisChatMemory extends RedisChatMessageHistory {
+  async addMessage(message) {
+    message.additional_kwargs = {
+      timestamp: new Date().getTime(),
+    };
+
+    await super.addMessage(message);
+  }
+}
+
+module.exports = { generateFilename, ExtendedRedisChatMemory };
