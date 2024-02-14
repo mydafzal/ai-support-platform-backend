@@ -32,6 +32,7 @@ const teachRouter = require("./src/routes/teach");
 const agentsRouter = require("./src/routes/agent.route");
 const voicesRouter = require("./src/routes/voice.route");
 const downloadsRouter = require("./src/routes/download.route");
+const chatsRouter = require("./src/routes/chat.route");
 
 const {
   convertTextToSpeech,
@@ -64,6 +65,7 @@ app.use("/teach", teachRouter);
 app.use("/agents", agentsRouter);
 app.use("/voices", voicesRouter);
 app.use("/download", downloadsRouter);
+app.use("/chats", chatsRouter);
 
 app.get("/", (req, res) => {
   res.status(200).json({ token: "token 123" });
