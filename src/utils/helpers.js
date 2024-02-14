@@ -22,4 +22,7 @@ class ExtendedRedisChatMemory extends RedisChatMessageHistory {
   }
 }
 
-module.exports = { generateFilename, ExtendedRedisChatMemory };
+module.exports = {
+  generateFilename,
+  ExtendedRedisChatMemory,
+};

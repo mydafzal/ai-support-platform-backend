@@ -313,4 +313,10 @@ router.post("/create-flow", async (req, res) => {
   }
 });
 
+router.delete("/:name", async (req, res) => {
+  const result = await deleteCollection(req.params.name);
+
+  res.send("deleted.");
+});
+
 module.exports = router;
