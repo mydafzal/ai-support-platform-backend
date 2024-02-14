@@ -163,7 +163,7 @@ router.post("/documents", upload.array("files"), async (req, res) => {
 
     documents = documents.map((doc) => doc.toJSON());
 
-    const promises = documents.map((document) => {
+    let promises = documents.map((document) => {
       const filePath = path.join(
         __dirname,
         "..",
@@ -182,6 +182,30 @@ router.post("/documents", upload.array("files"), async (req, res) => {
     await Promise.all(promises);
 
     console.log("files", req.files);
+
+    const destinationPath = path.join(
+      __dirname,
+      "..",
+      "..",
+      "documents",
+      `${req.body.userId}`
+    );
+
+    await fs.mkdir(destinationPath, { recursive: true });
+
+    promises = documents.map((file) => {
+      const sourcePath = path.join(
+        __dirname,
+        "..",
+        "..",
+        "documents",
+        file.name
+      );
+
+      return fs.rename(sourcePath, `${destinationPath}/${file.name}`);
+    });
+
+    await Promise.all(promises);
 
     res
       .status(201)
@@ -314,8 +338,7 @@ router.post("/create-flow", async (req, res) => {
 });
 
 router.delete("/:name", async (req, res) => {
-  const result = await deleteCollection(req.params.name);
-
+  await deleteCollection(req.params.name);
   res.send("deleted.");
 });
 

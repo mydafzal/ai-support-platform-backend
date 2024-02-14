@@ -12,8 +12,8 @@ const app = express();
 
 app.use(express.json());
 app.use(
-  "/public",
-  express.static(path.join(__dirname, "public"), {
+  "/documents",
+  express.static(path.join(__dirname, "documents"), {
     maxAge: 0,
     etag: false,
   })
@@ -31,6 +31,7 @@ const meetingEventsRouter = require("./src/routes/meetingEvent.route");
 const teachRouter = require("./src/routes/teach");
 const agentsRouter = require("./src/routes/agent.route");
 const voicesRouter = require("./src/routes/voice.route");
+const downloadsRouter = require("./src/routes/download.route");
 
 const {
   convertTextToSpeech,
@@ -62,6 +63,7 @@ app.use("/meeting-events", meetingEventsRouter);
 app.use("/teach", teachRouter);
 app.use("/agents", agentsRouter);
 app.use("/voices", voicesRouter);
+app.use("/download", downloadsRouter);
 
 app.get("/", (req, res) => {
   res.status(200).json({ token: "token 123" });
