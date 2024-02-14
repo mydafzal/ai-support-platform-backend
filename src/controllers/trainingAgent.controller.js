@@ -155,6 +155,7 @@ async function initializeAgent() {
 async function generateTrainingAgentResponse(
   userQuery,
   knowledgeBaseName,
+  businessName,
   threadId
 ) {
   if (!agent) {
@@ -166,7 +167,7 @@ async function generateTrainingAgentResponse(
   console.log("executing agent now...");
 
   const vectorStore = await getVectoreStore(knowledgeBaseName);
-  const data = await vectorStore.similaritySearch("Cheetah Agency");
+  const data = await vectorStore.similaritySearch(businessName);
 
   const businessInformation = constructBusinessSummary(data);
 

@@ -33,6 +33,7 @@ const Url = require("../models/url.model");
 const {
   generateTrainingAgentResponse,
 } = require("../controllers/trainingAgent.controller");
+const Business = require("../models/business.model");
 
 const urlsValidationSchema = z.object({
   urls: z.array(z.string().url()),
@@ -293,11 +294,20 @@ router.post("/chat", async (req, res) => {
 
     assistant = assistant.toJSON();
 
+    let business = await Business.findOne({
+      where: {
+        userId,
+      },
+    });
+
+    business = business.toJSON();
+
     console.log("assistant", assistant);
 
     const aiResponse = await generateTrainingAgentResponse(
       message,
       assistant.knowledgeBaseName,
+      business.businessName,
       userId
     );
 
