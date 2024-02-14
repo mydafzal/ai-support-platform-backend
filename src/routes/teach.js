@@ -30,9 +30,17 @@ const upload = multer({ storage });
 
 const { z } = require("zod");
 const Url = require("../models/url.model");
+const {
+  generateTrainingAgentResponse,
+} = require("../controllers/trainingAgent.controller");
 
 const urlsValidationSchema = z.object({
   urls: z.array(z.string().url()),
+  userId: z.number(),
+});
+
+const teachChatValidationSchema = z.object({
+  message: z.string(),
   userId: z.number(),
 });
 
@@ -233,21 +241,51 @@ router.delete("/documents/:id", async (req, res) => {
   }
 });
 
-router.delete("/:businessId", async (req, res) => {
+router.post("/chat", async (req, res) => {
+  const { message, userId } = req.body;
+
   try {
+    const { success, error } = await teachChatValidationSchema.safeParseAsync(
+      req.body
+    );
+
+    if (!success) {
+      return res
+        .status(400)
+        .json({ success: false, message: error.errors[0].message });
+    }
+
     let assistant = await Assistant.findOne({
       where: {
-        businessId: req.params.businessId,
+        userId,
       },
     });
+
+    if (!assistant) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid user id." });
+    }
+
     assistant = assistant.toJSON();
 
-    await deleteCollection(assistant.knowledgeBaseName);
+    console.log("assistant", assistant);
 
-    res.status(200).json({ response: "" });
+    const aiResponse = await generateTrainingAgentResponse(
+      message,
+      assistant.knowledgeBaseName,
+      userId
+    );
+
+    const data = {
+      type: "ai",
+      content: aiResponse,
+    };
+
+    res.status(200).json({ success: true, data });
   } catch (error) {
-    console.error("Error fetching customer:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error("Error getting training agent's response: ", error);
+    res.status(500).json({ success: false, error: "Internal Server Error" });
   }
 });
 
@@ -273,6 +311,12 @@ router.post("/create-flow", async (req, res) => {
     console.error("Error adding text to vector store.", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
+});
+
+router.delete("/:name", async (req, res) => {
+  const result = await deleteCollection(req.params.name);
+
+  res.send("deleted.");
 });
 
 module.exports = router;

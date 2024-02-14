@@ -14,13 +14,13 @@ const { z } = require("zod");
 const { RunnableWithMessageHistory } = require("@langchain/core/runnables");
 const { ChatOpenAI } = require("@langchain/openai");
 const { DynamicStructuredTool } = require("@langchain/community/tools/dynamic");
-const { addTextToVectoreStore } = require("../integrations/chromaDB");
-
 const {
-  RedisChatMessageHistory,
-} = require("@langchain/community/stores/message/redis");
+  addTextToVectoreStore,
+  getVectoreStore,
+} = require("../integrations/chromaDB");
 
 const { createClient } = require("redis");
+const { ExtendedRedisChatMemory } = require("../utils/helpers");
 const redisClient = createClient();
 
 let agent;
@@ -44,7 +44,7 @@ async function initializeAgent() {
       console.log("new info", newInformation);
       console.log("collectionName", collectionName);
 
-      await addTextToVectoreStore(newInformation, collectionName);
+      // await addTextToVectoreStore(newInformation, collectionName);
       return "";
     },
   });
@@ -56,7 +56,12 @@ async function initializeAgent() {
     temperature: 0,
   });
 
-  const systemTemplate = `You are an AI designed to learn about businesses through conversation. Your goal is to understand and reason about the information provided by the business. Continuously ask dynamic and insightful questions to gather more details, seek clarification, and make sense of the given information. Adapt your responses based on the context of the conversation. Your role is to simulate a learning process, so be inquisitive, thoughtful, and engaging. If the business introduces new concepts, adapt your questions to explore those areas. Always strive to deepen your understanding and maintain a conversational flow. 
+  const systemTemplate = `You are an AI designed to learn about businesses through conversation. Your goal is to understand and reason about the information provided by the business. Continuously ask dynamic and insightful questions to gather more details, seek clarification, and make sense of the given information. Adapt your responses based on the context of the conversation and the information about the business that is provided to you below. Your role is to simulate a learning process, so engaging. If the business introduces new concepts, adapt your questions to explore those areas. Always strive to deepen your understanding and maintain a conversational flow. If the business starts the conversation with a greeting message, reply to the greeting message in way that conveys to the business that they should start telling you about the business.
+
+  Here's some information about the business that we already know:
+  ==========
+  {companyInformation}
+  ==========
   
   You must continuously keep calling the 'information-saver' tool to save any new meaningful information about the business or anything related to the business. Here is the value of 'collectionName' you will need to pass to the 'information-saver' tool: {collectionName}
   
@@ -122,8 +127,6 @@ async function initializeAgent() {
     humanPromptTemplate,
   ]);
 
-  //   console.log("prompt", prompt);
-
   const agent = await createOpenAIFunctionsAgent({
     llm: chatModel,
     tools,
@@ -137,9 +140,8 @@ async function initializeAgent() {
 
   const agentWithChatHistory = new RunnableWithMessageHistory({
     runnable: agentExecutor,
-    // getMessageHistory: (_sessionId) => messageHistory,
     getMessageHistory: (sessionId) =>
-      new RedisChatMessageHistory({
+      new ExtendedRedisChatMemory({
         sessionId,
         client: redisClient,
       }),
@@ -160,22 +162,42 @@ async function generateTrainingAgentResponse(
   }
 
   console.log("threadId", threadId);
-
+  // console.log("relevantInformation", relevantInformation);
   console.log("executing agent now...");
+
+  const vectorStore = await getVectoreStore(knowledgeBaseName);
+  const data = await vectorStore.similaritySearch("Cheetah Agency");
+
+  const businessInformation = constructBusinessSummary(data);
+
+  console.log("businessInformation", businessInformation);
 
   const response = await agent.invoke(
     {
       input: userQuery,
       collectionName: knowledgeBaseName,
+      companyInformation: businessInformation,
     },
     {
       configurable: {
-        sessionId: threadId ? `${threadId}` : "foo",
+        sessionId: `teach-chat-${threadId}`,
       },
     }
   );
 
   return response.output;
+}
+
+function constructBusinessSummary(data) {
+  let summary = "";
+
+  data.forEach((obj) => {
+    const pageContent = obj.pageContent;
+
+    summary += pageContent + "\n";
+  });
+
+  return summary;
 }
 
 module.exports = {

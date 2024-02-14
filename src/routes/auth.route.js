@@ -25,6 +25,12 @@ const loginValidationSchema = z.object({
   externalType: z.enum(["Google", "Apple", ""]),
 });
 
+const accessTokenValidationSchema = z.object({
+  code: z.string(),
+  redirecUri: z.string().optional(),
+  userId: z.number(),
+});
+
 router.post("/token", async (req, res) => {
   const { email, password, externalType } = req.body;
 
@@ -120,21 +126,38 @@ router.get("/hubspot-auth-url", (req, res) => {
 });
 
 router.post("/hubspot-access-token", async (req, res) => {
-  const { code, redirecUri, businessId } = req.body;
+  try {
+    const { success, error } = await accessTokenValidationSchema.safeParseAsync(
+      req.body
+    );
 
-  const response = await getHubSpotAccessToken(code, redirecUri);
+    if (!success) {
+      return res
+        .status(400)
+        .json({ success: false, message: error.errors[0].message });
+    }
 
-  await Integration.create({
-    businessId,
-    accessToken: response.accessToken,
-    refreshToken: response.refreshToken,
-    expirationTime: `${moment(new Date())
-      .add(response.expiresIn, "seconds")
-      .toDate()}`,
-    integrationType: "HubSpot",
-  });
+    const { code, redirecUri, userId } = req.body;
 
-  res.status(200).json({ message: "HubSpot integration succesful." });
+    const response = await getHubSpotAccessToken(code, redirecUri);
+
+    await Integration.create({
+      userId,
+      accessToken: response.accessToken,
+      refreshToken: response.refreshToken,
+      expirationTime: `${moment(new Date())
+        .add(response.expiresIn, "seconds")
+        .toDate()}`,
+      integrationType: "HubSpot",
+    });
+
+    res
+      .status(201)
+      .json({ success: true, message: "HubSpot integration succesful." });
+  } catch (error) {
+    console.log("Error storing hubspot access token", error);
+    res.status(500).json({ success: false, message: "Internal Server Error." });
+  }
 });
 
 router.get("/calendly-auth-url", (req, res) => {
@@ -144,21 +167,38 @@ router.get("/calendly-auth-url", (req, res) => {
 });
 
 router.post("/calendly-access-token", async (req, res) => {
-  const { code, redirectUri, businessId } = req.body;
+  try {
+    const { success, error } = await accessTokenValidationSchema.safeParseAsync(
+      req.body
+    );
 
-  const response = await getCalendlyAccessToken(code, redirectUri);
+    if (!success) {
+      return res
+        .status(400)
+        .json({ success: false, message: error.errors[0].message });
+    }
 
-  await Integration.create({
-    businessId,
-    accessToken: response.access_token,
-    refreshToken: response.refresh_token,
-    expirationTime: `${moment(new Date())
-      .add(response.expires_in, "seconds")
-      .toDate()}`,
-    integrationType: "Calendly",
-  });
+    const { code, redirectUri, userId } = req.body;
 
-  res.status(200).json({ message: "Calendly integration successful." });
+    const response = await getCalendlyAccessToken(code, redirectUri);
+
+    await Integration.create({
+      userId,
+      accessToken: response.access_token,
+      refreshToken: response.refresh_token,
+      expirationTime: `${moment(new Date())
+        .add(response.expires_in, "seconds")
+        .toDate()}`,
+      integrationType: "Calendly",
+    });
+
+    res
+      .status(201)
+      .json({ success: true, message: "Calendly integration successful." });
+  } catch (error) {
+    console.log("Error storing hubspot access token", error);
+    res.status(500).json({ success: false, message: "Internal Server Error." });
+  }
 });
 
 module.exports = router;
