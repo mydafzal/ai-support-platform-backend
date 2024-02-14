@@ -11,33 +11,18 @@ const {
   AgentExecutor,
 } = require("langchain/agents");
 
-const { ChatMessageHistory } = require("langchain/stores/message/in_memory");
 const { RunnableWithMessageHistory } = require("@langchain/core/runnables");
 
-const { getVectoreStore } = require("./chroma-db");
+const { getVectoreStore } = require("../integrations/chromaDB");
 const { ChatOpenAI } = require("@langchain/openai");
 
-const { DynamicStructuredTool } = require("@langchain/community/tools/dynamic");
-
 const { z } = require("zod");
+const { ExtendedRedisChatMemory } = require("../utils/helpers");
+const { redisClient } = require("../integrations/redis");
 
-let agent;
-
-async function initializeAgent() {
-  const vectorStore = await getVectoreStore("test-collection");
+async function initializeAgent(knowledgeBaseName) {
+  const vectorStore = await getVectoreStore(knowledgeBaseName);
   const retriever = vectorStore.asRetriever();
-
-  const meetingSchedulerTool = new DynamicStructuredTool({
-    name: "meeting-scheduler",
-    description: "Call this to schedule a customer's meeting.",
-    schema: z.object({
-      email: z.string().describe("Customer's email."),
-    }),
-    func: ({ email }) => {
-      console.log("new info", email);
-      return "";
-    },
-  });
 
   const informationRetrieverTool = createRetrieverTool(retriever, {
     name: "search-business-information",
@@ -45,7 +30,7 @@ async function initializeAgent() {
       "Search for any information about the business. For any questions about the business, you must use this tool!",
   });
 
-  const tools = [informationRetrieverTool, meetingSchedulerTool];
+  const tools = [informationRetrieverTool];
 
   const chatModel = new ChatOpenAI({
     modelName: "gpt-3.5-turbo-1106",
@@ -56,12 +41,6 @@ async function initializeAgent() {
 
   const systemPromptTemplate =
     SystemMessagePromptTemplate.fromTemplate(systemTemplate);
-
-  //   const systemPromptTemplate = await SystemMessagePromptTemplate.fromTemplate(
-  //     systemTemplate
-  //   ).format({
-  //     context: formattedResponse,
-  //   });
 
   const humanTemplate = "{input}";
   const humanPromptTemplate =
@@ -74,7 +53,7 @@ async function initializeAgent() {
     humanPromptTemplate,
   ]);
 
-  console.log("prompt", prompt);
+  // console.log("prompt", prompt);
 
   const agent = await createOpenAIFunctionsAgent({
     llm: chatModel,
@@ -87,11 +66,13 @@ async function initializeAgent() {
     tools,
   });
 
-  const messageHistory = new ChatMessageHistory();
-
   const agentWithChatHistory = new RunnableWithMessageHistory({
     runnable: agentExecutor,
-    getMessageHistory: (_sessionId) => messageHistory,
+    getMessageHistory: (sessionId) =>
+      new ExtendedRedisChatMemory({
+        sessionId,
+        client: redisClient,
+      }),
     inputMessagesKey: "input",
     historyMessagesKey: "chat_history",
   });
@@ -99,32 +80,26 @@ async function initializeAgent() {
   return agentWithChatHistory;
 }
 
-async function generateCallAgentResponse(
+async function generateChatbotAgentResponse(
   userQuery,
   businessName,
-  customerName,
   assistantName,
-  customerDetails
+  knowledgeBaseName,
+  chatId
 ) {
-  //   const vectorStore = await getVectoreStore("test-collection");
-  //   const similarityResponse = await vectorStore.similaritySearch(userQuery, 2);
+  const agent = await initializeAgent(knowledgeBaseName);
 
-  //   const formattedResponse = formatDocumentsAsString(similarityResponse);
+  // const vectorStore = await getVectoreStore(knowledgeBaseName);
+  // const similarityResponse = await vectorStore
+  //   .asRetriever(3)
+  //   .getRelevantDocuments(businessName);
 
-  if (!agent) {
-    agent = await initializeAgent();
-  }
+  // const formattedBusinessDetails = formatDocumentsAsString(similarityResponse);
 
-  const prompt =
-    "You are an AI assistant designed to talk to customers of the business. Assist customers in various inquiries and engage in informative conversations about business. Provide helpful information, answer queries, and guide customers through specific topics related to the business";
-
-  const isNewCustomer = !customerName || !customerDetails;
   const systemPrompt = createSystemPrompt(
-    false,
     businessName,
-    assistantName,
-    customerName,
-    customerDetails
+    assistantName
+    // formattedBusinessDetails
   );
 
   console.log("executing agent now...");
@@ -132,16 +107,11 @@ async function generateCallAgentResponse(
   const response = await agent.invoke(
     {
       input: userQuery,
-      //   context: formattedResponse,
       systemPrompt,
-      businessName,
-      customerName,
-      assistantName,
-      customerDetails,
     },
     {
       configurable: {
-        sessionId: "foo",
+        sessionId: chatId,
       },
     }
   );
@@ -149,26 +119,11 @@ async function generateCallAgentResponse(
   return response.output;
 }
 
-function createSystemPrompt(
-  isNewCustomer = false,
-  businessName,
-  assistantName,
-  customerName,
-  customerDetails
-) {
-  let prompt;
-
-  if (!isNewCustomer) {
-    prompt = `You are ${businessName}'s AI Assistant, ${assistantName}. You are talking to ${customerName}, a valued customer You will help ${businessName}'s potential and current customers learn more about the business, connect customers to human agents of the business, and schedule customers' meetings with the team. Utilize the information available to personalize the interaction and provide a helpful response. Remember to maintain a friendly and professional tone throughout the conversation. Mostly importantly,provide concise responses, as concise as possible.
-  
-    Here is the customer's information:
-    ${customerDetails}`;
-  } else {
-    prompt = `You are ${businessName}'s AI Assistant, ${assistantName}. You are engaging with a new customer who is eager to learn more about ${businessName}. Your goal is to provide an overview of the business, answer any initial questions, and guide the customer on how to connect with human agents for more personalized assistance. Utilize the information available to create an informative and welcoming introduction. Remember to maintain a friendly and professional tone throughout the conversation. Additionally, focus on capturing the customer's interest and encouraging further exploration of ${businessName}'s offerings. Mostly importantly, provide concise responses, as concise as possible.
-    `;
-  }
+function createSystemPrompt(businessName, assistantName, businessInformation) {
+  let prompt = `You are ${businessName}'s AI Assistant, ${assistantName}. You are actually supposed to talk to customers of the business based on the information that the business has provided you. But in this conversation you are talking to the business itself. You are supposed to engage in insightful and engaging conversations about the business. To any answer question about business or related to the business, you must call the 'search-business-information' tool. Whenever you call this tool retrieve the information you need to answer question, you must first create a contextual query based on the business and the previous conversation and then pass this query to the tool. Don't makup answers from yourself.
+  `;
 
   return prompt;
 }
 
-module.exports = { generateCallAgentResponse };
+module.exports = { generateChatbotAgentResponse };
