@@ -49,7 +49,10 @@ router.post("/", async (req, res) => {
       chatId = chat.id;
     }
 
-    console.log("chatlength", chatLength);
+    // Edit message
+    else if (messageId) {
+      await redisClient.lTrim(`chat-${chatId}`, messageId - 1, -1); // Remove messages onward the message to be edited.
+    }
 
     let assistant = await Assistant.findOne({
       where: {
@@ -78,7 +81,8 @@ router.post("/", async (req, res) => {
       business.businessName,
       assistant.name,
       assistant.knowledgeBaseName,
-      `chat-${chatId}`
+      `chat-${chatId}`,
+      mode
     );
 
     const aiResponse = {
@@ -91,6 +95,21 @@ router.post("/", async (req, res) => {
   } catch (error) {
     console.error("Error getting chatbot agent's response: ", error);
     res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
+});
+
+router.delete("/:id", async (req, res) => {
+  try {
+    await Chat.destroy({
+      where: { id: req.params.id },
+    });
+
+    await redisClient.del(`chat-${req.params.id}`);
+
+    res.status(204).json({ success: true });
+  } catch (error) {
+    console.error("Error deleting chat:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });
 
