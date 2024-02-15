@@ -8,6 +8,7 @@ const { z } = require("zod");
 const Document = require("../models/document.model");
 const Url = require("../models/url.model");
 const { redisClient } = require("../integrations/redis");
+const Chat = require("../models/chat.model");
 
 const userValidationSchema = z.object({
   email: z.string().email(),
@@ -116,6 +117,74 @@ router.get("/:id/teach-chat-messages", async (req, res) => {
     res.status(200).json({ success: true, data: result });
   } catch (error) {
     console.error("Error getting teach chat's messages:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/chats", async (req, res) => {
+  try {
+    let chats = await Chat.findAll({
+      where: { userId: req.params.id },
+    });
+
+    if (chats.length === 0) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    chats = await Promise.all(
+      chats.map(async (chat) => {
+        chat = chat.toJSON();
+
+        let messages = await redisClient.lRange(`chat-${chat.id}`, 0, -1);
+
+        messages = messages.map((item) => {
+          item = JSON.parse(item);
+
+          return {
+            type: item.type,
+            content: item.data.content,
+            timestamp: item.data?.additional_kwargs?.timestamp,
+          };
+        });
+
+        return {
+          title: chat.title,
+          messages,
+        };
+      })
+    );
+
+    res.status(200).json({ success: true, data: chats });
+  } catch (error) {
+    console.error("Error getting chats:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.delete("/:id/chats", async (req, res) => {
+  const userId = req.params.id;
+
+  try {
+    let chats = await Chat.findAll({
+      where: {
+        userId,
+      },
+    });
+
+    await Chat.destroy({
+      where: { userId },
+    });
+
+    const promises = chats.map((chat) => {
+      chat = chat.toJSON();
+      return redisClient.del(`chat-${chat.id}`);
+    });
+
+    await Promise.all(promises);
+
+    res.status(204).json({ success: true });
+  } catch (error) {
+    console.error("Error deleting chat history:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });

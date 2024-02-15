@@ -11,33 +11,18 @@ const {
   AgentExecutor,
 } = require("langchain/agents");
 
-const { ChatMessageHistory } = require("langchain/stores/message/in_memory");
 const { RunnableWithMessageHistory } = require("@langchain/core/runnables");
 
-const { getVectoreStore } = require("./chroma-db");
+const { getVectoreStore } = require("../integrations/chromaDB");
 const { ChatOpenAI } = require("@langchain/openai");
+const { formatDocumentsAsString } = require("langchain/util/document");
 
-const { DynamicStructuredTool } = require("@langchain/community/tools/dynamic");
+const { ExtendedRedisChatMemory } = require("../utils/helpers");
+const { redisClient } = require("../integrations/redis");
 
-const { z } = require("zod");
-
-let agent;
-
-async function initializeAgent() {
-  const vectorStore = await getVectoreStore("test-collection");
+async function initializeAgent(knowledgeBaseName) {
+  const vectorStore = await getVectoreStore(knowledgeBaseName);
   const retriever = vectorStore.asRetriever();
-
-  const meetingSchedulerTool = new DynamicStructuredTool({
-    name: "meeting-scheduler",
-    description: "Call this to schedule a customer's meeting.",
-    schema: z.object({
-      email: z.string().describe("Customer's email."),
-    }),
-    func: ({ email }) => {
-      console.log("new info", email);
-      return "";
-    },
-  });
 
   const informationRetrieverTool = createRetrieverTool(retriever, {
     name: "search-business-information",
@@ -45,7 +30,7 @@ async function initializeAgent() {
       "Search for any information about the business. For any questions about the business, you must use this tool!",
   });
 
-  const tools = [informationRetrieverTool, meetingSchedulerTool];
+  const tools = [informationRetrieverTool];
 
   const chatModel = new ChatOpenAI({
     modelName: "gpt-3.5-turbo-1106",
@@ -56,12 +41,6 @@ async function initializeAgent() {
 
   const systemPromptTemplate =
     SystemMessagePromptTemplate.fromTemplate(systemTemplate);
-
-  //   const systemPromptTemplate = await SystemMessagePromptTemplate.fromTemplate(
-  //     systemTemplate
-  //   ).format({
-  //     context: formattedResponse,
-  //   });
 
   const humanTemplate = "{input}";
   const humanPromptTemplate =
@@ -74,8 +53,6 @@ async function initializeAgent() {
     humanPromptTemplate,
   ]);
 
-  console.log("prompt", prompt);
-
   const agent = await createOpenAIFunctionsAgent({
     llm: chatModel,
     tools,
@@ -87,11 +64,13 @@ async function initializeAgent() {
     tools,
   });
 
-  const messageHistory = new ChatMessageHistory();
-
   const agentWithChatHistory = new RunnableWithMessageHistory({
     runnable: agentExecutor,
-    getMessageHistory: (_sessionId) => messageHistory,
+    getMessageHistory: (sessionId) =>
+      new ExtendedRedisChatMemory({
+        sessionId,
+        client: redisClient,
+      }),
     inputMessagesKey: "input",
     historyMessagesKey: "chat_history",
   });
@@ -99,32 +78,31 @@ async function initializeAgent() {
   return agentWithChatHistory;
 }
 
-async function generateCallAgentResponse(
+async function generateChatbotAgentResponse(
   userQuery,
   businessName,
-  customerName,
   assistantName,
-  customerDetails
+  knowledgeBaseName,
+  chatId,
+  chatMode
 ) {
-  //   const vectorStore = await getVectoreStore("test-collection");
-  //   const similarityResponse = await vectorStore.similaritySearch(userQuery, 2);
+  const agent = await initializeAgent(knowledgeBaseName);
 
-  //   const formattedResponse = formatDocumentsAsString(similarityResponse);
+  const vectorStore = await getVectoreStore(knowledgeBaseName);
+  const similarityResponse = await vectorStore
+    .asRetriever(3)
+    .getRelevantDocuments(businessName);
 
-  if (!agent) {
-    agent = await initializeAgent();
-  }
+  const formattedBusinessDetails = formatDocumentsAsString(similarityResponse);
+  console.log("formattedBusinessDetails", formattedBusinessDetails);
 
-  const prompt =
-    "You are an AI assistant designed to talk to customers of the business. Assist customers in various inquiries and engage in informative conversations about business. Provide helpful information, answer queries, and guide customers through specific topics related to the business";
+  // return formattedBusinessDetails;
 
-  const isNewCustomer = !customerName || !customerDetails;
   const systemPrompt = createSystemPrompt(
-    false,
     businessName,
     assistantName,
-    customerName,
-    customerDetails
+    chatMode,
+    formattedBusinessDetails
   );
 
   console.log("executing agent now...");
@@ -132,16 +110,11 @@ async function generateCallAgentResponse(
   const response = await agent.invoke(
     {
       input: userQuery,
-      //   context: formattedResponse,
       systemPrompt,
-      businessName,
-      customerName,
-      assistantName,
-      customerDetails,
     },
     {
       configurable: {
-        sessionId: "foo",
+        sessionId: chatId,
       },
     }
   );
@@ -150,25 +123,42 @@ async function generateCallAgentResponse(
 }
 
 function createSystemPrompt(
-  isNewCustomer = false,
   businessName,
   assistantName,
-  customerName,
-  customerDetails
+  chatMode,
+  businessDetails
 ) {
   let prompt;
 
-  if (!isNewCustomer) {
-    prompt = `You are ${businessName}'s AI Assistant, ${assistantName}. You are talking to ${customerName}, a valued customer You will help ${businessName}'s potential and current customers learn more about the business, connect customers to human agents of the business, and schedule customers' meetings with the team. Utilize the information available to personalize the interaction and provide a helpful response. Remember to maintain a friendly and professional tone throughout the conversation. Mostly importantly,provide concise responses, as concise as possible.
-  
-    Here is the customer's information:
-    ${customerDetails}`;
+  if (chatMode === "specific") {
+    console.log("chat mode ------", chatMode);
+
+    //   prompt = `You are ${businessName}'s AI Assistant, ${assistantName}. You are actually supposed to talk to customers of the business based on the information that the business has provided you. But in this conversation you are talking to the business itself. You are supposed to engage in insightful and engaging conversations about the business. To any answer question about business or related to the business, you must call the 'search-business-information' tool. Whenever you call this tool retrieve the information you need to answer question, you must first create a contextual query based on the business and the previous conversation and then pass this query to the tool. Don't makup answers from yourself.
+    // `;
+
+    // prompt = `You are ${businessName}'s AI Assistant, ${assistantName}. Your primary function is to engage with customers based solely on the information provided by the business. However, in this conversation, you are communicating directly with the business itself. When responding to inquiries about the business or related topics, you must utilize the 'search-business-information' tool to retrieve relevant data. Ensure that each query to the tool is contextual, incorporating information from the business and the ongoing conversation. Avoid providing answers based on personal judgment, outside knowledge. Remember, you are NOT supposed to engage in conversations on general topics that are not specifically related to the business ${businessName}.  Your role is to facilitate insightful and accurate discussions about the business.`;
+
+    prompt = `You are ${businessName}'s AI Assistant, ${assistantName}. Your purpose is to engage exclusively in discussions related to the business and its operations. When communicating with the business, refrain from discussing general topics or providing information outside the scope of the business's domain. If asked about non-business-related matters, politely inform the user that your function is restricted to discussing only business-related topics. Utilize the 'search-business-information' tool to retrieve relevant data for answering inquiries about the business. Ensure that all responses are focused and pertinent to the business and its activities. If the information returned from 'search-business-information' tool does not make sense and is not related to the business, don't answer the question.
+    
+    
+    Here is some information about the business to help you figure out whether a user question is related to the business or not:
+    ${businessDetails}
+    
+    `;
   } else {
-    prompt = `You are ${businessName}'s AI Assistant, ${assistantName}. You are engaging with a new customer who is eager to learn more about ${businessName}. Your goal is to provide an overview of the business, answer any initial questions, and guide the customer on how to connect with human agents for more personalized assistance. Utilize the information available to create an informative and welcoming introduction. Remember to maintain a friendly and professional tone throughout the conversation. Additionally, focus on capturing the customer's interest and encouraging further exploration of ${businessName}'s offerings. Mostly importantly, provide concise responses, as concise as possible.
+    prompt = `You are ${businessName}'s AI Assistant, ${assistantName}. In this conversation, you're engaging with the business in a more generalized manner, drawing upon both the specific data provided by the business and your broader knowledge base. You can provide insights, recommendations, and information beyond the scope of the business's training data.
+  
+    Your goal is to foster informative and thought-provoking discussions with the business. While you can still utilize the 'search-business-information' tool when necessary, you're also empowered to draw upon your general knowledge to enrich the conversation.
+    
+    Remember to adapt your responses based on the context of the conversation and the needs of the business. Your role is to be a knowledgeable and resourceful partner in dialogue, capable of providing valuable insights and assistance beyond the confines of the business's specific data.
+    
+    
+    Here is some information about the business to help you figure out whether a user question is related to the business or not:
+    ${businessDetails}
     `;
   }
 
   return prompt;
 }
 
-module.exports = { generateCallAgentResponse };
+module.exports = { generateChatbotAgentResponse };
