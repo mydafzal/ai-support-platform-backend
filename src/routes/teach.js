@@ -34,6 +34,9 @@ const {
   generateTrainingAgentResponse,
 } = require("../controllers/trainingAgent.controller");
 const Business = require("../models/business.model");
+const { getBrowser } = require("../integrations/urlScreenshot");
+const { generatePdfThumbnail } = require("../utils/helpers");
+const { STORAGE_BASE_PATH } = require("../utils/constants");
 
 const urlsValidationSchema = z.object({
   urls: z.array(z.string().url()),
@@ -91,6 +94,36 @@ router.post("/urls", async (req, res) => {
     );
 
     await Promise.all(promises);
+
+    const destinationPath = path.join(
+      __dirname,
+      "..",
+      "..",
+      "documents",
+      `${userId}`
+    );
+
+    await fs.mkdir(destinationPath, { recursive: true });
+
+    const browser = getBrowser();
+
+    await Promise.all(
+      addUrlsResult.map(async (url) => {
+        try {
+          const page = await browser.newPage();
+
+          await page.goto(url.link);
+
+          await page.screenshot({
+            path: `${destinationPath}/url-${url.id}-preview.png`,
+          });
+
+          console.log("took screenshot");
+        } catch (error) {
+          console.log("error taking screenshot.", error);
+        }
+      })
+    );
 
     res
       .status(201)
@@ -184,29 +217,27 @@ router.post("/documents", upload.array("files"), async (req, res) => {
 
     console.log("files", req.files);
 
-    const destinationPath = path.join(
-      __dirname,
-      "..",
-      "..",
-      "documents",
-      `${req.body.userId}`
-    );
+    const destinationPath = path.join(STORAGE_BASE_PATH, `${req.body.userId}`);
 
     await fs.mkdir(destinationPath, { recursive: true });
 
     promises = documents.map((file) => {
-      const sourcePath = path.join(
-        __dirname,
-        "..",
-        "..",
-        "documents",
-        file.name
-      );
-
+      const sourcePath = path.join(STORAGE_BASE_PATH, file.name);
       return fs.rename(sourcePath, `${destinationPath}/${file.name}`);
     });
 
     await Promise.all(promises);
+
+    documents = documents.filter((doc) => doc.type === "application/pdf");
+
+    await Promise.all(
+      documents.map((doc) =>
+        generatePdfThumbnail(
+          `${STORAGE_BASE_PATH}/${req.body.userId}/${doc.name}`,
+          `${STORAGE_BASE_PATH}/${req.body.userId}/${doc.name}-preview.png`
+        )
+      )
+    );
 
     res
       .status(201)
