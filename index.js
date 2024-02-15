@@ -6,7 +6,12 @@ const path = require("path");
 require("dotenv").config();
 
 const { connectRedis } = require("./src/integrations/redis");
+const { initializeBrowser } = require("./src/integrations/urlScreenshot");
 connectRedis();
+
+initializeBrowser();
+
+require("./src/models/index");
 
 const app = express();
 
@@ -24,7 +29,8 @@ app.use(cookieParser());
 app.use(cors());
 
 const authRouter = require("./src/routes/auth.route");
-const callRouter = require("./src/routes/call.route");
+const callsRouter = require("./src/routes/call.route");
+const callGroupsRouter = require("./src/routes/callGroup.route");
 const usersRouter = require("./src/routes/user.route");
 const businessesRouter = require("./src/routes/business.route");
 const meetingEventsRouter = require("./src/routes/meetingEvent.route");
@@ -33,12 +39,7 @@ const agentsRouter = require("./src/routes/agent.route");
 const voicesRouter = require("./src/routes/voice.route");
 const downloadsRouter = require("./src/routes/download.route");
 const chatsRouter = require("./src/routes/chat.route");
-
-const {
-  convertTextToSpeech,
-  getElevenLabsVoices,
-} = require("./src/integrations/textToSpeech");
-const { queryCollection } = require("./src/integrations/chromaDB");
+const employeesRouter = require("./src/routes/employee.route");
 
 app.get("/speech", async (req, res) => {
   const response = await convertTextToSpeech(
@@ -52,12 +53,12 @@ app.get("/speech", async (req, res) => {
 });
 
 app.post("/test", async (req, res) => {
-  await queryCollection("5444d469-7033-44f1-ae18-c67081127243");
   res.status(200).json({ response: "" });
 });
 
 app.use("/auth", authRouter);
-app.use("/call", callRouter);
+app.use("/calls", callsRouter);
+app.use("/callGroups", callGroupsRouter);
 app.use("/businesses", businessesRouter);
 app.use("/users", usersRouter);
 app.use("/meeting-events", meetingEventsRouter);
@@ -66,6 +67,7 @@ app.use("/agents", agentsRouter);
 app.use("/voices", voicesRouter);
 app.use("/download", downloadsRouter);
 app.use("/chats", chatsRouter);
+app.use("/employees", employeesRouter);
 
 app.get("/", (req, res) => {
   res.status(200).json({ token: "token 123" });
