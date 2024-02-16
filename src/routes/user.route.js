@@ -12,6 +12,7 @@ const Chat = require("../models/chat.model");
 const Employee = require("../models/employee.model");
 const Call = require("../models/call.model");
 const CallGroup = require("../models/callGroup.model");
+const Integration = require("../models/integration.model");
 
 const userValidationSchema = z.object({
   email: z.string().email(),
@@ -236,6 +237,21 @@ router.get("/:id/callGroups", async (req, res) => {
     res.status(200).json({ success: true, data: callGroups });
   } catch (error) {
     console.error("Error getting calls:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/integrations", async (req, res) => {
+  try {
+    let integrations = await Integration.findAll({
+      where: { userId: req.params.id },
+    });
+
+    integrations = integrations.map((item) => item.toJSON());
+
+    res.status(200).json({ success: true, data: integrations });
+  } catch (error) {
+    console.error("Error getting connected integrations:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });
