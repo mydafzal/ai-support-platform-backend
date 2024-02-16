@@ -17,7 +17,7 @@ const Integration = sequelize.define(
       type: DataTypes.TEXT,
       // allowNull: false,
     },
-    integrationType: {
+    name: {
       type: DataTypes.ENUM("Calendly", "Google-OAuth", "HubSpot"),
       allowNull: false,
     },
