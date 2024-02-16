@@ -9,6 +9,9 @@ const Document = require("../models/document.model");
 const Url = require("../models/url.model");
 const { redisClient } = require("../integrations/redis");
 const Chat = require("../models/chat.model");
+const Employee = require("../models/employee.model");
+const Call = require("../models/call.model");
+const CallGroup = require("../models/callGroup.model");
 
 const userValidationSchema = z.object({
   email: z.string().email(),
@@ -185,6 +188,54 @@ router.delete("/:id/chats", async (req, res) => {
     res.status(204).json({ success: true });
   } catch (error) {
     console.error("Error deleting chat history:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/employees", async (req, res) => {
+  const userId = req.params.id;
+
+  try {
+    let employees = await Employee.findAll({
+      where: {
+        userId,
+      },
+    });
+
+    employees = employees.map((item) => item.toJSON());
+    res.status(200).json({ success: true, data: employees });
+  } catch (error) {
+    console.error("Error getting employees:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/calls", async (req, res) => {
+  try {
+    let calls = await Call.findAll({
+      where: { userId: req.params.id },
+    });
+
+    calls = calls.map((item) => item.toJSON());
+
+    res.status(200).json({ success: true, data: calls });
+  } catch (error) {
+    console.error("Error getting calls:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/callGroups", async (req, res) => {
+  try {
+    let callGroups = await CallGroup.findAll({
+      where: { userId: req.params.id },
+    });
+
+    callGroups = callGroups.map((item) => item.toJSON());
+
+    res.status(200).json({ success: true, data: callGroups });
+  } catch (error) {
+    console.error("Error getting calls:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });

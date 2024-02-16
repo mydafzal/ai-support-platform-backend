@@ -34,6 +34,7 @@ const { formatHubSpotContactDetails } = require("../utils/formatters");
 const Business = require("../models/business.model");
 const Assistant = require("../models/assistant.model");
 const Integration = require("../models/integration.model");
+const Call = require("../models/call.model");
 
 async function handleIncomingCall(request) {
   const VoiceResponse = twilio.twiml.VoiceResponse;
@@ -47,68 +48,79 @@ async function handleIncomingCall(request) {
 
   let business = await Business.findOne({
     where: {
-      twilioNumber: businessPhoneNumber,
+      // twilioNumber: businessPhoneNumber,
+      twilioNumber: "+14697074725",
     },
   });
 
   business = business?.toJSON();
 
-  let assistant = await Assistant.findOne({
-    where: {
-      businessId: business.id,
-    },
+  await Call.create({
+    id: request.body.CallSid,
+    from: request.body.From,
+    userId: business.userId,
   });
-  assistant = assistant?.toJSON();
 
-  let businessDetails = {
-    businessId: business.id,
-    businessName: business.businessName,
-    businessPhoneNumber,
-    voiceId: assistant.voiceId,
-    greetingMessageUrl: assistant.greetingMessageUrl,
-    farewellMessageUrl: assistant.farewellMessageUrl,
-    assistantName: assistant.name,
-    collectionName: assistant.knowledgeBaseName,
-  };
+  // let assistant = await Assistant.findOne({
+  //   where: {
+  //     businessId: business.userId,
+  //   },
+  // });
+  // assistant = assistant?.toJSON();
 
-  let integration = await Integration.findOne({
-    where: {
-      businessId: business.id,
-      integrationType: "HubSpot",
-    },
-  });
-  integration = integration?.toJSON();
+  // let businessDetails = {
+  //   businessId: business.id,
+  //   businessName: business.businessName,
+  //   businessPhoneNumber: business.twilioNumber,
+  //   voiceId: assistant.voiceId,
+  //   greetingMessageUrl: assistant.greetingMessageUrl,
+  //   farewellMessageUrl: assistant.farewellMessageUrl,
+  //   assistantName: assistant.name,
+  //   collectionName: assistant.knowledgeBaseName,
+  //   user: business.userId,
+  // };
 
-  const contact = await getContactByPhoneNumber(
-    integration.accessToken,
-    integration.refreshToken,
-    integration.expirationTime,
-    customerPhoneNumber,
-    business.id
+  // let integration = await Integration.findOne({
+  //   where: {
+  //     businessId: business.id,
+  //     integrationType: "HubSpot",
+  //   },
+  // });
+  // integration = integration?.toJSON();
+
+  // const contact = await getContactByPhoneNumber(
+  //   integration.accessToken,
+  //   integration.refreshToken,
+  //   integration.expirationTime,
+  //   customerPhoneNumber,
+  //   business.id
+  // );
+
+  // const formattedCustomerDetails = contact
+  //   ? formatHubSpotContactDetails(contact)
+  //   : "";
+
+  // storeCallData(customerPhoneNumber, {
+  //   ...businessDetails,
+  //   customerDetails: formattedCustomerDetails,
+  //   customerName: contact
+  //     ? `${contact.properties.firstname} ${contact.properties.lastname}`
+  //     : "",
+  //   callId,
+  // });
+
+  // twiml.play(businessDetails.greetingMessageUrl);
+  twiml.play(
+    "https://psychix.s3.amazonaws.com/ai-bot/customer-1/greetingMessage.mp3"
   );
 
-  const formattedCustomerDetails = contact
-    ? formatHubSpotContactDetails(contact)
-    : "";
-
-  storeCallData(customerPhoneNumber, {
-    ...businessDetails,
-    customerDetails: formattedCustomerDetails,
-    customerName: contact
-      ? `${contact.properties.firstname} ${contact.properties.lastname}`
-      : "",
-    callId,
-  });
-
-  twiml.play(businessDetails.greetingMessageUrl);
-
-  twiml.gather({
-    speechTimeout: "auto",
-    speechModel: "experimental_conversations",
-    input: "speech",
-    action: `${BASE_URL}/call/speech-input`,
-    actionOnEmptyResult: true,
-  });
+  // twiml.gather({
+  //   speechTimeout: "auto",
+  //   speechModel: "experimental_conversations",
+  //   input: "speech",
+  //   action: `${BASE_URL}/call/speech-input`,
+  //   actionOnEmptyResult: true,
+  // });
 
   return twiml.toString();
 }
@@ -337,7 +349,20 @@ async function checkVerification(code, phoneNumber) {
   return isVerified;
 }
 
-function handleCallDisconnect(request) {
+async function handleCallDisconnect(request) {
+  console.log("call disconnect--------", request.body);
+
+  await Call.update(
+    {
+      duration: request.body.Duration,
+    },
+    {
+      where: {
+        id: request.body.CallSid,
+      },
+    }
+  );
+
   const customerPhoneNumber = request.body.From;
   deleteCallData(customerPhoneNumber);
 }

@@ -6,6 +6,9 @@ const { StringOutputParser } = require("@langchain/core/output_parsers");
 const { ChatOpenAI } = require("@langchain/openai");
 const { PromptTemplate } = require("@langchain/core/prompts");
 
+const pdf = require("pdf-thumbnail");
+const fs = require("fs/promises");
+
 function generateFilename(fileExtension) {
   const uniqueId = uuidv4();
 
@@ -51,8 +54,20 @@ async function generateChatTitle(userQuery) {
   return chatTitle;
 }
 
+async function generatePdfThumbnail(sourceFilePath, thumbnailPath) {
+  const pdfBuffer = await fs.readFile(sourceFilePath);
+
+  pdf(pdfBuffer)
+    .then(async (data) => {
+      console.log("PDF preview generated.");
+      await fs.writeFile(thumbnailPath, data);
+    })
+    .catch((err) => console.log("Error generating pdf preview", err));
+}
+
 module.exports = {
   generateFilename,
   ExtendedRedisChatMemory,
   generateChatTitle,
+  generatePdfThumbnail,
 };
