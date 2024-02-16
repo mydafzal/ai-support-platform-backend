@@ -1,5 +1,7 @@
 const { google } = require("googleapis");
 const oauthCredentials = require("../../credentials.json");
+const moment = require("moment");
+const Integration = require("../models/integration.model");
 
 const SCOPES = ["https://www.googleapis.com/auth/calendar.events"];
 
@@ -17,48 +19,67 @@ function generateGoogleOAuthUrl() {
   });
 }
 
-async function storeGoogleOAuthAccessToken(code) {
-  try {
-    let credentials = await getTokenAsync(code);
-    console.log("credentials", credentials);
+// async function getGoogleOAuthAccessToken(userId) {
+//   try {
+//     // Get credentials from database based on userId...
+//     let credentials = {
+//       access_token: "",
+//       refresh_token: "",
+//       scope: "https://www.googleapis.com/auth/calendar.events",
+//       token_type: "Bearer",
+//       expiry_date: 1703574184543,
+//     };
 
-    return credentials;
-  } catch (error) {
-    console.log("storeAccessToken error", error);
-  }
-}
+//     oAuth2Client.setCredentials(credentials);
 
-async function getGoogleOAuthAccessToken(userId) {
-  try {
-    // Get credentials from database based on userId...
-    let credentials = {
-      access_token: "",
-      refresh_token: "",
-      scope: "https://www.googleapis.com/auth/calendar.events",
-      token_type: "Bearer",
-      expiry_date: 1703574184543,
-    };
+//     if (oAuth2Client.isTokenExpiring()) {
+//       refreshAccessToken(userId);
+//     }
 
-    oAuth2Client.setCredentials(credentials);
-
-    if (oAuth2Client.isTokenExpiring()) {
-      refreshAccessToken(userId);
-    }
-
-    return oAuth2Client;
-  } catch (error) {
-    console.error("getAccessToken error:", error);
-  }
-}
+//     return oAuth2Client;
+//   } catch (error) {
+//     console.error("getAccessToken error:", error);
+//   }
+// }
 
 async function getTokenAsync(code) {
   return new Promise((resolve, reject) => {
     oAuth2Client.getToken(code, (err, token) => {
       if (err) {
-        console.error("Error retrieving access token", err);
+        console.error("Error retrieving google oauth access token", err);
         reject(err);
       } else {
         resolve(token);
+      }
+    });
+  });
+}
+
+async function getGoogleOAuthAccessToken(code) {
+  return new Promise((resolve, reject) => {
+    oAuth2Client.getToken(code, (err, token) => {
+      if (err) {
+        console.error("Error retrieving google oauth access token", err);
+        reject(err);
+      } else {
+        console.log("expiry date", token.expiry_date);
+
+        const currentTime = moment();
+
+        console.log("current time", currentTime);
+
+        const futureTime = moment(token.expiry_date);
+        const expiresIn = futureTime.diff(currentTime, "seconds");
+
+        console.log("expiresIn", expiresIn);
+
+        const result = {
+          accessToken: token.access_token,
+          refreshToken: token.refresh_token,
+          expiresIn: expiresIn,
+        };
+
+        resolve(result);
       }
     });
   });
@@ -76,7 +97,19 @@ async function refreshAccessToken(userId) {
       expiry_date: oAuth2Client.credentials.expiry_date,
     });
 
-    // Store update credentials to database based on userId
+    await Integration.update(
+      {
+        accessToken: newToken.token,
+        refreshToken: oAuth2Client.credentials.refresh_token,
+        expirationTime: `${new Date(oAuth2Client.credentials.expiry_date)}`,
+      },
+      {
+        where: {
+          userId,
+        },
+      }
+    );
+
     console.log("Access token refreshed.");
   } catch (err) {
     console.error("Error refreshing access token:", err.message);
@@ -86,5 +119,4 @@ async function refreshAccessToken(userId) {
 module.exports = {
   generateGoogleOAuthUrl,
   getGoogleOAuthAccessToken,
-  storeGoogleOAuthAccessToken,
 };

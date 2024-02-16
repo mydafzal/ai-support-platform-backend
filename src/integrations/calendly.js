@@ -134,8 +134,14 @@ async function getCalendlyAccessToken(code, redirecUri) {
       body: encodedParams,
     });
 
-    const data = await response.json();
+    let data = await response.json();
     console.log("getCalendlyAccessToken - response", data);
+
+    data = {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      expiresIn: data.expires_in,
+    };
 
     return data;
   } catch (error) {
