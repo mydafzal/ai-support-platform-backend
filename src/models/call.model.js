@@ -20,6 +20,7 @@ const Call = sequelize.define(
     },
     status: {
       type: DataTypes.ENUM("Redirected", "Bot-handled"),
+      defaultValue: "Bot-handled",
     },
     redirectedTo: {
       type: DataTypes.STRING,

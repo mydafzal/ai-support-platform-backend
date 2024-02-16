@@ -41,87 +41,94 @@ async function handleIncomingCall(request) {
   const twiml = new VoiceResponse();
 
   const customerPhoneNumber = request.body.From;
-  const businessPhoneNumber = request.body.To;
+  const businessPhoneNumber = request.body.To || "+14697074725";
   const callId = request.body.CallSid;
 
   console.log("request.body.To", request.body);
 
+  const call = await client.calls.get(request.body.CallSid).fetch();
+
+  console.log("call instance", call);
+
   let business = await Business.findOne({
     where: {
-      // twilioNumber: businessPhoneNumber,
-      twilioNumber: "+14697074725",
+      twilioNumber: businessPhoneNumber,
     },
   });
 
   business = business?.toJSON();
 
   await Call.create({
-    id: request.body.CallSid,
+    id: callId,
     from: request.body.From,
     userId: business.userId,
   });
 
-  // let assistant = await Assistant.findOne({
-  //   where: {
-  //     businessId: business.userId,
-  //   },
-  // });
-  // assistant = assistant?.toJSON();
+  let assistant = await Assistant.findOne({
+    where: {
+      userId: business.userId,
+    },
+  });
 
-  // let businessDetails = {
-  //   businessId: business.id,
-  //   businessName: business.businessName,
-  //   businessPhoneNumber: business.twilioNumber,
-  //   voiceId: assistant.voiceId,
-  //   greetingMessageUrl: assistant.greetingMessageUrl,
-  //   farewellMessageUrl: assistant.farewellMessageUrl,
-  //   assistantName: assistant.name,
-  //   collectionName: assistant.knowledgeBaseName,
-  //   user: business.userId,
-  // };
+  assistant = assistant?.toJSON();
 
-  // let integration = await Integration.findOne({
-  //   where: {
-  //     businessId: business.id,
-  //     integrationType: "HubSpot",
-  //   },
-  // });
-  // integration = integration?.toJSON();
+  let integration = await Integration.findOne({
+    where: {
+      userId: business.userId,
+      integrationType: "HubSpot",
+    },
+  });
 
-  // const contact = await getContactByPhoneNumber(
-  //   integration.accessToken,
-  //   integration.refreshToken,
-  //   integration.expirationTime,
-  //   customerPhoneNumber,
-  //   business.id
-  // );
+  integration = integration?.toJSON();
 
-  // const formattedCustomerDetails = contact
-  //   ? formatHubSpotContactDetails(contact)
-  //   : "";
-
-  // storeCallData(customerPhoneNumber, {
-  //   ...businessDetails,
-  //   customerDetails: formattedCustomerDetails,
-  //   customerName: contact
-  //     ? `${contact.properties.firstname} ${contact.properties.lastname}`
-  //     : "",
-  //   callId,
-  // });
-
-  // twiml.play(businessDetails.greetingMessageUrl);
-  twiml.play(
-    "https://psychix.s3.amazonaws.com/ai-bot/customer-1/greetingMessage.mp3"
+  const contact = await getContactByPhoneNumber(
+    integration.accessToken,
+    integration.refreshToken,
+    integration.expirationTime,
+    customerPhoneNumber,
+    business.userId
   );
 
-  // twiml.gather({
-  //   speechTimeout: "auto",
-  //   speechModel: "experimental_conversations",
-  //   input: "speech",
-  //   action: `${BASE_URL}/call/speech-input`,
-  //   actionOnEmptyResult: true,
-  // });
+  const formattedCustomerDetails = contact
+    ? formatHubSpotContactDetails(contact)
+    : "";
 
+  let callDetails = {
+    businessName: business.businessName,
+    businessPhoneNumber: business.twilioNumber,
+    voiceId: assistant.voiceId,
+    greetingMessageUrl: assistant.greetingMessageUrl,
+    farewellMessageUrl: assistant.farewellMessageUrl,
+    assistantName: assistant.name,
+    collectionName: assistant.knowledgeBaseName,
+    userId: business.userId,
+    callId: callId,
+    customerDetails: formattedCustomerDetails,
+    customerName: contact
+      ? `${contact.properties.firstname} ${contact.properties.lastname}`
+      : "",
+  };
+
+  storeCallData(callId, callDetails);
+
+  // twiml.play(businessDetails.greetingMessageUrl);
+  // twiml.play(
+  //   "https://psychix.s3.amazonaws.com/ai-bot/customer-1/greetingMessage.mp3"
+  // );
+
+  twiml.play(
+    "https://c06d-119-73-113-87.ngrok-free.app/public/greeting-message-adam.mp3"
+  );
+
+  twiml.gather({
+    speechTimeout: "auto",
+    speechModel: "experimental_conversations",
+    input: "speech",
+    action: `${BASE_URL}/calls/speech-input`,
+    actionOnEmptyResult: true,
+  });
+
+  startCallRecording(callId);
   return twiml.toString();
 }
 
@@ -144,88 +151,94 @@ async function handleSpeechInput(request) {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
-  const customerPhoneNumber = request.body.From;
-
   const voiceInput = request.body.SpeechResult;
   console.log("voice input", voiceInput);
 
-  const callData = await getCallData(customerPhoneNumber);
+  // const customerPhoneNumber = request.body.From;
 
-  let {
-    businessId,
-    farewellMessageUrl,
-    phoneNumbers,
-    businessName,
-    customerName,
-    assistantName,
-    customerDetails,
-    voiceId,
-    callId,
-    collectionName,
-  } = callData;
+  // const voiceInput = request.body.SpeechResult;
+  // console.log("voice input", voiceInput);
 
-  if (!voiceInput) {
-    twiml.play(farewellMessageUrl);
-    twiml.hangup();
+  // const callData = await getCallData(customerPhoneNumber);
 
-    deleteCallData(customerPhoneNumber);
+  // let {
+  //   businessId,
+  //   farewellMessageUrl,
+  //   phoneNumbers,
+  //   businessName,
+  //   customerName,
+  //   assistantName,
+  //   customerDetails,
+  //   voiceId,
+  //   callId,
+  //   collectionName,
+  // } = callData;
 
-    return twiml.toString();
-  }
+  // if (!voiceInput) {
+  //   twiml.play(farewellMessageUrl);
+  //   twiml.hangup();
 
-  let aiResponse = await generateCallAnsweringAgentResponse(
-    voiceInput,
-    businessName,
-    customerName,
-    assistantName,
-    customerDetails,
-    callId,
-    collectionName
+  //   deleteCallData(customerPhoneNumber);
+
+  //   return twiml.toString();
+  // }
+
+  // let aiResponse = await generateCallAnsweringAgentResponse(
+  //   voiceInput,
+  //   businessName,
+  //   customerName,
+  //   assistantName,
+  //   customerDetails,
+  //   callId,
+  //   collectionName
+  // );
+
+  // console.log("aiResponse", aiResponse);
+
+  // let shouldRedirectCall = false;
+  // if (aiResponse === "connect_to_human") {
+  //   aiResponse = "You are now being connected to a human agent.";
+  //   shouldRedirectCall = true;
+  // }
+
+  // const cleanedAiResponse = aiResponse.replace(/^\w+:\s*/i, "").trim();
+
+  // const generatedSpeechFile = await convertTextToSpeech(
+  //   cleanedAiResponse,
+  //   voiceId
+  // );
+
+  // const textToSpeechFileURL = await uploadToS3(generatedSpeechFile, businessId);
+
+  // console.log("cleanedAiResponse", cleanedAiResponse);
+  // console.log("textToSpeechFileURL", textToSpeechFileURL);
+
+  // twiml.play(textToSpeechFileURL);
+
+  // if (shouldRedirectCall && phoneNumbers?.length > 0) {
+  //   console.log("Dialing the human agent's number...");
+
+  //   twiml
+  //     .dial({
+  //       callerId: phoneNumbers[0],
+  //       action: `${BASE_URL}/call/redirected-call-disconnect`,
+  //       method: "POST",
+  //     })
+  //     .number(phoneNumbers[0]);
+  // } else {
+  //   console.log("redirect true - gather -speech");
+
+  //   twiml.redirect(
+  //     {
+  //       method: "POST",
+  //     },
+  //     `${BASE_URL}/call/gather-speech`
+  //   );
+  // }
+
+  twiml.play(
+    "https://psychix.s3.amazonaws.com/ai-bot/customer-1/farewellMessage.mp3"
   );
-
-  console.log("aiResponse", aiResponse);
-
-  let shouldRedirectCall = false;
-  if (aiResponse === "connect_to_human") {
-    aiResponse = "You are now being connected to a human agent.";
-    shouldRedirectCall = true;
-  }
-
-  const cleanedAiResponse = aiResponse.replace(/^\w+:\s*/i, "").trim();
-
-  const generatedSpeechFile = await convertTextToSpeech(
-    cleanedAiResponse,
-    voiceId
-  );
-
-  const textToSpeechFileURL = await uploadToS3(generatedSpeechFile, businessId);
-
-  console.log("cleanedAiResponse", cleanedAiResponse);
-  console.log("textToSpeechFileURL", textToSpeechFileURL);
-
-  twiml.play(textToSpeechFileURL);
-
-  if (shouldRedirectCall && phoneNumbers?.length > 0) {
-    console.log("Dialing the human agent's number...");
-
-    twiml
-      .dial({
-        callerId: phoneNumbers[0],
-        action: `${BASE_URL}/call/redirected-call-disconnect`,
-        method: "POST",
-      })
-      .number(phoneNumbers[0]);
-  } else {
-    console.log("redirect true - gather -speech");
-
-    twiml.redirect(
-      {
-        method: "POST",
-      },
-      `${BASE_URL}/call/gather-speech`
-    );
-  }
-
   return twiml.toString();
 }
 
@@ -367,6 +380,40 @@ async function handleCallDisconnect(request) {
   deleteCallData(customerPhoneNumber);
 }
 
+async function startCallRecording(callSid) {
+  let tries = 0;
+
+  try {
+    const recording = await client.calls(callSid).recordings.create({
+      recordingStatusCallback: `${process.env.BASE_URL}/calls/recording`,
+    });
+
+    console.log("started call recording", recording.sid);
+  } catch (error) {
+    console.log("startCallRecording error - tries", tries);
+    if (tries < 2) {
+      startCallRecording(callSid);
+    }
+  }
+}
+
+async function handleCompletedRecording(request) {
+  const { CallSid, RecordingUrl } = request.body;
+
+  await Call.update(
+    {
+      recordingUrl: RecordingUrl,
+    },
+    {
+      where: {
+        id: CallSid,
+      },
+    }
+  );
+
+  console.log("saved call recording");
+}
+
 module.exports = {
   handleIncomingCall,
   handleSpeechInput,
@@ -379,4 +426,5 @@ module.exports = {
   createVerification,
   createVerifyService,
   handleCallDisconnect,
+  handleCompletedRecording,
 };
