@@ -23,9 +23,10 @@ const app = express();
 //     etag: false,
 //   })
 // );
+
 app.use(
-  "/public",
-  express.static(path.join(__dirname, "public"), {
+  "/data",
+  express.static(path.join(__dirname, "data"), {
     maxAge: 0,
     etag: false,
   })

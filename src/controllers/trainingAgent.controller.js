@@ -162,16 +162,11 @@ async function generateTrainingAgentResponse(
     agent = await initializeAgent();
   }
 
-  console.log("threadId", threadId);
-  // console.log("relevantInformation", relevantInformation);
-  console.log("executing agent now...");
-
   const vectorStore = await getVectoreStore(knowledgeBaseName);
   const data = await vectorStore.similaritySearch(businessName);
-
   const businessInformation = constructBusinessSummary(data);
 
-  console.log("businessInformation", businessInformation);
+  console.log("executing agent now...");
 
   const response = await agent.invoke(
     {
