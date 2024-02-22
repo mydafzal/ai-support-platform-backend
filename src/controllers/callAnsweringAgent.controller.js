@@ -5,22 +5,22 @@ const {
   SystemMessagePromptTemplate,
   HumanMessagePromptTemplate,
 } = require("@langchain/core/prompts");
+
 const {
   createOpenAIFunctionsAgent,
   AgentExecutor,
 } = require("langchain/agents");
 
-const { ChatMessageHistory } = require("langchain/stores/message/in_memory");
 const { RunnableWithMessageHistory } = require("@langchain/core/runnables");
 
 const { getVectoreStore } = require("../integrations/chromaDB");
 const { ChatOpenAI } = require("@langchain/openai");
-
 const { DynamicStructuredTool } = require("@langchain/community/tools/dynamic");
 
 const { z } = require("zod");
 
-let agent;
+const { ExtendedRedisChatMemory } = require("../utils/helpers");
+const { redisClient } = require("../integrations/redis");
 
 async function initializeAgent(collectionName) {
   const vectorStore = await getVectoreStore(collectionName);
@@ -73,8 +73,6 @@ async function initializeAgent(collectionName) {
     humanPromptTemplate,
   ]);
 
-  console.log("prompt", prompt);
-
   const agent = await createOpenAIFunctionsAgent({
     llm: chatModel,
     tools,
@@ -86,11 +84,13 @@ async function initializeAgent(collectionName) {
     tools,
   });
 
-  const messageHistory = new ChatMessageHistory();
-
   const agentWithChatHistory = new RunnableWithMessageHistory({
     runnable: agentExecutor,
-    getMessageHistory: (_sessionId) => messageHistory,
+    getMessageHistory: (sessionId) =>
+      new ExtendedRedisChatMemory({
+        sessionId,
+        client: redisClient,
+      }),
     inputMessagesKey: "input",
     historyMessagesKey: "chat_history",
   });
@@ -116,8 +116,6 @@ async function generateCallAnsweringAgentResponse(
   // }
 
   const agent = await initializeAgent(collectionName);
-  console.log("customerName", customerName);
-  console.log("customerDetails", customerDetails);
 
   const systemPrompt = createSystemPrompt(
     businessName,
@@ -137,7 +135,7 @@ async function generateCallAnsweringAgentResponse(
     },
     {
       configurable: {
-        sessionId: callId,
+        sessionId: `transcription-${callId}`,
       },
     }
   );
@@ -149,23 +147,23 @@ function createSystemPrompt(
   businessName,
   assistantName,
   customerName,
-  customerDetails,
-  collectionName
+  customerDetails
 ) {
   let prompt;
   let isNewCustomer = customerName ? false : true;
 
   if (!isNewCustomer) {
-    prompt = `You are ${businessName}'s AI Assistant, ${assistantName}. You are talking to ${customerName}, a valued customer. You will help ${businessName}'s potential and current customers learn more about the business, connect customers to human agents of the business, and schedule customers' meetings with the team. Utilize the information available to personalize the interaction and provide a helpful response. Remember to maintain a friendly and professional tone throughout the conversation. Mostly importantly,provide concise responses, as concise as possible.
+    prompt = `You are ${businessName}'s AI Assistant, ${assistantName}. You are talking to ${customerName}, a valued customer on a phone call. You will help ${businessName}'s potential and current customers learn more about the business, connect customers to human agents of the business, and schedule customers' meetings with the team. Remember to maintain a friendly and professional tone throughout the conversation. Mostly importantly, provide EXTREMELY CONCISE responses because you are a phone call. Utilize the 'search-business-information' tool to retrieve relevant data for answering inquiries about the business. Ensure that all responses are focused and pertinent to the business and its activities. If the information returned from 'search-business-information' tool does not make sense and is not related to the business, don't answer the question.
 
-    Here is the name of the collection from which to retrieve information: ${collectionName}
-  
     Here is the customer's information:
-    ${customerDetails}`;
+    ${customerDetails}
+    
+    When you call 'search-business-informaton' tool, make sure to pass a contextual query based on information you have about the business and the previous conversation history .
+    `;
   } else {
-    prompt = `You are ${businessName}'s AI Assistant, ${assistantName}. You are engaging with a new customer who is eager to learn more about ${businessName}. Your goal is to provide an overview of the business, answer any initial questions, and guide the customer on how to connect with human agents for more personalized assistance. Utilize the information available to create an informative and welcoming introduction. Remember to maintain a friendly and professional tone throughout the conversation. Additionally, focus on capturing the customer's interest and encouraging further exploration of ${businessName}'s offerings. Mostly importantly, provide concise responses, as concise as possible.
+    prompt = `You are ${businessName}'s AI Assistant, ${assistantName}. You are engaging with a new customer who is eager to learn more about ${businessName}. Your goal is to provide an overview of the business, answer any initial questions, and guide the customer on how to connect with human agents for more personalized assistance. Utilize the information available to create an informative and welcoming introduction. Remember to maintain a friendly and professional tone throughout the conversation. Additionally, focus on capturing the customer's interest and encouraging further exploration of ${businessName}'s offerings. Mostly importantly, provide EXTREMELY CONCISE responses because you are a phone call. Utilize the 'search-business-information' tool to retrieve relevant data for answering inquiries about the business. Ensure that all responses are focused and pertinent to the business and its activities. If the information returned from 'search-business-information' tool does not make sense and is not related to the business, don't answer the question.
 
-    Here is the name of the collection from which to retrieve information: ${collectionName}
+    When you call 'search-business-informaton' tool, make sure to pass a contextual query based on information you have about the business and the previous conversation history .
     `;
   }
 
