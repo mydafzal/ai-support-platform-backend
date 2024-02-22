@@ -1,7 +1,6 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../loaders/db");
 const User = require("./user.model");
-const CallGroup = require("./callGroup.model");
 
 const Call = sequelize.define(
   "Call",
@@ -27,9 +26,6 @@ const Call = sequelize.define(
     },
     recordingUrl: {
       type: DataTypes.STRING,
-    },
-    transcription: {
-      type: DataTypes.TEXT("long"),
     },
   },
   {}
