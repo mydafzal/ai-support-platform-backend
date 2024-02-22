@@ -11,9 +11,14 @@ const { uploadToS3 } = require("../integrations/s3Storage");
 const { convertTextToSpeech } = require("../integrations/textToSpeech");
 
 const router = require("express").Router();
+const fs = require("fs/promises");
 
 const { v4: uuidv4 } = require("uuid");
 const { z } = require("zod");
+const {
+  AUDIO_FILES_BASE_PATH,
+  AUDIO_FILES_BASE_URL,
+} = require("../utils/constants");
 
 const businessDetailsValidationSchema = z.object({
   userId: z.number(),
@@ -72,17 +77,33 @@ router.post("/", async (req, res) => {
       convertTextToSpeech(farewellMessage, voiceId),
     ];
 
-    const [greetingMessageSpeech, farewellMessageSpeech] = await Promise.all(
+    let [greetingMessageSpeech, farewellMessageSpeech] = await Promise.all(
       promises
     );
 
+    greetingMessageSpeech = Buffer.from(greetingMessageSpeech);
+    farewellMessageSpeech = Buffer.from(farewellMessageSpeech);
+
+    const businessDataDirectoryPath = `${AUDIO_FILES_BASE_PATH}/business-${userId}`;
+    await fs.mkdir(businessDataDirectoryPath, {
+      recursive: true,
+    });
+
     promises = [
-      uploadToS3(greetingMessageSpeech, user.id, "greetingMessage.mp3"),
-      uploadToS3(farewellMessageSpeech, user.id, "farewellMessage.mp3"),
+      fs.writeFile(
+        `${businessDataDirectoryPath}/greetingMessage.mp3`,
+        greetingMessageSpeech
+      ),
+      fs.writeFile(
+        `${businessDataDirectoryPath}/farewellMessage.mp3`,
+        farewellMessageSpeech
+      ),
     ];
-    const [greetingMessageUrl, farewellMessageUrl] = await Promise.all(
-      promises
-    );
+
+    await Promise.all(promises);
+
+    const greetingMessageUrl = `${AUDIO_FILES_BASE_URL}/business-${userId}/greetingMessage.mp3`;
+    const farewellMessageUrl = `${AUDIO_FILES_BASE_URL}/business-${userId}/farewellMessage.mp3`;
 
     const assistant = await Assistant.create({
       userId: user.id,
