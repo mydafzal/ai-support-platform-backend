@@ -7,7 +7,6 @@ const Assistant = require("../models/assistant.model");
 const Business = require("../models/business.model");
 const User = require("../models/user.model");
 
-const { uploadToS3 } = require("../integrations/s3Storage");
 const { convertTextToSpeech } = require("../integrations/textToSpeech");
 
 const router = require("express").Router();

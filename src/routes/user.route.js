@@ -13,13 +13,15 @@ const Employee = require("../models/employee.model");
 const Call = require("../models/call.model");
 const CallGroup = require("../models/callGroup.model");
 const Integration = require("../models/integration.model");
+const { sendEmail } = require("../integrations/nodemailer");
+const { generateEmailVerificationToken } = require("../utils/helpers");
 
 const userValidationSchema = z.object({
   email: z.string().email(),
-  password: z.string().optional(),
+  password: z.string().min(4).optional(),
   externalType: z.enum(["Google", "Apple", ""]).optional(),
   externalId: z.string().optional(),
-  name: z.string().optional(),
+  name: z.string(),
 });
 
 router.post("/", async (req, res) => {
@@ -49,17 +51,44 @@ router.post("/", async (req, res) => {
         .json({ success: false, message: "Email already exists." });
     }
 
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
+    let hashedPassword;
+    if (password?.length > 0) {
+      hashedPassword = await bcrypt.hash(password, saltRounds);
+    }
 
-    user = await User.create({
+    await User.create({
       name,
       email,
-      password: hashedPassword,
+      password: hashedPassword || null,
       externalId: externalId || null,
       externalType: externalType || null,
+      emailVerificationToken: generateEmailVerificationToken(),
     });
 
-    res.status(201).json({ success: true, data: user.toJSON() });
+    user = await User.findOne({
+      where: {
+        email,
+      },
+      attributes: {
+        exclude: [
+          "password",
+          "externalId",
+          "emailVerificationToken",
+          "resetPasswordToken",
+        ],
+      },
+    });
+
+    user = user.toJSON();
+
+    const emailLink = `${req.hostname}/email-verification?token=${user.emailVerificationToken}`;
+    await sendEmail(user.email, emailLink);
+
+    res.status(201).json({
+      success: true,
+      data: user,
+      message: "Email verification link sent.",
+    });
   } catch (error) {
     console.error("Error adding user:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
