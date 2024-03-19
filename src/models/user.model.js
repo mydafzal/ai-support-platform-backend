@@ -19,9 +19,6 @@ const User = sequelize.define(
     password: {
       type: DataTypes.STRING,
     },
-    externalId: {
-      type: DataTypes.STRING,
-    },
     externalType: {
       type: DataTypes.ENUM("Google", "Apple"),
     },
