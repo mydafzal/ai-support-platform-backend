@@ -3,6 +3,7 @@ const User = require("../models/user.model");
 
 const bcrypt = require("bcrypt");
 const saltRounds = 10;
+const jwt = require("jsonwebtoken");
 
 const { z } = require("zod");
 const Document = require("../models/document.model");
@@ -14,18 +15,15 @@ const Call = require("../models/call.model");
 const CallGroup = require("../models/callGroup.model");
 const Integration = require("../models/integration.model");
 const { sendEmail } = require("../integrations/nodemailer");
-const { generateEmailVerificationToken } = require("../utils/helpers");
 
 const userValidationSchema = z.object({
   email: z.string().email(),
   password: z.string().min(4).optional(),
-  externalType: z.enum(["Google", "Apple", ""]).optional(),
-  externalId: z.string().optional(),
   name: z.string(),
 });
 
 router.post("/", async (req, res) => {
-  const { name, email, password, externalId, externalType } = req.body;
+  const { name, email, password } = req.body;
   console.log("add user", req.body);
 
   try {
@@ -59,10 +57,7 @@ router.post("/", async (req, res) => {
     await User.create({
       name,
       email,
-      password: hashedPassword || null,
-      externalId: externalId || null,
-      externalType: externalType || null,
-      emailVerificationToken: generateEmailVerificationToken(),
+      password: hashedPassword,
     });
 
     user = await User.findOne({
@@ -70,23 +65,29 @@ router.post("/", async (req, res) => {
         email,
       },
       attributes: {
-        exclude: [
-          "password",
-          "externalId",
-          "emailVerificationToken",
-          "resetPasswordToken",
-        ],
+        exclude: ["password", "emailVerificationToken", "resetPasswordToken"],
       },
     });
+
+    const emailVerificationToken = jwt.sign(
+      { userId: user.toJSON().id },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+
+    user.emailVerificationToken = emailVerificationToken;
+    await user.save();
 
     user = user.toJSON();
 
     const emailLink = `${req.hostname}/email-verification?token=${user.emailVerificationToken}`;
     await sendEmail(user.email, emailLink);
 
+    const token = jwt.sign({ ...user }, process.env.JWT_SECRET);
+
     res.status(201).json({
       success: true,
-      data: user,
+      data: token,
       message: "Email verification link sent.",
     });
   } catch (error) {
