@@ -12,6 +12,8 @@ const { convertTextToSpeech } = require("../integrations/textToSpeech");
 const router = require("express").Router();
 const fs = require("fs/promises");
 
+const jwt = require("jsonwebtoken");
+
 const { v4: uuidv4 } = require("uuid");
 const { z } = require("zod");
 const {
@@ -50,7 +52,11 @@ router.post("/", async (req, res) => {
       farewellMessage,
     } = req.body;
 
-    let user = await User.findByPk(userId);
+    let user = await User.findByPk(userId, {
+      attributes: {
+        exclude: ["password", "emailVerificationToken", "resetPasswordToken"],
+      },
+    });
 
     if (!user?.toJSON()?.email) {
       return res.status(404).json({
@@ -67,6 +73,10 @@ router.post("/", async (req, res) => {
       twilioNumber: "+14697074725",
       verifyServiceId: "",
       userId: user.id,
+    });
+
+    business = await Business.findByPk(business.toJSON().id, {
+      attributes: { exclude: ["userId"] },
     });
 
     business = business.toJSON();
@@ -104,7 +114,7 @@ router.post("/", async (req, res) => {
     const greetingMessageUrl = `${AUDIO_FILES_BASE_URL}/business-${userId}/greetingMessage.mp3`;
     const farewellMessageUrl = `${AUDIO_FILES_BASE_URL}/business-${userId}/farewellMessage.mp3`;
 
-    const assistant = await Assistant.create({
+    let assistant = await Assistant.create({
       userId: user.id,
       name: assistantName,
       voiceName,
@@ -114,7 +124,25 @@ router.post("/", async (req, res) => {
       knowledgeBaseName: uuidv4(),
     });
 
-    res.status(201).json({ success: true, data: { business, assistant } });
+    assistant = await Assistant.findByPk(assistant.toJSON().id, {
+      attributes: { exclude: ["userId"] },
+    });
+
+    assistant = assistant.toJSON();
+
+    const token = jwt.sign(
+      {
+        ...user.toJSON(),
+        assistant,
+        business,
+      },
+      process.env.JWT_SECRET
+    );
+
+    res.status(201).json({
+      success: true,
+      data: token,
+    });
   } catch (error) {
     console.error("Error adding business:", error);
     res.status(500).json({ error: "Internal Server Error" });
