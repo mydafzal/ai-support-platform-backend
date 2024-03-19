@@ -1,27 +1,19 @@
 const Router = require("express").Router;
 const router = Router();
 
-const moment = require("moment");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
-const {
-  generateGoogleOAuthUrl,
-  storeGoogleOAuthAccessToken,
-} = require("../integrations/googleOAuth");
-const { getHubSpotAccessToken } = require("../integrations/hubspotCRM");
-const { getCalendlyAccessToken } = require("../integrations/calendly");
-
-const Integration = require("../models/integration.model");
 const User = require("../models/user.model");
-const Business = require("../models/business.model");
-const Assistant = require("../models/assistant.model");
 
 const { z } = require("zod");
 const { sendEmail } = require("../integrations/nodemailer");
+const Business = require("../models/business.model");
+const Assistant = require("../models/assistant.model");
 
 const loginValidationSchema = z.object({
   email: z.string().email(),
+  name: z.string().optional(),
   password: z
     .string()
     .min(4, "Password must contain at least 4 characters.")
@@ -29,18 +21,10 @@ const loginValidationSchema = z.object({
   externalType: z.enum(["Google", "Apple", ""]),
 });
 
-const accessTokenValidationSchema = z.object({
-  code: z.string(),
-  redirecUri: z.string().optional(),
-  userId: z.number(),
-});
-
 const emailValidationSchema = z.string().email();
 const passwordValidationSchema = z.string().min(4);
 
-router.get("/token", async (req, res) => {
-  const { email, password, externalType } = req.body;
-
+router.post("/login", async (req, res) => {
   try {
     const { success, error } = await loginValidationSchema.safeParseAsync(
       req.body
@@ -53,86 +37,202 @@ router.get("/token", async (req, res) => {
       });
     }
 
-    let user = await User.findOne({
-      where: {
-        email,
-      },
-    });
+    const { email, password, externalType, name } = req.body;
 
-    if (!user) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid email and/or password." });
-    }
-
-    user = user.toJSON();
-
-    if (!user?.emailVerified) {
-      const emailLink = `${req.protocol}://${req.get(
-        "host"
-      )}/email-verification?token=${user?.emailVerificationToken}`;
-
-      await sendEmail(user?.email, emailLink);
-
-      return res.status(200).json({
-        success: false,
-        message:
-          "Email not verified. A new email verification link has been sent.",
+    let user;
+    // Social authentication
+    if (externalType === "Google" || externalType === "Apple") {
+      user = await User.findOne({
+        where: {
+          email,
+        },
       });
+
+      if (!user) {
+        user = await User.create({
+          name,
+          email,
+          externalType,
+          emailVerified: true,
+        });
+      }
     }
 
-    if (externalType !== "Google" && externalType !== "Apple") {
-      const result = await bcrypt.compare(password, user.password);
+    // Perform email/password authentication
+    else {
+      user = await User.findOne({
+        where: { email },
+      });
 
+      if (!user) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Invalid email and/or password." });
+      }
+
+      user = user.toJSON();
+
+      if (!user?.emailVerified) {
+        const emailLink = `${req.protocol}://${req.get(
+          "host"
+        )}/email-verification?token=${user?.emailVerificationToken}`;
+
+        await sendEmail(user?.email, emailLink);
+
+        return res.status(200).json({
+          success: false,
+          message:
+            "Email not verified. A new email verification link has been sent.",
+        });
+      }
+
+      const result = await bcrypt.compare(password, user.password);
       if (!result) {
         return res
-          .status(400)
+          .status(401)
           .json({ success: false, message: "Invalid email and/or password" });
       }
     }
 
-    delete user.password;
-
-    let business = await Business.findOne({
+    user = await User.findOne({
       where: {
-        userId: user.id,
+        email,
+      },
+      attributes: {
+        exclude: ["password", "emailVerificationToken", "resetPasswordToken"],
       },
     });
 
-    if (!business) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide business information to complete the signup",
-      });
-    }
+    user = user.toJSON();
 
-    business = business.toJSON();
-
-    let assistant = await Assistant.findOne({
+    const business = await Business.findOne({
       where: {
         userId: user.id,
       },
+      attributes: {
+        exclude: ["userId"],
+      },
     });
 
-    assistant = assistant.toJSON();
+    const assistant = await Assistant.findOne({
+      where: {
+        userId: user.id,
+      },
+      attributes: {
+        exclude: ["userId"],
+      },
+    });
 
     const token = jwt.sign(
-      { user, business, assistant },
-      process.env.JWT_SECRET,
       {
-        expiresIn: 86400,
-      }
+        ...user,
+        assistant: assistant?.toJSON(),
+        business: business?.toJSON(),
+      },
+      process.env.JWT_SECRET
     );
-
-    res.status(200).json({
-      success: true,
-      data: token,
-    });
+    return res.status(200).json({ success: true, data: token });
   } catch (error) {
-    console.log("Error authenticating user...", error);
+    console.error("Error during login:", error);
     res.status(500).json({ success: false, message: "Internal Server Error." });
   }
 });
+
+// router.get("/token", async (req, res) => {
+//   const { email, password, externalType } = req.body;
+
+//   try {
+//     const { success, error } = await loginValidationSchema.safeParseAsync(
+//       req.body
+//     );
+
+//     if (!success) {
+//       return res.status(400).json({
+//         success: false,
+//         message: error.errors[0].message,
+//       });
+//     }
+
+//     let user = await User.findOne({
+//       where: {
+//         email,
+//       },
+//     });
+
+//     if (!user) {
+//       return res
+//         .status(400)
+//         .json({ success: false, message: "Invalid email and/or password." });
+//     }
+
+//     user = user.toJSON();
+
+//     if (!user?.emailVerified) {
+//       const emailLink = `${req.protocol}://${req.get(
+//         "host"
+//       )}/email-verification?token=${user?.emailVerificationToken}`;
+
+//       await sendEmail(user?.email, emailLink);
+
+//       return res.status(200).json({
+//         success: false,
+//         message:
+//           "Email not verified. A new email verification link has been sent.",
+//       });
+//     }
+
+//     if (externalType !== "Google" && externalType !== "Apple") {
+//       const result = await bcrypt.compare(password, user.password);
+
+//       if (!result) {
+//         return res
+//           .status(400)
+//           .json({ success: false, message: "Invalid email and/or password" });
+//       }
+//     }
+
+//     delete user.password;
+
+//     let business = await Business.findOne({
+//       where: {
+//         userId: user.id,
+//       },
+//     });
+
+//     if (!business) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Please provide business information to complete the signup",
+//       });
+//     }
+
+//     business = business.toJSON();
+
+//     let assistant = await Assistant.findOne({
+//       where: {
+//         userId: user.id,
+//       },
+//     });
+
+//     assistant = assistant.toJSON();
+
+//     const token = jwt.sign(
+//       { user, business, assistant },
+//       process.env.JWT_SECRET,
+//       {
+//         expiresIn: 86400,
+//       }
+//     );
+
+//     res.status(200).json({
+//       success: true,
+//       data: token,
+//     });
+//   } catch (error) {
+//     console.log("Error authenticating user...", error);
+//     res.status(500).json({ success: false, message: "Internal Server Error." });
+//   }
+// });
 
 router.post("/forgot-password", async (req, res) => {
   const { email } = req.body;
@@ -151,16 +251,17 @@ router.post("/forgot-password", async (req, res) => {
       },
     });
 
-    user = user?.toJSON();
-
     if (!user) {
       return res.status(404).json({ success: false, message: "Invalid email" });
     }
 
-    // Generate password reset token
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
-      expiresIn: "1h",
-    });
+    const token = jwt.sign(
+      { userId: user.toJSON().id },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "1h",
+      }
+    );
 
     user.resetPasswordToken = token;
     await user.save();
@@ -174,9 +275,9 @@ router.post("/forgot-password", async (req, res) => {
     });
   } catch (error) {
     console.log("Error forgot-password", error);
-    res.status(200).json({
+    res.status(500).json({
       success: false,
-      message: "Password reset instructions sent to your email.",
+      message: "Internal server error.",
     });
   }
 });
@@ -195,7 +296,6 @@ router.post("/reset-password/:token", async (req, res) => {
     }
 
     let user = await User.findOne({ where: { resetPasswordToken: token } });
-    user = user?.toJSON();
 
     if (!user) {
       return res
@@ -204,7 +304,7 @@ router.post("/reset-password/:token", async (req, res) => {
     }
 
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
-    if (!decodedToken || decodedToken.userId !== user.id) {
+    if (!decodedToken || decodedToken.userId !== user.toJSON().id) {
       return res
         .status(404)
         .json({ success: false, message: "Invalid or expired token." });
@@ -224,103 +324,38 @@ router.post("/reset-password/:token", async (req, res) => {
   }
 });
 
-router.get("/google-oauth-url", (req, res) => {
-  const oauthUrl = generateGoogleOAuthUrl();
-  res.status(200).json({ oauthUrl });
-});
-
-router.post("/google-oauth-access-token", async (req, res) => {
-  const { businessId, code } = req.body;
-
-  const response = await storeGoogleOAuthAccessToken(code);
-
-  await Integration.create({
-    businessId,
-    accessToken: response.access_token,
-    refreshToken: response.refresh_token,
-    expirationTime: response.expiry_date,
-  });
-
-  res.status(200).json({ message: "Google OAuth integration successful." });
-});
-
-router.get("/hubspot-auth-url", (req, res) => {
-  return res.status(200).json({ hubspotAuthUrl: process.env.HUBSPOT_AUTH_URL });
-});
-
-router.post("/hubspot-access-token", async (req, res) => {
+router.get("/verify-email", async (req, res) => {
   try {
-    const { success, error } = await accessTokenValidationSchema.safeParseAsync(
-      req.body
-    );
+    const { token } = req.query;
 
-    if (!success) {
+    console.log("token ", token);
+
+    if (!token) {
       return res
         .status(400)
-        .json({ success: false, message: error.errors[0].message });
+        .json({ success: false, message: "Please provide a valid token" });
     }
 
-    const { code, redirecUri, userId } = req.body;
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
 
-    const response = await getHubSpotAccessToken(code, redirecUri);
+    console.log("decodedToken.userId", decodedToken.userId);
 
-    await Integration.create({
-      userId,
-      accessToken: response.accessToken,
-      refreshToken: response.refreshToken,
-      expirationTime: `${moment(new Date())
-        .add(response.expiresIn, "seconds")
-        .toDate()}`,
-      integrationType: "HubSpot",
-    });
+    let user = await User.findByPk(decodedToken.userId);
 
-    res
-      .status(201)
-      .json({ success: true, message: "HubSpot integration succesful." });
-  } catch (error) {
-    console.log("Error storing hubspot access token", error);
-    res.status(500).json({ success: false, message: "Internal Server Error." });
-  }
-});
-
-router.get("/calendly-auth-url", (req, res) => {
-  return res.status(200).json({
-    calendlyRedirectUrl: `https://calendly.com/oauth/authorize?client_id=${process.env.CALENDLY_CLIENT_ID}&response_type=code&redirect_uri=http://localhost:5000/`,
-  });
-});
-
-router.post("/calendly-access-token", async (req, res) => {
-  try {
-    const { success, error } = await accessTokenValidationSchema.safeParseAsync(
-      req.body
-    );
-
-    if (!success) {
-      return res
-        .status(400)
-        .json({ success: false, message: error.errors[0].message });
+    if (!user?.toJSON() || user?.toJSON().emailVerificationToken !== token) {
+      return res.status(400).json({ message: "Invalid or expired token" });
     }
 
-    const { code, redirectUri, userId } = req.body;
-
-    const response = await getCalendlyAccessToken(code, redirectUri);
-
-    await Integration.create({
-      userId,
-      accessToken: response.access_token,
-      refreshToken: response.refresh_token,
-      expirationTime: `${moment(new Date())
-        .add(response.expires_in, "seconds")
-        .toDate()}`,
-      integrationType: "Calendly",
-    });
+    user.emailVerified = true;
+    user.emailVerificationToken = null;
+    await user.save();
 
     res
-      .status(201)
-      .json({ success: true, message: "Calendly integration successful." });
-  } catch (error) {
-    console.log("Error storing hubspot access token", error);
-    res.status(500).json({ success: false, message: "Internal Server Error." });
+      .status(200)
+      .json({ success: true, message: "Email verified successfully" });
+  } catch (err) {
+    console.error("Error verifying email:", err);
+    res.status(500).json({ message: "Internal server error" });
   }
 });
 
