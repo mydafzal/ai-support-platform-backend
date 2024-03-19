@@ -2,7 +2,10 @@ const Router = require("express").Router;
 const router = Router();
 
 const { getCalendlyAccessToken } = require("../integrations/calendly");
-const { getGoogleOAuthAccessToken } = require("../integrations/googleOAuth");
+const {
+  getGoogleOAuthAccessToken,
+  generateGoogleOAuthUrl,
+} = require("../integrations/googleOAuth");
 const { getHubSpotAccessToken } = require("../integrations/hubspotCRM");
 const Integration = require("../models/integration.model");
 
@@ -14,6 +17,21 @@ const accessTokenValidationSchema = z.object({
   redirecUri: z.string().optional(),
   userId: z.number(),
   name: z.enum(["Calendly", "HubSpot", "Google-OAuth"]),
+});
+
+router.get("/google-oauth-url", (req, res) => {
+  const oauthUrl = generateGoogleOAuthUrl();
+  res.status(200).json({ oauthUrl });
+});
+
+router.get("/hubspot-auth-url", (req, res) => {
+  return res.status(200).json({ hubspotAuthUrl: process.env.HUBSPOT_AUTH_URL });
+});
+
+router.get("/calendly-auth-url", (req, res) => {
+  return res.status(200).json({
+    calendlyRedirectUrl: `https://calendly.com/oauth/authorize?client_id=${process.env.CALENDLY_CLIENT_ID}&response_type=code&redirect_uri=http://localhost:5000/`,
+  });
 });
 
 router.post("/", async (req, res) => {
