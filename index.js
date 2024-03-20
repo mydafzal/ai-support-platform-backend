@@ -47,7 +47,8 @@ const agentsRouter = require("./src/routes/agent.route");
 const voicesRouter = require("./src/routes/voice.route");
 const downloadsRouter = require("./src/routes/download.route");
 const chatsRouter = require("./src/routes/chat.route");
-const employeesRouter = require("./src/routes/employee.route");
+const teamMembersRouter = require("./src/routes/teamMember.route");
+const teamGroupsRouter = require("./src/routes/teamGroup.route");
 const integrationsRouter = require("./src/routes/integration.route");
 
 app.get("/speech", async (req, res) => {
@@ -67,7 +68,7 @@ app.post("/test", async (req, res) => {
 
 app.use("/auth", authRouter);
 app.use("/calls", callsRouter);
-app.use("/callGroups", callGroupsRouter);
+app.use("/call-groups", callGroupsRouter);
 app.use("/businesses", businessesRouter);
 app.use("/users", usersRouter);
 app.use("/meeting-events", meetingEventsRouter);
@@ -76,7 +77,8 @@ app.use("/agents", agentsRouter);
 app.use("/voices", voicesRouter);
 app.use("/download", downloadsRouter);
 app.use("/chats", chatsRouter);
-app.use("/employees", employeesRouter);
+app.use("/team-members", teamMembersRouter);
+app.use("/team-groups", teamGroupsRouter);
 app.use("/integrations", integrationsRouter);
 
 app.get("/", (req, res) => {
