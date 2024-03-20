@@ -6,13 +6,11 @@ const TWIML_APP_SID = process.env.TWIML_APP_SID;
 const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 const BASE_URL = process.env.BASE_URL;
 
-const path = require("path");
 const fs = require("fs");
-
 const uuid = require("uuid");
+const axios = require("axios");
 
 const twilio = require("twilio");
-
 const client = twilio(ACCOUNT_SID, AUTH_TOKEN);
 const AccessToken = twilio.jwt.AccessToken;
 const VoiceGrant = AccessToken.VoiceGrant;
@@ -27,101 +25,125 @@ const {
   deleteCallData,
   storeCallData,
   getCallData,
+  updateCallConversation,
 } = require("../integrations/redis");
-const { uploadToS3 } = require("../integrations/s3Storage");
 const { convertTextToSpeech } = require("../integrations/textToSpeech");
 const { formatHubSpotContactDetails } = require("../utils/formatters");
 const Business = require("../models/business.model");
 const Assistant = require("../models/assistant.model");
 const Integration = require("../models/integration.model");
 const Call = require("../models/call.model");
+const {
+  AUDIO_FILES_BASE_PATH,
+  AUDIO_FILES_EXTENSION,
+  AUDIO_FILES_BASE_URL,
+} = require("../utils/constants");
+const { generateFilename } = require("../utils/helpers");
 
 async function handleIncomingCall(request) {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
   const customerPhoneNumber = request.body.From;
-  const businessPhoneNumber = request.body.To;
+  const businessPhoneNumber = request.body.To || "+14697074725";
   const callId = request.body.CallSid;
 
   console.log("request.body.To", request.body);
 
+  // const call = await client.calls.get(request.body.CallSid).fetch();
+  // console.log("call instance", call);
+
   let business = await Business.findOne({
     where: {
-      // twilioNumber: businessPhoneNumber,
-      twilioNumber: "+14697074725",
+      twilioNumber: businessPhoneNumber,
     },
   });
 
   business = business?.toJSON();
 
+  if (!business) {
+    twiml.say("Sorry, we can't handle your call.");
+    return twiml.toString();
+  }
+
   await Call.create({
-    id: request.body.CallSid,
-    from: request.body.From,
+    id: callId,
+    from: customerPhoneNumber,
     userId: business.userId,
   });
 
-  // let assistant = await Assistant.findOne({
-  //   where: {
-  //     businessId: business.userId,
-  //   },
-  // });
-  // assistant = assistant?.toJSON();
+  let assistant = await Assistant.findOne({
+    where: {
+      userId: business.userId,
+    },
+  });
 
-  // let businessDetails = {
-  //   businessId: business.id,
-  //   businessName: business.businessName,
-  //   businessPhoneNumber: business.twilioNumber,
-  //   voiceId: assistant.voiceId,
-  //   greetingMessageUrl: assistant.greetingMessageUrl,
-  //   farewellMessageUrl: assistant.farewellMessageUrl,
-  //   assistantName: assistant.name,
-  //   collectionName: assistant.knowledgeBaseName,
-  //   user: business.userId,
-  // };
+  assistant = assistant?.toJSON();
 
-  // let integration = await Integration.findOne({
-  //   where: {
-  //     businessId: business.id,
-  //     integrationType: "HubSpot",
-  //   },
-  // });
-  // integration = integration?.toJSON();
+  let integration = await Integration.findOne({
+    where: {
+      userId: business.userId,
+      name: "HubSpot",
+    },
+  });
 
-  // const contact = await getContactByPhoneNumber(
-  //   integration.accessToken,
-  //   integration.refreshToken,
-  //   integration.expirationTime,
-  //   customerPhoneNumber,
-  //   business.id
-  // );
+  integration = integration?.toJSON();
 
-  // const formattedCustomerDetails = contact
-  //   ? formatHubSpotContactDetails(contact)
-  //   : "";
+  let formattedCustomerDetails = "";
+  let customerFullName = "";
 
-  // storeCallData(customerPhoneNumber, {
-  //   ...businessDetails,
-  //   customerDetails: formattedCustomerDetails,
-  //   customerName: contact
-  //     ? `${contact.properties.firstname} ${contact.properties.lastname}`
-  //     : "",
-  //   callId,
-  // });
+  if (!integration) {
+    console.log(
+      "HubSpot integration not available, couldn't retrieve customer's information"
+    );
 
-  // twiml.play(businessDetails.greetingMessageUrl);
-  twiml.play(
-    "https://psychix.s3.amazonaws.com/ai-bot/customer-1/greetingMessage.mp3"
-  );
+    // Trigger email to business to connect the CRM...
+  } else {
+    const contact = await getContactByPhoneNumber(
+      integration.accessToken,
+      integration.refreshToken,
+      integration.expirationTime,
+      customerPhoneNumber,
+      business.userId
+    );
 
-  // twiml.gather({
-  //   speechTimeout: "auto",
-  //   speechModel: "experimental_conversations",
-  //   input: "speech",
-  //   action: `${BASE_URL}/call/speech-input`,
-  //   actionOnEmptyResult: true,
-  // });
+    if (contact) {
+      formattedCustomerDetails = formatHubSpotContactDetails(contact);
+      customerFullName = `${contact.properties.firstname} ${contact.properties.lastname}`;
+    }
+  }
 
+  let callDetails = {
+    businessName: business.businessName,
+    businessPhoneNumber: business.twilioNumber,
+    voiceId: assistant.voiceId,
+    greetingMessageUrl: assistant.greetingMessageUrl,
+    farewellMessageUrl: assistant.farewellMessageUrl,
+    assistantName: assistant.name,
+    collectionName: assistant.knowledgeBaseName,
+    userId: business.userId,
+    callId: callId,
+    customerDetails: formattedCustomerDetails,
+    customerName: customerFullName,
+    customerPhoneNumber,
+  };
+
+  await storeCallData(callId, callDetails);
+
+  // https://psychix.s3.amazonaws.com/ai-bot/customer-1/greetingMessage.mp3
+  // https://c06d-119-73-113-87.ngrok-free.app/public/greeting-message-adam.mp3
+
+  twiml.play(callDetails.greetingMessageUrl);
+
+  twiml.gather({
+    speechTimeout: "auto",
+    speechModel: "experimental_conversations",
+    input: "speech",
+    action: `${BASE_URL}/calls/speech-input`,
+    actionOnEmptyResult: true,
+  });
+
+  startCallRecording(callId);
   return twiml.toString();
 }
 
@@ -133,7 +155,7 @@ async function gatherSpeechInput() {
     speechTimeout: "auto",
     speechModel: "experimental_conversations",
     input: "speech",
-    action: `${BASE_URL}/call/speech-input`,
+    action: `${BASE_URL}/calls/speech-input`,
     actionOnEmptyResult: true,
   });
 
@@ -144,32 +166,29 @@ async function handleSpeechInput(request) {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
-  const customerPhoneNumber = request.body.From;
-
   const voiceInput = request.body.SpeechResult;
-  console.log("voice input", voiceInput);
+  console.log("caller voice input", voiceInput);
 
-  const callData = await getCallData(customerPhoneNumber);
+  const callId = request.body.CallSid;
+  const callData = await getCallData(callId);
 
   let {
-    businessId,
     farewellMessageUrl,
-    phoneNumbers,
     businessName,
     customerName,
     assistantName,
     customerDetails,
     voiceId,
-    callId,
     collectionName,
+    audioFileNames,
+    phoneNumbers,
   } = callData;
 
   if (!voiceInput) {
     twiml.play(farewellMessageUrl);
     twiml.hangup();
 
-    deleteCallData(customerPhoneNumber);
-
+    deleteCallData(callId);
     return twiml.toString();
   }
 
@@ -193,12 +212,21 @@ async function handleSpeechInput(request) {
 
   const cleanedAiResponse = aiResponse.replace(/^\w+:\s*/i, "").trim();
 
-  const generatedSpeechFile = await convertTextToSpeech(
+  let generatedSpeechFile = await convertTextToSpeech(
     cleanedAiResponse,
     voiceId
   );
 
-  const textToSpeechFileURL = await uploadToS3(generatedSpeechFile, businessId);
+  // Save the audio file locally
+  generatedSpeechFile = Buffer.from(generatedSpeechFile);
+  const fileName = generateFilename(AUDIO_FILES_EXTENSION);
+
+  await fs.promises.writeFile(
+    `${AUDIO_FILES_BASE_PATH}/${fileName}`,
+    generatedSpeechFile
+  );
+
+  const textToSpeechFileURL = `${AUDIO_FILES_BASE_URL}/${fileName}`;
 
   console.log("cleanedAiResponse", cleanedAiResponse);
   console.log("textToSpeechFileURL", textToSpeechFileURL);
@@ -222,9 +250,16 @@ async function handleSpeechInput(request) {
       {
         method: "POST",
       },
-      `${BASE_URL}/call/gather-speech`
+      `${BASE_URL}/calls/gather-speech`
     );
   }
+
+  if (!audioFileNames) {
+    callData.audioFileNames = [fileName];
+  } else {
+    callData.audioFileNames.push(fileName);
+  }
+  await updateCallConversation(callId, callData);
 
   return twiml.toString();
 }
@@ -350,21 +385,86 @@ async function checkVerification(code, phoneNumber) {
 }
 
 async function handleCallDisconnect(request) {
-  console.log("call disconnect--------", request.body);
+  const callId = request.body.CallSid;
+  console.log("call disconnected: ", request.body);
 
   await Call.update(
     {
-      duration: request.body.Duration,
+      duration: request.body.CallDuration,
     },
     {
       where: {
-        id: request.body.CallSid,
+        id: callId,
       },
     }
   );
 
-  const customerPhoneNumber = request.body.From;
-  deleteCallData(customerPhoneNumber);
+  const callData = await getCallData(callId);
+
+  if (callData?.audioFileNames) {
+    // Delete all AI speeches that were generated during the call.
+    const promises = audioFileNames?.map((fileName) =>
+      fs.promises.unlink(`${AUDIO_FILES_BASE_PATH}/${fileName}`)
+    );
+
+    await Promise.all(promises);
+  }
+
+  deleteCallData(callId);
+}
+
+async function startCallRecording(callSid) {
+  let tries = 0;
+
+  try {
+    const recording = await client.calls(callSid).recordings.create({
+      recordingStatusCallback: `${process.env.BASE_URL}/calls/recording`,
+      trim: "trim-silence",
+    });
+
+    console.log("started call recording", recording.sid);
+  } catch (error) {
+    console.log("startCallRecording error - tries", tries);
+    if (tries < 2) {
+      startCallRecording(callSid);
+    }
+  }
+}
+
+async function handleCompletedRecording(request) {
+  const { CallSid, RecordingUrl, RecordingSid } = request.body;
+
+  const response = await axios.get(
+    `https://api.twilio.com/2010-04-01/Accounts/${ACCOUNT_SID}/Recordings/${RecordingSid}.mp3`,
+    null,
+    {
+      // params: {
+      //   RecordingStatusCallback: recordingStatusCallback,
+      //   RecordingStatusCallbackEvent: recordingStatusCallbackEvent,
+      // },
+      auth: {
+        username: ACCOUNT_SID,
+        password: AUTH_TOKEN,
+      },
+    }
+  );
+
+  console.log("response - get recording mp3", response);
+
+  // // GET https://api.twilio.com/2010-04-01/Accounts/ACXXXXX.../Recordings/RE557ce644e5ab84fa21cc21112e22c485.mp3
+
+  // await Call.update(
+  //   {
+  //     recordingUrl: RecordingUrl,
+  //   },
+  //   {
+  //     where: {
+  //       id: CallSid,
+  //     },
+  //   }
+  // );
+
+  // console.log("saved call recording");
 }
 
 module.exports = {
@@ -379,4 +479,5 @@ module.exports = {
   createVerification,
   createVerifyService,
   handleCallDisconnect,
+  handleCompletedRecording,
 };

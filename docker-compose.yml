@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    ports:
+      - $PORT:$PORT
+    depends_on:
+      - redis
+      - postgres
+      - chroma_db
+
+  redis:
+    image: redis/redis-stack-server:latest
+
+  postgres:
+    image: postgres:latest
+    env_file: .env
+    environment:
+      POSTGRES_USER: $POSTGRESDB_USER
+      POSTGRES_PASSWORD: $POSTGRESDB_PASSWORD
+      POSTGRES_DB: $POSTGRESDB_NAME
+    ports:
+      - $POSTGRESDB_LOCAL_PORT:$POSTGRESDB_DOCKER_PORT
+    volumes:
+      - db:/var/lib/postgres
+
+  chroma_db:
+    image: chromadb/chroma:latest
+    # Add any necessary configuration or environment variables here
+
+volumes: 
+  db:

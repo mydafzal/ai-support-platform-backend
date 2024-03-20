@@ -6,6 +6,7 @@ const User = sequelize.define(
   {
     name: {
       type: DataTypes.STRING,
+      allowNull: false,
     },
     email: {
       type: DataTypes.STRING,
@@ -18,17 +19,22 @@ const User = sequelize.define(
     password: {
       type: DataTypes.STRING,
     },
-    externalId: {
-      type: DataTypes.STRING,
-    },
     externalType: {
       type: DataTypes.ENUM("Google", "Apple"),
+    },
+    emailVerified: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    emailVerificationToken: {
+      type: DataTypes.STRING,
+    },
+    resetPasswordToken: {
+      type: DataTypes.STRING,
     },
   },
   {}
 );
-
-// User.belongsTo(Business, { foreignKey: "businessId" });
 
 // User.sync({ force: true });
 

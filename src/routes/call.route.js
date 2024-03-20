@@ -8,6 +8,7 @@ const {
   handleSpeechInput,
   gatherSpeechInput,
   handleCallDisconnect,
+  handleCompletedRecording,
 } = require("../controllers/call.controller");
 
 const Business = require("../models/business.model");
@@ -68,6 +69,11 @@ router.post("/speech-input", async (req, res) => {
 
   res.type("application/xml");
   res.send(result);
+});
+
+router.post("/recording", async (req, res) => {
+  await handleCompletedRecording(req);
+  res.status(200).send();
 });
 
 router.post("/disconnect", async (req, res) => {

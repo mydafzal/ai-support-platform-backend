@@ -1,5 +1,6 @@
 const { getUnixTime } = require("date-fns");
 const { v4: uuidv4 } = require("uuid");
+const crypto = require("crypto");
 
 const { RedisChatMessageHistory } = require("langchain/stores/message/redis");
 const { StringOutputParser } = require("@langchain/core/output_parsers");
@@ -65,9 +66,14 @@ async function generatePdfThumbnail(sourceFilePath, thumbnailPath) {
     .catch((err) => console.log("Error generating pdf preview", err));
 }
 
+function generateEmailVerificationToken() {
+  return crypto.randomBytes(20).toString("hex");
+}
+
 module.exports = {
   generateFilename,
   ExtendedRedisChatMemory,
   generateChatTitle,
   generatePdfThumbnail,
+  generateEmailVerificationToken,
 };

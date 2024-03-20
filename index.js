@@ -15,10 +15,18 @@ require("./src/models/index");
 
 const app = express();
 
-app.use(express.json());
+// app.use(express.json());
+// app.use(
+//   "/documents",
+//   express.static(path.join(__dirname, "documents"), {
+//     maxAge: 0,
+//     etag: false,
+//   })
+// );
+
 app.use(
-  "/documents",
-  express.static(path.join(__dirname, "documents"), {
+  "/data",
+  express.static(path.join(__dirname, "data"), {
     maxAge: 0,
     etag: false,
   })
@@ -40,6 +48,7 @@ const voicesRouter = require("./src/routes/voice.route");
 const downloadsRouter = require("./src/routes/download.route");
 const chatsRouter = require("./src/routes/chat.route");
 const employeesRouter = require("./src/routes/employee.route");
+const integrationsRouter = require("./src/routes/integration.route");
 
 app.get("/speech", async (req, res) => {
   const response = await convertTextToSpeech(
@@ -68,6 +77,7 @@ app.use("/voices", voicesRouter);
 app.use("/download", downloadsRouter);
 app.use("/chats", chatsRouter);
 app.use("/employees", employeesRouter);
+app.use("/integrations", integrationsRouter);
 
 app.get("/", (req, res) => {
   res.status(200).json({ token: "token 123" });

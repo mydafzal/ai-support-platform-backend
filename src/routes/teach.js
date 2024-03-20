@@ -36,7 +36,10 @@ const {
 const Business = require("../models/business.model");
 const { getBrowser } = require("../integrations/urlScreenshot");
 const { generatePdfThumbnail } = require("../utils/helpers");
-const { STORAGE_BASE_PATH } = require("../utils/constants");
+const {
+  STORAGE_BASE_PATH,
+  DOCUMENTS_BASE_PATH,
+} = require("../utils/constants");
 
 const urlsValidationSchema = z.object({
   urls: z.array(z.string().url()),
@@ -217,12 +220,15 @@ router.post("/documents", upload.array("files"), async (req, res) => {
 
     console.log("files", req.files);
 
-    const destinationPath = path.join(STORAGE_BASE_PATH, `${req.body.userId}`);
+    const destinationPath = path.join(
+      DOCUMENTS_BASE_PATH,
+      `${req.body.userId}`
+    );
 
     await fs.mkdir(destinationPath, { recursive: true });
 
     promises = documents.map((file) => {
-      const sourcePath = path.join(STORAGE_BASE_PATH, file.name);
+      const sourcePath = path.join(DOCUMENTS_BASE_PATH, file.name);
       return fs.rename(sourcePath, `${destinationPath}/${file.name}`);
     });
 
@@ -233,8 +239,8 @@ router.post("/documents", upload.array("files"), async (req, res) => {
     await Promise.all(
       documents.map((doc) =>
         generatePdfThumbnail(
-          `${STORAGE_BASE_PATH}/${req.body.userId}/${doc.name}`,
-          `${STORAGE_BASE_PATH}/${req.body.userId}/${doc.name}-preview.png`
+          `${DOCUMENTS_BASE_PATH}/${req.body.userId}/${doc.name}`,
+          `${DOCUMENTS_BASE_PATH}/${req.body.userId}/${doc.name}-preview.png`
         )
       )
     );

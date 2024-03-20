@@ -3,6 +3,7 @@ const User = require("../models/user.model");
 
 const bcrypt = require("bcrypt");
 const saltRounds = 10;
+const jwt = require("jsonwebtoken");
 
 const { z } = require("zod");
 const Document = require("../models/document.model");
@@ -12,17 +13,17 @@ const Chat = require("../models/chat.model");
 const Employee = require("../models/employee.model");
 const Call = require("../models/call.model");
 const CallGroup = require("../models/callGroup.model");
+const Integration = require("../models/integration.model");
+const { sendEmail } = require("../integrations/nodemailer");
 
 const userValidationSchema = z.object({
   email: z.string().email(),
-  password: z.string().optional(),
-  externalType: z.enum(["Google", "Apple", ""]).optional(),
-  externalId: z.string().optional(),
-  name: z.string().optional(),
+  password: z.string().min(4).optional(),
+  name: z.string(),
 });
 
 router.post("/", async (req, res) => {
-  const { name, email, password, externalId, externalType } = req.body;
+  const { name, email, password } = req.body;
   console.log("add user", req.body);
 
   try {
@@ -48,17 +49,47 @@ router.post("/", async (req, res) => {
         .json({ success: false, message: "Email already exists." });
     }
 
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
+    let hashedPassword;
+    if (password?.length > 0) {
+      hashedPassword = await bcrypt.hash(password, saltRounds);
+    }
 
-    user = await User.create({
+    await User.create({
       name,
       email,
       password: hashedPassword,
-      externalId: externalId || null,
-      externalType: externalType || null,
     });
 
-    res.status(201).json({ success: true, data: user.toJSON() });
+    user = await User.findOne({
+      where: {
+        email,
+      },
+      attributes: {
+        exclude: ["password", "emailVerificationToken", "resetPasswordToken"],
+      },
+    });
+
+    const emailVerificationToken = jwt.sign(
+      { userId: user.toJSON().id },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+
+    user.emailVerificationToken = emailVerificationToken;
+    await user.save();
+
+    user = user.toJSON();
+
+    const emailLink = `${req.hostname}/email-verification?token=${user.emailVerificationToken}`;
+    await sendEmail(user.email, emailLink);
+
+    const token = jwt.sign({ ...user }, process.env.JWT_SECRET);
+
+    res.status(201).json({
+      success: true,
+      data: token,
+      message: "Email verification link sent.",
+    });
   } catch (error) {
     console.error("Error adding user:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
@@ -236,6 +267,21 @@ router.get("/:id/callGroups", async (req, res) => {
     res.status(200).json({ success: true, data: callGroups });
   } catch (error) {
     console.error("Error getting calls:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/integrations", async (req, res) => {
+  try {
+    let integrations = await Integration.findAll({
+      where: { userId: req.params.id },
+    });
+
+    integrations = integrations.map((item) => item.toJSON());
+
+    res.status(200).json({ success: true, data: integrations });
+  } catch (error) {
+    console.error("Error getting connected integrations:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });
