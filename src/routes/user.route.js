@@ -97,16 +97,42 @@ router.post("/", async (req, res) => {
 });
 
 router.get("/:id/documents", async (req, res) => {
+  const userId = req.params.id;
+  let { page = 1, pageSize = 10 } = req.query;
+
+  if (page < 1) {
+    page = 1;
+  }
+  if (pageSize < 1) {
+    pageSize = 10;
+  }
+
   try {
+    const offset = (page - 1) * pageSize;
+
     let documents = await Document.findAll({
       where: {
-        userId: req.params.id,
+        userId,
+      },
+      limit: parseInt(pageSize),
+      offset: parseInt(offset),
+    });
+
+    const totalCount = await Document.count({
+      where: {
+        userId,
       },
     });
 
     documents = documents.map((item) => item.toJSON());
 
-    res.status(200).json({ success: true, data: documents });
+    res
+      .status(200)
+      .json({
+        success: true,
+        data: documents,
+        pagination: { page, pageSize, totalCount },
+      });
   } catch (error) {
     console.error("Error fetching customer:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
@@ -114,16 +140,50 @@ router.get("/:id/documents", async (req, res) => {
 });
 
 router.get("/:id/urls", async (req, res) => {
+  const userId = req.params.id;
+  let { page = 1, pageSize = 10 } = req.query;
+
+  if (page < 1) {
+    page = 1;
+  }
+  if (pageSize < 1) {
+    pageSize = 10;
+  }
+
   try {
+    const offset = (page - 1) * pageSize;
+
     let urls = await Url.findAll({
       where: {
-        userId: req.params.id,
+        userId,
+      },
+      limit: parseInt(pageSize),
+      offset: parseInt(offset),
+    });
+
+    const totalCount = await Url.count({
+      where: {
+        userId,
       },
     });
 
-    urls = urls.map((item) => item.toJSON());
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const basePath = `${baseUrl}/data/documents/${userId}`;
 
-    res.status(200).json({ success: true, data: urls });
+    urls = urls.map((item) => {
+      item = item.toJSON();
+
+      return {
+        ...item,
+        previewUrl: `${basePath}/url-${item.id}-preview.png`,
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      data: urls,
+      pagination: { page, pageSize, totalCount },
+    });
   } catch (error) {
     console.error("Error getting urls:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
