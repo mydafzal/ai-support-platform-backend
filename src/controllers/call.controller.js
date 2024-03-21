@@ -26,6 +26,7 @@ const {
   storeCallData,
   getCallData,
   updateCallConversation,
+  redisClient,
 } = require("../integrations/redis");
 const { convertTextToSpeech } = require("../integrations/textToSpeech");
 const { formatHubSpotContactDetails } = require("../utils/formatters");
@@ -37,6 +38,7 @@ const {
   AUDIO_FILES_BASE_PATH,
   AUDIO_FILES_EXTENSION,
   AUDIO_FILES_BASE_URL,
+  CALL_RECORDINGS_BASE_PATH,
 } = require("../utils/constants");
 const { generateFilename } = require("../utils/helpers");
 
@@ -236,6 +238,17 @@ async function handleSpeechInput(request) {
   if (shouldRedirectCall && phoneNumbers?.length > 0) {
     console.log("Dialing the human agent's number...");
 
+    await Call.update(
+      {
+        status: "Redirected",
+      },
+      {
+        where: {
+          id: callId,
+        },
+      }
+    );
+
     twiml
       .dial({
         callerId: phoneNumbers[0],
@@ -259,6 +272,7 @@ async function handleSpeechInput(request) {
   } else {
     callData.audioFileNames.push(fileName);
   }
+
   await updateCallConversation(callId, callData);
 
   return twiml.toString();
@@ -411,13 +425,40 @@ async function handleCallDisconnect(request) {
   }
 
   deleteCallData(callId);
+
+  let call = await Call.findByPk(callId, {
+    attributes: ["userId"],
+  });
+
+  const assistant = await Assistant.findOne({
+    where: { userId: call.toJSON().userId },
+  });
+
+  const greetingMessage = {
+    type: "ai",
+    data: {
+      content: assistant.toJSON().greetingMessage,
+      additional_kwargs: { timestamp: "" },
+    },
+  };
+
+  const farewellMessage = {
+    type: "ai",
+    data: {
+      content: assistant.toJSON().farewellMessage,
+      additional_kwargs: { timestamp: "" },
+    },
+  };
+
+  await redisClient.lPush(`transcription-${callId}`, greetingMessage);
+  await redisClient.rPush(`transcription-${callId}`, farewellMessage);
 }
 
-async function startCallRecording(callSid) {
+async function startCallRecording(callId) {
   let tries = 0;
 
   try {
-    const recording = await client.calls(callSid).recordings.create({
+    const recording = await client.calls(callId).recordings.create({
       recordingStatusCallback: `${process.env.BASE_URL}/calls/recording`,
       trim: "trim-silence",
     });
@@ -426,45 +467,56 @@ async function startCallRecording(callSid) {
   } catch (error) {
     console.log("startCallRecording error - tries", tries);
     if (tries < 2) {
-      startCallRecording(callSid);
+      startCallRecording(callId);
     }
   }
 }
 
 async function handleCompletedRecording(request) {
-  const { CallSid, RecordingUrl, RecordingSid } = request.body;
+  const { CallSid, RecordingSid } = request.body;
 
-  const response = await axios.get(
-    `https://api.twilio.com/2010-04-01/Accounts/${ACCOUNT_SID}/Recordings/${RecordingSid}.mp3`,
-    null,
-    {
-      // params: {
-      //   RecordingStatusCallback: recordingStatusCallback,
-      //   RecordingStatusCallbackEvent: recordingStatusCallbackEvent,
-      // },
-      auth: {
-        username: ACCOUNT_SID,
-        password: AUTH_TOKEN,
+  // console.log("completed recording - ", request.body);
+
+  try {
+    const response = await axios.default.get(
+      `https://api.twilio.com/2010-04-01/Accounts/${ACCOUNT_SID}/Recordings/${RecordingSid}.mp3`,
+      {
+        responseType: "arraybuffer",
+        auth: {
+          username: ACCOUNT_SID,
+          password: AUTH_TOKEN,
+        },
+      }
+    );
+
+    await fs.promises.mkdir(`${CALL_RECORDINGS_BASE_PATH}`, {
+      recursive: true,
+    });
+
+    await fs.promises.writeFile(
+      `${CALL_RECORDINGS_BASE_PATH}/${CallSid}.mp3`,
+      response.data
+    );
+
+    console.log("response - get recording mp3");
+
+    const recordingUrl = `${BASE_URL}/data/call-recordings/${CallSid}.mp3`;
+
+    await Call.update(
+      {
+        recordingUrl,
       },
-    }
-  );
+      {
+        where: {
+          id: CallSid,
+        },
+      }
+    );
 
-  console.log("response - get recording mp3", response);
-
-  // // GET https://api.twilio.com/2010-04-01/Accounts/ACXXXXX.../Recordings/RE557ce644e5ab84fa21cc21112e22c485.mp3
-
-  // await Call.update(
-  //   {
-  //     recordingUrl: RecordingUrl,
-  //   },
-  //   {
-  //     where: {
-  //       id: CallSid,
-  //     },
-  //   }
-  // );
-
-  // console.log("saved call recording");
+    console.log("saved call recording");
+  } catch (error) {
+    console.log("Error downloading call recording from Twilio: ", error);
+  }
 }
 
 module.exports = {
