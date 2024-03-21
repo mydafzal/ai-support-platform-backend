@@ -21,7 +21,6 @@ const multer = require("multer");
 const storage = multer.diskStorage({
   destination: "documents",
   filename: (req, file, cb) => {
-    // cb(null, file.originalname + path.extname(file.originalname));
     cb(null, file.originalname);
   },
 });
@@ -35,11 +34,7 @@ const {
 } = require("../controllers/trainingAgent.controller");
 const Business = require("../models/business.model");
 const { getBrowser } = require("../integrations/urlScreenshot");
-const { generatePdfThumbnail } = require("../utils/helpers");
-const {
-  STORAGE_BASE_PATH,
-  DOCUMENTS_BASE_PATH,
-} = require("../utils/constants");
+const { DOCUMENTS_BASE_PATH } = require("../utils/constants");
 
 const urlsValidationSchema = z.object({
   urls: z.array(z.string().url()),
@@ -98,13 +93,7 @@ router.post("/urls", async (req, res) => {
 
     await Promise.all(promises);
 
-    const destinationPath = path.join(
-      __dirname,
-      "..",
-      "..",
-      "documents",
-      `${userId}`
-    );
+    const destinationPath = path.join(DOCUMENTS_BASE_PATH, `${userId}`);
 
     await fs.mkdir(destinationPath, { recursive: true });
 
@@ -187,6 +176,12 @@ router.post("/documents", upload.array("files"), async (req, res) => {
       },
     });
 
+    if (!assistant) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid user id." });
+    }
+
     assistant = assistant.toJSON();
 
     let documents = await Document.bulkCreate(
@@ -228,22 +223,17 @@ router.post("/documents", upload.array("files"), async (req, res) => {
     await fs.mkdir(destinationPath, { recursive: true });
 
     promises = documents.map((file) => {
-      const sourcePath = path.join(DOCUMENTS_BASE_PATH, file.name);
+      const sourcePath = path.join(
+        __dirname,
+        "..",
+        "..",
+        "documents",
+        file.name
+      );
       return fs.rename(sourcePath, `${destinationPath}/${file.name}`);
     });
 
     await Promise.all(promises);
-
-    documents = documents.filter((doc) => doc.type === "application/pdf");
-
-    await Promise.all(
-      documents.map((doc) =>
-        generatePdfThumbnail(
-          `${DOCUMENTS_BASE_PATH}/${req.body.userId}/${doc.name}`,
-          `${DOCUMENTS_BASE_PATH}/${req.body.userId}/${doc.name}-preview.png`
-        )
-      )
-    );
 
     res
       .status(201)
@@ -338,8 +328,6 @@ router.post("/chat", async (req, res) => {
     });
 
     business = business.toJSON();
-
-    console.log("assistant", assistant);
 
     const aiResponse = await generateTrainingAgentResponse(
       message,

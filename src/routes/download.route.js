@@ -1,21 +1,40 @@
 const router = require("express").Router();
 const path = require("path");
 const fs = require("fs/promises");
+const { DOCUMENTS_BASE_PATH } = require("../utils/constants");
 
-router.get("/download/:fileName", async (req, res) => {
-  const userId = 1;
+router.get("/:fileName", async (req, res) => {
+  // const userId = 1;
+
+  // const filePath = path.join(
+  //   __dirname,
+  //   "documents",
+  //   `${userId}`,
+  //   req.params.fileName
+  // );
+
+  // const data = await fs.readFile(filePath);
+
+  // res.setHeader("Content-Disposition", "attachment");
+  // res.status(200).send(data);
+
+  const userId = req?.user?.id || 2;
 
   const filePath = path.join(
-    __dirname,
-    "documents",
+    DOCUMENTS_BASE_PATH,
     `${userId}`,
     req.params.fileName
   );
 
-  const data = await fs.readFile(filePath);
+  try {
+    const data = await fs.readFile(filePath);
 
-  res.setHeader("Content-Disposition", "attachment");
-  res.status(200).send(data);
+    res.setHeader("Content-Disposition", "attachment");
+    res.status(200).send(data);
+  } catch (error) {
+    console.error("Error downloading file: ", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
 });
 
 module.exports = router;

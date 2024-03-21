@@ -26,8 +26,6 @@ async function scrapeAndPersistData(url, collectionName, urlId) {
 }
 
 async function readFileAndPersistData(filePath, collectionName, documentId) {
-  // filePath = path.join(__dirname, "..", "..", "sample-file.pdf");
-
   const fileExtension = path.extname(filePath);
   console.log(`Extension: ${fileExtension}`);
 
@@ -42,11 +40,8 @@ async function readFileAndPersistData(filePath, collectionName, documentId) {
     loader = new CSVLoader(filePath);
   }
 
-  // const loader = new PDFLoader(file.buffer);
   const rawDocs = await loader.load();
-
   const docs = await splitDocuments(rawDocs);
-
   docs.forEach((doc) => (doc.metadata.documentId = `document-${documentId}`));
 
   await addToVectoreStore(collectionName, docs);
