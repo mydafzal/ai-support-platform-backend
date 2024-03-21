@@ -11,11 +11,12 @@ const Url = require("../models/url.model");
 const { redisClient } = require("../integrations/redis");
 const Chat = require("../models/chat.model");
 const Call = require("../models/call.model");
-const CallGroup = require("../models/callGroup.model");
+const CallTag = require("../models/callTag.model");
 const Integration = require("../models/integration.model");
 const { sendEmail } = require("../integrations/nodemailer");
 const TeamMember = require("../models/teamMember.model");
 const TeamGroup = require("../models/teamGroup.model");
+const CallTagMapping = require("../models/callTagMapping.model");
 
 const userValidationSchema = z.object({
   email: z.string().email(),
@@ -325,12 +326,55 @@ router.get("/:id/team-groups", async (req, res) => {
 });
 
 router.get("/:id/calls", async (req, res) => {
+  let { page = 1, pageSize = 10, tagId } = req.query;
+
+  if (page < 1) {
+    page = 1;
+  }
+  if (pageSize < 1) {
+    pageSize = 10;
+  }
+
   try {
+    const offset = (page - 1) * pageSize;
+
+    let whereCondition = { userId: req.params.id };
+    if (tagId) {
+      whereCondition.tagId = tagId;
+    }
+
     let calls = await Call.findAll({
-      where: { userId: req.params.id },
+      where: whereCondition,
+      limit: parseInt(pageSize),
+      offset: parseInt(offset),
     });
 
     calls = calls.map((item) => item.toJSON());
+
+    calls = await Promise.all(
+      calls.map(async (call) => {
+        let messages = await redisClient.lRange(
+          `transcription-${call.id}`,
+          0,
+          -1
+        );
+
+        messages = messages.map((item) => {
+          item = JSON.parse(item);
+
+          return {
+            type: item.type,
+            content: item.data.content,
+            timestamp: item.data?.additional_kwargs?.timestamp,
+          };
+        });
+
+        return {
+          ...call,
+          transcription: messages,
+        };
+      })
+    );
 
     res.status(200).json({ success: true, data: calls });
   } catch (error) {
@@ -339,17 +383,17 @@ router.get("/:id/calls", async (req, res) => {
   }
 });
 
-router.get("/:id/call-groups", async (req, res) => {
+router.get("/:id/call-tags", async (req, res) => {
   try {
-    let callGroups = await CallGroup.findAll({
+    let callTags = await CallTag.findAll({
       where: { userId: req.params.id },
     });
 
-    callGroups = callGroups.map((item) => item.toJSON());
+    callTags = callTags.map((item) => item.toJSON());
 
-    res.status(200).json({ success: true, data: callGroups });
+    res.status(200).json({ success: true, data: callTags });
   } catch (error) {
-    console.error("Error getting calls:", error);
+    console.error("Error getting call tags:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });
