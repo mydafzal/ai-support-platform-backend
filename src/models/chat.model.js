@@ -13,8 +13,4 @@ const Chat = sequelize.define(
   {}
 );
 
-Chat.belongsTo(User, { foreignKey: "userId" });
-
-// Chat.sync({ force: true });
-
 module.exports = Chat;

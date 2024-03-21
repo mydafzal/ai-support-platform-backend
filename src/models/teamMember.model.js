@@ -18,9 +18,4 @@ const TeamMember = sequelize.define(
   {}
 );
 
-TeamMember.belongsTo(User, { foreignKey: "userId" });
-TeamMember.belongsTo(TeamGroup, { foreignKey: "teamGroupId" });
-
-// TeamMember.sync({ force: true });
-
 module.exports = TeamMember;

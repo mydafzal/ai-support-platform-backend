@@ -33,8 +33,4 @@ const Assistant = sequelize.define(
   {}
 );
 
-Assistant.belongsTo(User, { foreignKey: "userId" });
-
-// Assistant.sync({ force: true });
-
 module.exports = Assistant;

@@ -15,27 +15,4 @@ const CallGroup = sequelize.define(
   {}
 );
 
-CallGroup.belongsTo(User, { foreignKey: "userId" });
-
-// // Define a hook on the CallGroups model to delete associated calls when a group is deleted
-// CallGroup.addHook("beforeDestroy", async (group, options) => {
-//   // Find calls that are only associated with this group
-//   const callsToDelete = await Calls.findAll({
-//     include: [
-//       {
-//         model: CallGroup,
-//         where: { id: group.id },
-//         through: { attributes: [] }, // Exclude join table attributes
-//       },
-//     ],
-//     having: Sequelize.literal("COUNT(*) = 1"), // Only calls in this group
-//     group: ["Call.id"], // Group by call ID
-//   });
-
-//   // Delete the calls found
-//   await Promise.all(callsToDelete.map((call) => call.destroy()));
-// });
-
-// CallGroup.sync({ force: true });
-
 module.exports = CallGroup;

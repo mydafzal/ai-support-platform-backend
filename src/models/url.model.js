@@ -13,8 +13,5 @@ const Url = sequelize.define(
   {}
 );
 
-Url.belongsTo(User, { foreignKey: "userId" });
-
-// Url.sync({ force: true });
 
 module.exports = Url;
