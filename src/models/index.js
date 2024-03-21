@@ -36,6 +36,7 @@ CallGroupMapping.belongsTo(Call, { foreignKey: "callId" });
 CallGroupMapping.belongsTo(CallGroup, { foreignKey: "groupId" });
 
 TeamMember.belongsTo(TeamGroup, { foreignKey: "teamGroupId" });
+TeamGroup.hasMany(TeamMember, { foreignKey: "teamGroupId" });
 
 // User.sync({ force: true });
 // Call.sync({ force: true });

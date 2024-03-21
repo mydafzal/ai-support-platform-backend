@@ -290,6 +290,12 @@ router.get("/:id/team-members", async (req, res) => {
       where: {
         userId,
       },
+      include: [
+        {
+          model: TeamGroup,
+          attributes: ["name"],
+        },
+      ],
     });
 
     teamMembers = teamMembers.map((item) => item.toJSON());
