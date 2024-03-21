@@ -1,6 +1,6 @@
 const Call = require("./call.model");
-const CallGroup = require("./callGroup.model");
-const CallGroupMapping = require("./callGroupMapping.model");
+const CallTag = require("./callTag.model");
+// const CallTagMapping = require("./callTagMapping.model");
 const TeamGroup = require("./teamGroup.model");
 const TeamMember = require("./teamMember.model");
 const User = require("./user.model");
@@ -12,7 +12,7 @@ const Integration = require("./integration.model");
 const Chat = require("./chat.model");
 
 Call.belongsTo(User, { foreignKey: "userId" });
-CallGroup.belongsTo(User, { foreignKey: "userId" });
+CallTag.belongsTo(User, { foreignKey: "userId" });
 TeamGroup.belongsTo(User, { foreignKey: "userId" });
 TeamMember.belongsTo(User, { foreignKey: "userId" });
 Assistant.belongsTo(User, { foreignKey: "userId" });
@@ -22,26 +22,24 @@ Url.belongsTo(User, { foreignKey: "userId" });
 Document.belongsTo(User, { foreignKey: "userId" });
 Chat.belongsTo(User, { foreignKey: "userId" });
 
-Call.belongsToMany(CallGroup, {
-  through: CallGroupMapping,
-  foreignKey: "callId",
+Call.belongsTo(CallTag, {
+  foreignKey: "tagId",
 });
 
-CallGroup.belongsToMany(Call, {
-  through: CallGroupMapping,
-  foreignKey: "groupId",
+CallTag.hasMany(Call, {
+  foreignKey: "tagId",
 });
 
-CallGroupMapping.belongsTo(Call, { foreignKey: "callId" });
-CallGroupMapping.belongsTo(CallGroup, { foreignKey: "groupId" });
+// CallTagMapping.belongsTo(Call, { foreignKey: "callId" });
+// CallTagMapping.belongsTo(CallTag, { foreignKey: "tagId" });
 
 TeamMember.belongsTo(TeamGroup, { foreignKey: "teamGroupId" });
 TeamGroup.hasMany(TeamMember, { foreignKey: "teamGroupId" });
 
 // User.sync({ force: true });
 // Call.sync({ force: true });
-// CallGroup.sync({ force: true });
-// CallGroupMapping.sync({ force: true });
+// CallTag.sync({ force: true });
+// CallTagMapping.sync({ force: true });
 // TeamGroup.sync({ force: true });
 // TeamMember.sync({ force: true });
 // Url.sync({ force: true });

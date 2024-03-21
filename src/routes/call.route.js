@@ -16,11 +16,10 @@ const Business = require("../models/business.model");
 const router = Router();
 
 const { z } = require("zod");
-const CallGroupMapping = require("../models/callGroupMapping.model");
+const Call = require("../models/call.model");
 
-const callGroupingValidationSchema = z.object({
-  groupId: z.number(),
-  callIds: z.array(z.string()),
+const callTaggingValidationSchema = z.object({
+  tagId: z.number(),
 });
 
 router.get("/access-token/:id?", (req, res) => {
@@ -94,10 +93,11 @@ router.post("/redirected-call-disconnect", async (req, res) => {
   res.status(200).send(result);
 });
 
-router.put("/group", async (req, res) => {
+router.put("/:id/tag", async (req, res) => {
   try {
-    const { success, error } =
-      await callGroupingValidationSchema.safeParseAsync(req.body);
+    const { success, error } = await callTaggingValidationSchema.safeParseAsync(
+      req.body
+    );
 
     if (!success) {
       return res
@@ -105,22 +105,20 @@ router.put("/group", async (req, res) => {
         .json({ success: false, message: error.errors[0].message });
     }
 
-    const { groupId, callIds } = req.body;
+    const { tagId } = req.body;
 
-    console.log("bulk creation..........................");
-
-    let callGroupMappings = await CallGroupMapping.bulkCreate(
-      callIds.map((callId) => ({
-        callId,
-        groupId,
-      }))
+    await Call.update(
+      { tagId },
+      {
+        where: {
+          id: req.params.id,
+        },
+      }
     );
 
-    callGroupMappings = callGroupMappings.map((item) => item.toJSON());
-
-    res.status(200).json({ success: true, data: callGroupMappings });
+    res.status(200).json({ success: true, message: "Call added to tag." });
   } catch (error) {
-    console.error("Error adding calls to group:", error);
+    console.error("Error tagging calls: ", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });
