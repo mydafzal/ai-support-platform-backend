@@ -121,6 +121,8 @@ router.post("/", async (req, res) => {
       voiceId,
       greetingMessageUrl,
       farewellMessageUrl,
+      greetingMessage,
+      farewellMessage,
       knowledgeBaseName: uuidv4(),
     });
 

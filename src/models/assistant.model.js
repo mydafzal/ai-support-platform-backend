@@ -25,6 +25,14 @@ const Assistant = sequelize.define(
       type: DataTypes.STRING,
       allowNull: false,
     },
+    greetingMessage: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    farewellMessage: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
     knowledgeBaseName: {
       type: DataTypes.STRING,
       allowNull: false,
