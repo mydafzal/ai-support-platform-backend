@@ -41,6 +41,8 @@ const {
   CALL_RECORDINGS_BASE_PATH,
 } = require("../utils/constants");
 const { generateFilename } = require("../utils/helpers");
+const { sendEmail } = require("../integrations/nodemailer");
+const User = require("../models/user.model");
 
 async function handleIncomingCall(request) {
   const VoiceResponse = twilio.twiml.VoiceResponse;
@@ -99,7 +101,35 @@ async function handleIncomingCall(request) {
       "HubSpot integration not available, couldn't retrieve customer's information"
     );
 
+    await Call.update(
+      {
+        warnings: ["HubSpot"],
+      },
+      {
+        where: {
+          id: callId,
+        },
+      }
+    );
+
+    let user = await User.findOne({
+      where: {
+        id: business.userId,
+      },
+    });
+
+    user = user.toJSON();
+
     // Trigger email to business to connect the CRM...
+    const emailLink = `${request.protocol}://${request.get(
+      "host"
+    )}/integration?callId=${callId}`;
+
+    const emailTemplate = `We couldn't retrieve details of your customer because you have not connected any CRM with Customer Bot. 
+    </br>
+    Click <a href="${emailLink}">here</a> to get redirected to the call during which this problem occured.`;
+
+    await sendEmail(user.email, emailTemplate);
   } else {
     const contact = await getContactByPhoneNumber(
       integration.accessToken,
@@ -128,6 +158,8 @@ async function handleIncomingCall(request) {
     customerDetails: formattedCustomerDetails,
     customerName: customerFullName,
     customerPhoneNumber,
+    shouldAddGreetingMessageToTranscription: false,
+    shouldAddFarewellMessageToTranscription: false,
   };
 
   await storeCallData(callId, callDetails);
@@ -184,13 +216,16 @@ async function handleSpeechInput(request) {
     collectionName,
     audioFileNames,
     phoneNumbers,
+    shouldAddGreetingMessageToTranscription,
   } = callData;
 
   if (!voiceInput) {
     twiml.play(farewellMessageUrl);
     twiml.hangup();
 
-    deleteCallData(callId);
+    callData.shouldAddFarewellMessageToTranscription = true;
+    await updateCallConversation(callId, callData);
+
     return twiml.toString();
   }
 
@@ -271,6 +306,10 @@ async function handleSpeechInput(request) {
     callData.audioFileNames = [fileName];
   } else {
     callData.audioFileNames.push(fileName);
+  }
+
+  if (!shouldAddGreetingMessageToTranscription) {
+    callData.shouldAddGreetingMessageToTranscription = true;
   }
 
   await updateCallConversation(callId, callData);
@@ -417,41 +456,52 @@ async function handleCallDisconnect(request) {
 
   if (callData?.audioFileNames) {
     // Delete all AI speeches that were generated during the call.
-    const promises = audioFileNames?.map((fileName) =>
+    const promises = callData?.audioFileNames?.map((fileName) =>
       fs.promises.unlink(`${AUDIO_FILES_BASE_PATH}/${fileName}`)
     );
 
     await Promise.all(promises);
   }
 
+  if (callData?.shouldAddGreetingMessageToTranscription) {
+    let call = await Call.findByPk(callId, {
+      attributes: ["userId"],
+    });
+
+    const assistant = await Assistant.findOne({
+      where: { userId: call.toJSON().userId },
+    });
+
+    const greetingMessage = {
+      type: "ai",
+      data: {
+        content: assistant.toJSON().greetingMessage,
+        additional_kwargs: { timestamp: "" },
+      },
+    };
+
+    await redisClient.rPush(
+      `transcription-${callId}`,
+      JSON.stringify(greetingMessage)
+    );
+
+    if (callData.shouldAddFarewellMessageToTranscription) {
+      const farewellMessage = {
+        type: "ai",
+        data: {
+          content: assistant.toJSON().farewellMessage,
+          additional_kwargs: { timestamp: "" },
+        },
+      };
+
+      await redisClient.lPush(
+        `transcription-${callId}`,
+        JSON.stringify(farewellMessage)
+      );
+    }
+  }
+
   deleteCallData(callId);
-
-  let call = await Call.findByPk(callId, {
-    attributes: ["userId"],
-  });
-
-  const assistant = await Assistant.findOne({
-    where: { userId: call.toJSON().userId },
-  });
-
-  const greetingMessage = {
-    type: "ai",
-    data: {
-      content: assistant.toJSON().greetingMessage,
-      additional_kwargs: { timestamp: "" },
-    },
-  };
-
-  const farewellMessage = {
-    type: "ai",
-    data: {
-      content: assistant.toJSON().farewellMessage,
-      additional_kwargs: { timestamp: "" },
-    },
-  };
-
-  await redisClient.lPush(`transcription-${callId}`, greetingMessage);
-  await redisClient.rPush(`transcription-${callId}`, farewellMessage);
 }
 
 async function startCallRecording(callId) {
