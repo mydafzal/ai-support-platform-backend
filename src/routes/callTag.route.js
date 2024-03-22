@@ -34,22 +34,16 @@ router.post("/", async (req, res) => {
 });
 
 router.delete("/:id", async (req, res) => {
+  const tagId = req.params.id;
+
   try {
     const callsToDelete = await Call.findAll({
-      include: [
-        {
-          model: CallTag,
-          where: { id: req.params.id },
-          through: { attributes: [] }, // Exclude join table attributes
-        },
-      ],
-      having: Sequelize.literal("COUNT(*) = 1"), // Only calls in this group
-      group: ["Call.id", "CallTags.id"], // Group by call ID and call group ID
+      where: { tagId },
     });
 
     await CallTag.destroy({
       where: {
-        id: req.params.id,
+        id: tagId,
       },
     });
 
