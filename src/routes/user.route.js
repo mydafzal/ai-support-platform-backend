@@ -83,7 +83,8 @@ router.post("/", async (req, res) => {
     user = user.toJSON();
 
     const emailLink = `${req.hostname}/email-verification?token=${user.emailVerificationToken}`;
-    await sendEmail(user.email, emailLink);
+    const emailTemplate = `Please verify your email: <a href="${emailLink}">here</a>`;
+    await sendEmail(user.email, emailTemplate);
 
     const token = jwt.sign({ ...user }, process.env.JWT_SECRET);
 

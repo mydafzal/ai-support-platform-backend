@@ -77,7 +77,9 @@ router.post("/login", async (req, res) => {
           "host"
         )}/email-verification?token=${user?.emailVerificationToken}`;
 
-        await sendEmail(user?.email, emailLink);
+        const emailTemplate = `Please verify your email: <a href="${emailLink}">here</a>`;
+
+        await sendEmail(user?.email, emailTemplate);
 
         return res.status(200).json({
           success: false,
@@ -267,7 +269,8 @@ router.post("/forgot-password", async (req, res) => {
     await user.save();
 
     const emailLink = `${req.hostname}/setup-passsword?token=${token}`;
-    await sendEmail(email, emailLink);
+    const emailTemplate = `Reset your password: <a href="${emailLink}">here</a>`;
+    await sendEmail(email, emailTemplate);
 
     res.status(200).json({
       success: true,
