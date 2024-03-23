@@ -1,6 +1,5 @@
 const Call = require("./call.model");
 const CallTag = require("./callTag.model");
-// const CallTagMapping = require("./callTagMapping.model");
 const TeamGroup = require("./teamGroup.model");
 const TeamMember = require("./teamMember.model");
 const User = require("./user.model");
@@ -30,11 +29,10 @@ CallTag.hasMany(Call, {
   foreignKey: "tagId",
 });
 
-// CallTagMapping.belongsTo(Call, { foreignKey: "callId" });
-// CallTagMapping.belongsTo(CallTag, { foreignKey: "tagId" });
-
 TeamMember.belongsTo(TeamGroup, { foreignKey: "teamGroupId" });
 TeamGroup.hasMany(TeamMember, { foreignKey: "teamGroupId" });
+Chat.belongsTo(TeamGroup, { foreignKey: "groupId" });
+// TeamGroup.hasMany(Chat, { foreignKey: "groupId" });
 
 // User.sync({ force: true });
 // Call.sync({ force: true });
