@@ -2,10 +2,10 @@ const { DataTypes } = require("sequelize");
 const { sequelize } = require("../loaders/db");
 const User = require("./user.model");
 
-const Chat = sequelize.define(
-  "Chat",
+const TeamGroup = sequelize.define(
+  "TeamGroup",
   {
-    title: {
+    name: {
       type: DataTypes.STRING,
       allowNull: false,
     },
@@ -13,4 +13,4 @@ const Chat = sequelize.define(
   {}
 );
 
-module.exports = Chat;
+module.exports = TeamGroup;

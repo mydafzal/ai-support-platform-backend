@@ -31,8 +31,4 @@ const Call = sequelize.define(
   {}
 );
 
-Call.belongsTo(User, { foreignKey: "userId" });
-
-// Call.sync({ force: true });
-
 module.exports = Call;

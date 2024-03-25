@@ -1,9 +1,10 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../loaders/db");
 const User = require("./user.model");
+const TeamGroup = require("./teamGroup.model");
 
-const Employee = sequelize.define(
-  "Employee",
+const TeamMember = sequelize.define(
+  "TeamMember",
   {
     name: {
       type: DataTypes.STRING,
@@ -17,8 +18,4 @@ const Employee = sequelize.define(
   {}
 );
 
-Employee.belongsTo(User, { foreignKey: "userId" });
-
-// Employee.sync({ force: true });
-
-module.exports = Employee;
+module.exports = TeamMember;

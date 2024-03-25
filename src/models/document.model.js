@@ -21,8 +21,4 @@ const Document = sequelize.define(
   {}
 );
 
-Document.belongsTo(User, { foreignKey: "userId" });
-
-// Document.sync({ force: true });
-
 module.exports = Document;

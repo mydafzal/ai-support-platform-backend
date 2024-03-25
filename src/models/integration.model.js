@@ -25,8 +25,4 @@ const Integration = sequelize.define(
   {}
 );
 
-Integration.belongsTo(User, { foreignKey: "userId" });
-
-// Integration.sync({ force: true });
-
 module.exports = Integration;

@@ -10,11 +10,12 @@ const Document = require("../models/document.model");
 const Url = require("../models/url.model");
 const { redisClient } = require("../integrations/redis");
 const Chat = require("../models/chat.model");
-const Employee = require("../models/employee.model");
 const Call = require("../models/call.model");
 const CallGroup = require("../models/callGroup.model");
 const Integration = require("../models/integration.model");
 const { sendEmail } = require("../integrations/nodemailer");
+const TeamMember = require("../models/teamMember.model");
+const TeamGroup = require("../models/teamGroup.model");
 
 const userValidationSchema = z.object({
   email: z.string().email(),
@@ -126,13 +127,11 @@ router.get("/:id/documents", async (req, res) => {
 
     documents = documents.map((item) => item.toJSON());
 
-    res
-      .status(200)
-      .json({
-        success: true,
-        data: documents,
-        pagination: { page, pageSize, totalCount },
-      });
+    res.status(200).json({
+      success: true,
+      data: documents,
+      pagination: { page, pageSize, totalCount },
+    });
   } catch (error) {
     console.error("Error fetching customer:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
@@ -283,20 +282,44 @@ router.delete("/:id/chats", async (req, res) => {
   }
 });
 
-router.get("/:id/employees", async (req, res) => {
+router.get("/:id/team-members", async (req, res) => {
   const userId = req.params.id;
 
   try {
-    let employees = await Employee.findAll({
+    let teamMembers = await TeamMember.findAll({
+      where: {
+        userId,
+      },
+      include: [
+        {
+          model: TeamGroup,
+          attributes: ["name"],
+        },
+      ],
+    });
+
+    teamMembers = teamMembers.map((item) => item.toJSON());
+    res.status(200).json({ success: true, data: teamMembers });
+  } catch (error) {
+    console.error("Error getting team members:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/team-groups", async (req, res) => {
+  const userId = req.params.id;
+
+  try {
+    let teamGroups = await TeamGroup.findAll({
       where: {
         userId,
       },
     });
 
-    employees = employees.map((item) => item.toJSON());
-    res.status(200).json({ success: true, data: employees });
+    teamGroups = teamGroups.map((item) => item.toJSON());
+    res.status(200).json({ success: true, data: teamGroups });
   } catch (error) {
-    console.error("Error getting employees:", error);
+    console.error("Error getting team groups:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });
@@ -316,7 +339,7 @@ router.get("/:id/calls", async (req, res) => {
   }
 });
 
-router.get("/:id/callGroups", async (req, res) => {
+router.get("/:id/call-groups", async (req, res) => {
   try {
     let callGroups = await CallGroup.findAll({
       where: { userId: req.params.id },

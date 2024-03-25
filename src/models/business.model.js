@@ -20,8 +20,4 @@ const Business = sequelize.define(
   {}
 );
 
-Business.belongsTo(User, { foreignKey: "userId" });
-
-// Business.sync({ force: true });
-
 module.exports = Business;
