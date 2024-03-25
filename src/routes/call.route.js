@@ -15,14 +15,6 @@ const Business = require("../models/business.model");
 
 const router = Router();
 
-const { z } = require("zod");
-const CallGroupMapping = require("../models/callGroupMapping.model");
-
-const callGroupingValidationSchema = z.object({
-  groupId: z.number(),
-  callIds: z.array(z.string()),
-});
-
 router.get("/access-token/:id?", (req, res) => {
   const result = getTwilioAccessToken(req.params.id);
   res.status(200).json(result);
@@ -92,37 +84,6 @@ router.post("/redirected-call-disconnect", async (req, res) => {
 
   res.type("application/xml");
   res.status(200).send(result);
-});
-
-router.put("/group", async (req, res) => {
-  try {
-    const { success, error } =
-      await callGroupingValidationSchema.safeParseAsync(req.body);
-
-    if (!success) {
-      return res
-        .status(400)
-        .json({ success: false, message: error.errors[0].message });
-    }
-
-    const { groupId, callIds } = req.body;
-
-    console.log("bulk creation..........................");
-
-    let callGroupMappings = await CallGroupMapping.bulkCreate(
-      callIds.map((callId) => ({
-        callId,
-        groupId,
-      }))
-    );
-
-    callGroupMappings = callGroupMappings.map((item) => item.toJSON());
-
-    res.status(200).json({ success: true, data: callGroupMappings });
-  } catch (error) {
-    console.error("Error adding calls to group:", error);
-    res.status(500).json({ success: false, message: "Internal Server Error" });
-  }
 });
 
 module.exports = router;

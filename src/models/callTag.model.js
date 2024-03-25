@@ -1,15 +1,16 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../loaders/db");
 
-const TeamGroup = sequelize.define(
-  "TeamGroup",
+const CallTag = sequelize.define(
+  "CallTag",
   {
     name: {
       type: DataTypes.STRING,
       allowNull: false,
+      unique: true,
     },
   },
   {}
 );
 
-module.exports = TeamGroup;
+module.exports = CallTag;

@@ -1,6 +1,6 @@
 const nodemailer = require("nodemailer");
 
-async function sendEmail(email, emailLink) {
+async function sendEmail(email, emailTemplate) {
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
@@ -12,8 +12,8 @@ async function sendEmail(email, emailLink) {
   const mailOptions = {
     from: process.env.NODE_MAILER_EMAIL,
     to: email,
-    subject: "Verify Your Email",
-    html: `Click the link to verify your email: <a href="${emailLink}">${emailLink}</a>`,
+    subject: "Customer Bot",
+    html: emailTemplate,
   };
 
   transporter.sendMail(mailOptions, (error, info) => {
