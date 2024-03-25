@@ -10,6 +10,8 @@ const { PromptTemplate } = require("@langchain/core/prompts");
 const pdf = require("pdf-thumbnail");
 const fs = require("fs/promises");
 
+const jwt = require("jsonwebtoken");
+
 function generateFilename(fileExtension) {
   const uniqueId = uuidv4();
 
@@ -66,8 +68,18 @@ async function generatePdfThumbnail(sourceFilePath, thumbnailPath) {
     .catch((err) => console.log("Error generating pdf preview", err));
 }
 
-function generateEmailVerificationToken() {
-  return crypto.randomBytes(20).toString("hex");
+function generateEmailVerificationToken(userId) {
+  return jwt.sign({ userId }, process.env.JWT_SECRET, {
+    expiresIn: "1h",
+  });
+}
+
+function generateJWT(payload) {
+  return jwt.sign({ ...payload }, process.env.JWT_SECRET);
+}
+
+function generateEmailLink(request, path, queryParams) {
+  return `${request.protocol}://${request.get("host")}/${path}?${queryParams}`;
 }
 
 module.exports = {
@@ -76,4 +88,6 @@ module.exports = {
   generateChatTitle,
   generatePdfThumbnail,
   generateEmailVerificationToken,
+  generateJWT,
+  generateEmailLink,
 };

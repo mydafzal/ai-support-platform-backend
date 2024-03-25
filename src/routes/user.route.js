@@ -3,7 +3,6 @@ const User = require("../models/user.model");
 
 const bcrypt = require("bcrypt");
 const saltRounds = 10;
-const jwt = require("jsonwebtoken");
 
 const { z } = require("zod");
 const Document = require("../models/document.model");
@@ -16,7 +15,11 @@ const Integration = require("../models/integration.model");
 const { sendEmail } = require("../integrations/nodemailer");
 const TeamMember = require("../models/teamMember.model");
 const TeamGroup = require("../models/teamGroup.model");
-const CallTagMapping = require("../models/callTagMapping.model");
+const {
+  generateEmailVerificationToken,
+  generateEmailLink,
+  generateJWT,
+} = require("../utils/helpers");
 
 const userValidationSchema = z.object({
   email: z.string().email(),
@@ -26,7 +29,6 @@ const userValidationSchema = z.object({
 
 router.post("/", async (req, res) => {
   const { name, email, password } = req.body;
-  console.log("add user", req.body);
 
   try {
     const { success, error } = await userValidationSchema.safeParseAsync(
@@ -71,22 +73,23 @@ router.post("/", async (req, res) => {
       },
     });
 
-    const emailVerificationToken = jwt.sign(
-      { userId: user.toJSON().id },
-      process.env.JWT_SECRET,
-      { expiresIn: "1h" }
+    const emailVerificationToken = generateEmailVerificationToken(
+      user.toJSON().id
     );
-
     user.emailVerificationToken = emailVerificationToken;
     await user.save();
 
     user = user.toJSON();
 
-    const emailLink = `${req.hostname}/email-verification?token=${user.emailVerificationToken}`;
-    const emailTemplate = `Please verify your email: <a href="${emailLink}">here</a>`;
+    const emailLink = generateEmailLink(
+      req,
+      "verify-email",
+      `token=${emailVerificationToken}`
+    );
+    const emailTemplate = `Please verify your email by clicking <a href="${emailLink}">here</a>`;
     await sendEmail(user.email, emailTemplate);
 
-    const token = jwt.sign({ ...user }, process.env.JWT_SECRET);
+    const token = generateJWT(user);
 
     res.status(201).json({
       success: true,
@@ -196,8 +199,6 @@ router.get("/:id/teach-chat-messages", async (req, res) => {
 
   try {
     let result = await redisClient.lRange(`teach-chat-${userId}`, 0, -1);
-
-    console.log("result", JSON.parse(result[0]).data);
 
     result = result.map((item) => {
       item = JSON.parse(item);

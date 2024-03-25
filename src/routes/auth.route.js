@@ -10,6 +10,11 @@ const { z } = require("zod");
 const { sendEmail } = require("../integrations/nodemailer");
 const Business = require("../models/business.model");
 const Assistant = require("../models/assistant.model");
+const {
+  generateEmailVerificationToken,
+  generateEmailLink,
+  generateJWT,
+} = require("../utils/helpers");
 
 const loginValidationSchema = z.object({
   email: z.string().email(),
@@ -45,10 +50,21 @@ router.post("/login", async (req, res) => {
       user = await User.findOne({
         where: {
           email,
+          externalType,
+        },
+        attributes: {
+          exclude: ["emailVerificationToken", "resetPasswordToken"],
         },
       });
 
       if (!user) {
+        if (!name) {
+          return res.status(400).json({
+            success: false,
+            message: "Name is required.",
+          });
+        }
+
         user = await User.create({
           name,
           email,
@@ -62,6 +78,9 @@ router.post("/login", async (req, res) => {
     else {
       user = await User.findOne({
         where: { email },
+        attributes: {
+          exclude: ["emailVerificationToken", "resetPasswordToken"],
+        },
       });
 
       if (!user) {
@@ -73,13 +92,28 @@ router.post("/login", async (req, res) => {
       user = user.toJSON();
 
       if (!user?.emailVerified) {
-        const emailLink = `${req.protocol}://${req.get(
-          "host"
-        )}/email-verification?token=${user?.emailVerificationToken}`;
+        const emailVerificationToken = generateEmailVerificationToken(user.id);
 
-        const emailTemplate = `Please verify your email: <a href="${emailLink}">here</a>`;
+        const emailLink = generateEmailLink(
+          req,
+          "verify-email",
+          `token=${emailVerificationToken}`
+        );
+
+        const emailTemplate = `Please verify your email by clicking <a href="${emailLink}">here</a>`;
 
         await sendEmail(user?.email, emailTemplate);
+
+        await User.update(
+          {
+            emailVerificationToken,
+          },
+          {
+            where: {
+              id: user.id,
+            },
+          }
+        );
 
         return res.status(200).json({
           success: false,
@@ -96,16 +130,7 @@ router.post("/login", async (req, res) => {
       }
     }
 
-    user = await User.findOne({
-      where: {
-        email,
-      },
-      attributes: {
-        exclude: ["password", "emailVerificationToken", "resetPasswordToken"],
-      },
-    });
-
-    user = user.toJSON();
+    delete user.password;
 
     const business = await Business.findOne({
       where: {
@@ -125,116 +150,19 @@ router.post("/login", async (req, res) => {
       },
     });
 
-    const token = jwt.sign(
-      {
-        ...user,
-        assistant: assistant?.toJSON(),
-        business: business?.toJSON(),
-      },
-      process.env.JWT_SECRET
-    );
+    const payload = {
+      ...user,
+      assistant: assistant?.toJSON(),
+      business: business?.toJSON(),
+    };
+
+    const token = generateJWT(payload);
     return res.status(200).json({ success: true, data: token });
   } catch (error) {
     console.error("Error during login:", error);
     res.status(500).json({ success: false, message: "Internal Server Error." });
   }
 });
-
-// router.get("/token", async (req, res) => {
-//   const { email, password, externalType } = req.body;
-
-//   try {
-//     const { success, error } = await loginValidationSchema.safeParseAsync(
-//       req.body
-//     );
-
-//     if (!success) {
-//       return res.status(400).json({
-//         success: false,
-//         message: error.errors[0].message,
-//       });
-//     }
-
-//     let user = await User.findOne({
-//       where: {
-//         email,
-//       },
-//     });
-
-//     if (!user) {
-//       return res
-//         .status(400)
-//         .json({ success: false, message: "Invalid email and/or password." });
-//     }
-
-//     user = user.toJSON();
-
-//     if (!user?.emailVerified) {
-//       const emailLink = `${req.protocol}://${req.get(
-//         "host"
-//       )}/email-verification?token=${user?.emailVerificationToken}`;
-
-//       await sendEmail(user?.email, emailLink);
-
-//       return res.status(200).json({
-//         success: false,
-//         message:
-//           "Email not verified. A new email verification link has been sent.",
-//       });
-//     }
-
-//     if (externalType !== "Google" && externalType !== "Apple") {
-//       const result = await bcrypt.compare(password, user.password);
-
-//       if (!result) {
-//         return res
-//           .status(400)
-//           .json({ success: false, message: "Invalid email and/or password" });
-//       }
-//     }
-
-//     delete user.password;
-
-//     let business = await Business.findOne({
-//       where: {
-//         userId: user.id,
-//       },
-//     });
-
-//     if (!business) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Please provide business information to complete the signup",
-//       });
-//     }
-
-//     business = business.toJSON();
-
-//     let assistant = await Assistant.findOne({
-//       where: {
-//         userId: user.id,
-//       },
-//     });
-
-//     assistant = assistant.toJSON();
-
-//     const token = jwt.sign(
-//       { user, business, assistant },
-//       process.env.JWT_SECRET,
-//       {
-//         expiresIn: 86400,
-//       }
-//     );
-
-//     res.status(200).json({
-//       success: true,
-//       data: token,
-//     });
-//   } catch (error) {
-//     console.log("Error authenticating user...", error);
-//     res.status(500).json({ success: false, message: "Internal Server Error." });
-//   }
-// });
 
 router.post("/forgot-password", async (req, res) => {
   const { email } = req.body;
@@ -268,8 +196,12 @@ router.post("/forgot-password", async (req, res) => {
     user.resetPasswordToken = token;
     await user.save();
 
-    const emailLink = `${req.hostname}/setup-passsword?token=${token}`;
-    const emailTemplate = `Reset your password: <a href="${emailLink}">here</a>`;
+    const emailLink = generateEmailLink(
+      req,
+      "setup-password",
+      `token=${token}`
+    );
+    const emailTemplate = `Reset your password by clicking <a href="${emailLink}">here</a>`;
     await sendEmail(email, emailTemplate);
 
     res.status(200).json({
@@ -356,6 +288,53 @@ router.get("/verify-email", async (req, res) => {
     res
       .status(200)
       .json({ success: true, message: "Email verified successfully" });
+  } catch (err) {
+    console.error("Error verifying email:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+router.post("/resend-verification-email", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    let user = await User.findOne({
+      where: {
+        email,
+      },
+    });
+
+    if (!user) {
+      return res
+        .status(400)
+        .json({ success: false, message: "User does not exist." });
+    }
+
+    if (user.toJSON().emailVerified) {
+      return res
+        .status(400)
+        .json({ success: false, message: "User is already verified." });
+    }
+
+    const emailVerificationToken = generateEmailVerificationToken(
+      user.toJSON().id
+    );
+
+    user.emailVerificationToken = emailVerificationToken;
+    await user.save();
+
+    const emailLink = generateEmailLink(
+      req,
+      "verify-email",
+      `token=${emailVerificationToken}`
+    );
+
+    const emailTemplate = `Please verify your email by clicking <a href=${emailLink}>here</a>`;
+    await sendEmail(email, emailTemplate);
+
+    res
+      .status(200)
+      .json({ success: true, message: "Verification email resent" });
   } catch (err) {
     console.error("Error verifying email:", err);
     res.status(500).json({ message: "Internal server error" });
