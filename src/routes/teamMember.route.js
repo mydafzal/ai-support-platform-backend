@@ -52,7 +52,7 @@ router.delete("/:id", async (req, res) => {
       },
     });
 
-    res.status(204);
+    res.status(204).send();
   } catch (error) {
     console.error("Error deleting team member: ", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
