@@ -15,13 +15,6 @@ const Business = require("../models/business.model");
 
 const router = Router();
 
-const { z } = require("zod");
-const Call = require("../models/call.model");
-
-const callTaggingValidationSchema = z.object({
-  tagId: z.number(),
-});
-
 router.get("/access-token/:id?", (req, res) => {
   const result = getTwilioAccessToken(req.params.id);
   res.status(200).json(result);
@@ -91,36 +84,6 @@ router.post("/redirected-call-disconnect", async (req, res) => {
 
   res.type("application/xml");
   res.status(200).send(result);
-});
-
-router.put("/:id/tag", async (req, res) => {
-  try {
-    const { success, error } = await callTaggingValidationSchema.safeParseAsync(
-      req.body
-    );
-
-    if (!success) {
-      return res
-        .status(400)
-        .json({ success: false, message: error.errors[0].message });
-    }
-
-    const { tagId } = req.body;
-
-    await Call.update(
-      { tagId },
-      {
-        where: {
-          id: req.params.id,
-        },
-      }
-    );
-
-    res.status(200).json({ success: true, message: "Call added to tag." });
-  } catch (error) {
-    console.error("Error tagging calls: ", error);
-    res.status(500).json({ success: false, message: "Internal Server Error" });
-  }
 });
 
 module.exports = router;
