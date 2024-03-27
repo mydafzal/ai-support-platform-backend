@@ -8,19 +8,19 @@ const hubspotClient = new hubspot.Client({
   apiKey: process.env.HUBSPOT_API_KEY,
 });
 
-async function getHubSpotAccessToken(code, redirecUri) {
+async function getHubSpotAccessToken(code, redirectUri) {
   try {
     const response = await hubspotClient.oauth.tokensApi.create(
       "authorization_code",
       code,
-      redirecUri,
+      redirectUri,
       process.env.HUBSPOT_CLIENT_ID,
       process.env.HUBSPOT_CLIENT_SECRET
     );
 
     return response;
   } catch (error) {
-    console.log("hubspot get access token errro", error);
+    console.log("hubspot get access token errro", error?.message);
   }
 }
 
