@@ -4,6 +4,7 @@ FROM node:latest
 # Set the working directory in the container
 WORKDIR /app
 
+
 # Copy package.json and package-lock.json (if available)
 COPY package*.json ./
 
@@ -14,7 +15,7 @@ RUN npm install
 COPY . .
 
 # Expose the port your app runs on
-EXPOSE 5000
+EXPOSE 8080
 
 # Command to run your app
 CMD ["node", "index.js"]
