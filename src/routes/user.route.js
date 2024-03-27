@@ -404,6 +404,9 @@ router.get("/:id/integrations", async (req, res) => {
   try {
     let integrations = await Integration.findAll({
       where: { userId: req.params.id },
+      attributes: {
+        exclude: ["userId", "refreshToken", "accessToken", "expirationTime"],
+      },
     });
 
     integrations = integrations.map((item) => item.toJSON());
