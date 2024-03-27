@@ -14,7 +14,7 @@ const moment = require("moment");
 const { z } = require("zod");
 const accessTokenValidationSchema = z.object({
   code: z.string(),
-  redirecUri: z.string().optional(),
+  redirectUri: z.string().optional(),
   userId: z.number(),
   name: z.enum(["Calendly", "HubSpot", "Google-OAuth"]),
 });
