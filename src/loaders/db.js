@@ -1,9 +1,14 @@
 const { Sequelize } = require("sequelize");
 
-const sequelize = new Sequelize("customer-bot", "hammadfarooq", "rockers@445", {
-  host: "localhost",
-  dialect: "postgres",
-});
+const sequelize = new Sequelize(
+  process.env.POSTGRESDB_NAME,
+  process.env.POSTGRESDB_USER,
+  process.env.POSTGRESDB_PASSWORD,
+  {
+    host: "localhost",
+    dialect: "postgres",
+  }
+);
 
 async function connecteToDb() {
   try {
