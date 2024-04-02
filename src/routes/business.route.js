@@ -3,9 +3,19 @@ const {
   createVerifyService,
 } = require("../controllers/call.controller");
 
-const Assistant = require("../models/assistant.model");
-const Business = require("../models/business.model");
-const User = require("../models/user.model");
+const {
+  Assistant,
+  Business,
+  BusinessMembership,
+  User,
+  Url,
+  Document,
+  TeamGroup,
+  Call,
+  CallTag,
+  Integration,
+  BusinessIntegration,
+} = require("../../models");
 
 const { convertTextToSpeech } = require("../integrations/textToSpeech");
 
@@ -20,6 +30,7 @@ const {
   AUDIO_FILES_BASE_PATH,
   AUDIO_FILES_BASE_URL,
 } = require("../utils/constants");
+const { Sequelize } = require("sequelize");
 
 const businessDetailsValidationSchema = z.object({
   userId: z.number(),
@@ -58,7 +69,9 @@ router.post("/", async (req, res) => {
       },
     });
 
-    if (!user?.toJSON()?.email) {
+    user = user?.toJSON();
+
+    if (!user.email) {
       return res.status(404).json({
         succcess: false,
         message: "User with the given id does not exist.",
@@ -69,17 +82,19 @@ router.post("/", async (req, res) => {
     // const verifyServiceId = await createVerifyService(companyName);
 
     let business = await Business.create({
-      businessName,
+      name: businessName,
       twilioNumber: "+14697074725",
       verifyServiceId: "",
-      userId: user.id,
-    });
-
-    business = await Business.findByPk(business.toJSON().id, {
-      attributes: { exclude: ["userId"] },
+      adminUserId: userId,
     });
 
     business = business.toJSON();
+
+    await BusinessMembership.create({
+      userId,
+      businessId: business.id,
+      role: "Admin",
+    });
 
     let promises = [
       convertTextToSpeech(greetingMessage, voiceId),
@@ -93,7 +108,7 @@ router.post("/", async (req, res) => {
     greetingMessageSpeech = Buffer.from(greetingMessageSpeech);
     farewellMessageSpeech = Buffer.from(farewellMessageSpeech);
 
-    const businessDataDirectoryPath = `${AUDIO_FILES_BASE_PATH}/business-${userId}`;
+    const businessDataDirectoryPath = `${AUDIO_FILES_BASE_PATH}/business-${business.id}`;
     await fs.mkdir(businessDataDirectoryPath, {
       recursive: true,
     });
@@ -111,11 +126,11 @@ router.post("/", async (req, res) => {
 
     await Promise.all(promises);
 
-    const greetingMessageUrl = `${AUDIO_FILES_BASE_URL}/business-${userId}/greetingMessage.mp3`;
-    const farewellMessageUrl = `${AUDIO_FILES_BASE_URL}/business-${userId}/farewellMessage.mp3`;
+    const greetingMessageUrl = `${AUDIO_FILES_BASE_URL}/business-${business.id}/greetingMessage.mp3`;
+    const farewellMessageUrl = `${AUDIO_FILES_BASE_URL}/business-${business.id}/farewellMessage.mp3`;
 
-    let assistant = await Assistant.create({
-      userId: user.id,
+    await Assistant.create({
+      businessId: business.id,
       name: assistantName,
       voiceName,
       voiceId,
@@ -126,17 +141,25 @@ router.post("/", async (req, res) => {
       knowledgeBaseName: uuidv4(),
     });
 
-    assistant = await Assistant.findByPk(assistant.toJSON().id, {
-      attributes: { exclude: ["userId"] },
+    let businessMemberships = await BusinessMembership.findAll({
+      where: {
+        userId,
+      },
+      include: [
+        {
+          model: Business,
+          as: "business",
+          include: [{ model: Assistant, as: "assistant" }],
+        },
+      ],
     });
 
-    assistant = assistant.toJSON();
+    businessMemberships = businessMemberships.map((item) => item.toJSON());
 
     const token = jwt.sign(
       {
-        ...user.toJSON(),
-        assistant,
-        business,
+        ...user,
+        businessMemberships,
       },
       process.env.JWT_SECRET
     );
@@ -148,6 +171,346 @@ router.post("/", async (req, res) => {
   } catch (error) {
     console.error("Error adding business:", error);
     res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/documents", async (req, res) => {
+  const businessId = req.params.id;
+  let { page = 1, pageSize = 10 } = req.query;
+
+  if (page < 1) {
+    page = 1;
+  }
+  if (pageSize < 1) {
+    pageSize = 10;
+  }
+
+  try {
+    const offset = (page - 1) * pageSize;
+
+    let documents = await Document.findAll({
+      where: {
+        businessId,
+      },
+      limit: parseInt(pageSize),
+      offset: parseInt(offset),
+    });
+
+    const totalCount = await Document.count({
+      where: {
+        businessId,
+      },
+    });
+
+    documents = documents.map((item) => item.toJSON());
+
+    res.status(200).json({
+      success: true,
+      data: documents,
+      pagination: { page, pageSize, totalCount },
+    });
+  } catch (error) {
+    console.error("Error fetching customer:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/urls", async (req, res) => {
+  const businessId = req.params.id;
+  let { page = 1, pageSize = 10 } = req.query;
+
+  if (page < 1) {
+    page = 1;
+  }
+  if (pageSize < 1) {
+    pageSize = 10;
+  }
+
+  try {
+    const offset = (page - 1) * pageSize;
+
+    let urls = await Url.findAll({
+      where: {
+        businessId,
+      },
+      limit: parseInt(pageSize),
+      offset: parseInt(offset),
+    });
+
+    const totalCount = await Url.count({
+      where: {
+        businessId,
+      },
+    });
+
+    const basePath = `${process.env.BASE_URL}/data/documents/${businessId}`;
+
+    urls = urls.map((item) => {
+      item = item.toJSON();
+
+      return {
+        ...item,
+        previewUrl: `${basePath}/url-${item.id}-preview.png`,
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      data: urls,
+      pagination: { page, pageSize, totalCount },
+    });
+  } catch (error) {
+    console.error("Error getting urls:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/teach-chat-messages", async (req, res) => {
+  const businessId = req.params.id;
+
+  try {
+    let result = await redisClient.lRange(`teach-chat-${businessId}`, 0, -1);
+
+    result = result.map((item) => {
+      item = JSON.parse(item);
+
+      return {
+        type: item.type,
+        content: item.data.content,
+        timestamp: item.data?.additional_kwargs?.timestamp,
+      };
+    });
+
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    console.error("Error getting teach chat's messages:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+// router.get("/:id/chats", async (req, res) => {
+//   try {
+//     let chats = await Chat.findAll({
+//       where: { userId: req.params.id },
+//     });
+
+//     if (chats.length === 0) {
+//       return res.status(200).json({ success: true, data: [] });
+//     }
+
+//     chats = await Promise.all(
+//       chats.map(async (chat) => {
+//         chat = chat.toJSON();
+
+//         let messages = await redisClient.lRange(`chat-${chat.id}`, 0, -1);
+
+//         messages = messages.map((item) => {
+//           item = JSON.parse(item);
+
+//           return {
+//             type: item.type,
+//             content: item.data.content,
+//             timestamp: item.data?.additional_kwargs?.timestamp,
+//           };
+//         });
+
+//         return {
+//           title: chat.title,
+//           messages,
+//         };
+//       })
+//     );
+
+//     res.status(200).json({ success: true, data: chats });
+//   } catch (error) {
+//     console.error("Error getting chats:", error);
+//     res.status(500).json({ success: false, message: "Internal Server Error" });
+//   }
+// });
+
+// router.delete("/:id/chats", async (req, res) => {
+//   const userId = req.params.id;
+
+//   try {
+//     let chats = await Chat.findAll({
+//       where: {
+//         userId,
+//       },
+//     });
+
+//     await Chat.destroy({
+//       where: { userId },
+//     });
+
+//     const promises = chats.map((chat) => {
+//       chat = chat.toJSON();
+//       return redisClient.del(`chat-${chat.id}`);
+//     });
+
+//     await Promise.all(promises);
+
+//     res.status(204).json({ success: true });
+//   } catch (error) {
+//     console.error("Error deleting chat history:", error);
+//     res.status(500).json({ success: false, message: "Internal Server Error" });
+//   }
+// });
+
+// router.get("/:id/team-members", async (req, res) => {
+//   const userId = req.params.id;
+
+//   try {
+//     let teamMembers = await TeamMember.findAll({
+//       where: {
+//         userId,
+//       },
+//       include: [
+//         {
+//           model: TeamGroup,
+//           attributes: ["name"],
+//         },
+//       ],
+//     });
+
+//     teamMembers = teamMembers.map((item) => item.toJSON());
+//     res.status(200).json({ success: true, data: teamMembers });
+//   } catch (error) {
+//     console.error("Error getting team members:", error);
+//     res.status(500).json({ success: false, message: "Internal Server Error" });
+//   }
+// });
+
+router.get("/:id/team-groups", async (req, res) => {
+  const businessId = req.params.id;
+
+  try {
+    let teamGroups = await TeamGroup.findAll({
+      where: {
+        businessId,
+      },
+    });
+
+    teamGroups = teamGroups.map((item) => item.toJSON());
+    res.status(200).json({ success: true, data: teamGroups });
+  } catch (error) {
+    console.error("Error getting team groups:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/calls", async (req, res) => {
+  let { page = 1, pageSize = 10, tagId } = req.query;
+
+  if (page < 1) {
+    page = 1;
+  }
+  if (pageSize < 1) {
+    pageSize = 10;
+  }
+
+  try {
+    const offset = (page - 1) * pageSize;
+
+    let whereCondition = { businessId: req.params.id };
+    if (tagId) {
+      whereCondition.tagId = tagId;
+    }
+
+    let calls = await Call.findAll({
+      where: whereCondition,
+      limit: parseInt(pageSize),
+      offset: parseInt(offset),
+    });
+
+    calls = calls.map((item) => item.toJSON());
+
+    calls = await Promise.all(
+      calls.map(async (call) => {
+        let messages = await redisClient.lRange(
+          `transcription-${call.id}`,
+          0,
+          -1
+        );
+
+        messages = messages.map((item) => {
+          item = JSON.parse(item);
+
+          return {
+            type: item.type,
+            content: item.data.content,
+            timestamp: item.data?.additional_kwargs?.timestamp,
+          };
+        });
+
+        return {
+          ...call,
+          transcription: messages,
+        };
+      })
+    );
+
+    res.status(200).json({ success: true, data: calls });
+  } catch (error) {
+    console.error("Error getting calls:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/call-tags", async (req, res) => {
+  try {
+    let callTags = await CallTag.findAll({
+      where: { businessId: req.params.id },
+    });
+
+    callTags = callTags.map((item) => item.toJSON());
+
+    res.status(200).json({ success: true, data: callTags });
+  } catch (error) {
+    console.error("Error getting call tags:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/integrations", async (req, res) => {
+  const businessId = req.params.id;
+
+  const { recommended } = req.query;
+
+  let whereCondition = {};
+  if (recommended == "true") {
+    whereCondition.recommended = true;
+  }
+
+  try {
+    let integrations = await Integration.findAll({
+      where: whereCondition,
+      include: [
+        {
+          model: BusinessIntegration,
+          as: "integration",
+          where: { businessId },
+          attributes: [],
+          required: false,
+        },
+      ],
+      attributes: {
+        include: [
+          [
+            Sequelize.literal(
+              'CASE WHEN "integration"."businessId" IS NOT NULL THEN true ELSE false END'
+            ),
+            "connected",
+          ],
+          [Sequelize.col("integration.id"), "businessIntegrationId"],
+        ],
+      },
+    });
+
+    integrations = integrations.map((item) => item.toJSON());
+    res.status(200).json({ success: true, data: integrations });
+  } catch (error) {
+    console.error("Error getting connected integrations:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });
 

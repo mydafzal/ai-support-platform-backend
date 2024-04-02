@@ -11,8 +11,6 @@ connectRedis();
 
 initializeBrowser();
 
-require("./src/models/index");
-
 const app = express();
 
 // app.use(express.json());
@@ -41,15 +39,16 @@ const callsRouter = require("./src/routes/call.route");
 const callTagsRouter = require("./src/routes/callTag.route");
 const usersRouter = require("./src/routes/user.route");
 const businessesRouter = require("./src/routes/business.route");
-const meetingEventsRouter = require("./src/routes/meetingEvent.route");
+// const meetingEventsRouter = require("./src/routes/meetingEvent.route");
 const teachRouter = require("./src/routes/teach.route");
 const agentsRouter = require("./src/routes/agent.route");
 const voicesRouter = require("./src/routes/voice.route");
 const downloadsRouter = require("./src/routes/download.route");
-const chatsRouter = require("./src/routes/chat.route");
-const teamMembersRouter = require("./src/routes/teamMember.route");
+// const chatsRouter = require("./src/routes/chat.route");
+// const teamMembersRouter = require("./src/routes/teamMember.route");
 const teamGroupsRouter = require("./src/routes/teamGroup.route");
 const integrationsRouter = require("./src/routes/integration.route");
+const db = require("./models");
 
 app.get("/speech", async (req, res) => {
   const response = await convertTextToSpeech(
@@ -71,13 +70,13 @@ app.use("/calls", callsRouter);
 app.use("/call-tags", callTagsRouter);
 app.use("/businesses", businessesRouter);
 app.use("/users", usersRouter);
-app.use("/meeting-events", meetingEventsRouter);
+// app.use("/meeting-events", meetingEventsRouter);
 app.use("/teach", teachRouter);
 app.use("/agents", agentsRouter);
 app.use("/voices", voicesRouter);
 app.use("/download", downloadsRouter);
-app.use("/chats", chatsRouter);
-app.use("/team-members", teamMembersRouter);
+// app.use("/chats", chatsRouter);
+// app.use("/team-members", teamMembersRouter);
 app.use("/team-groups", teamGroupsRouter);
 app.use("/integrations", integrationsRouter);
 

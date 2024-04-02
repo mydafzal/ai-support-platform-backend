@@ -1,8 +1,8 @@
 const router = require("express").Router();
-const CallTag = require("../models/callTag.model");
+const CallTag = require("../../models");
 
 const { z } = require("zod");
-const Call = require("../models/call.model");
+const Call = require("../../models");
 
 const addCallTagValidationSchema = z.object({
   name: z.string(),

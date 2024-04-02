@@ -1,23 +1,21 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../loaders/db");
-const User = require("./user.model");
+const User = require("./user");
+const TeamGroup = require("./teamGroup");
 
-const Business = sequelize.define(
-  "Business",
+const TeamMember = sequelize.define(
+  "TeamMember",
   {
-    businessName: {
+    name: {
       type: DataTypes.STRING,
       allowNull: false,
     },
-    twilioNumber: {
+    phoneNumber: {
       type: DataTypes.STRING,
       allowNull: false,
-    },
-    verifyServiceId: {
-      type: DataTypes.STRING,
     },
   },
   {}
 );
 
-module.exports = Business;
+module.exports = TeamMember;

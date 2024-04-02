@@ -1,8 +1,8 @@
 const router = require("express").Router();
-const User = require("../models/user.model");
+const User = require("../../models/user");
 
 const { z } = require("zod");
-const TeamMember = require("../models/teamMember.model");
+const TeamMember = require("../../models");
 
 const addTeamMemberValidationSchema = z.object({
   name: z.string(),

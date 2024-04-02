@@ -1,15 +1,15 @@
 const router = require("express").Router();
-const Assistant = require("../models/assistant.model");
+const Assistant = require("../../models");
 
 const {
   generateChatbotAgentResponse,
 } = require("../controllers/chatbotAgent.controller");
-const Business = require("../models/business.model");
+const Business = require("../../models");
 
 const { z } = require("zod");
 const { redisClient } = require("../integrations/redis");
 const { generateChatTitle } = require("../utils/helpers");
-const Chat = require("../models/chat.model");
+const Chat = require("../../models");
 
 const chatValidationSchema = z.object({
   message: z.string(),

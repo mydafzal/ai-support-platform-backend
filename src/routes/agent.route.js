@@ -5,7 +5,7 @@ const {
 const {
   generateCallAnsweringAgentResponse,
 } = require("../controllers/callAnsweringAgent.controller");
-const Assistant = require("../models/assistant.model");
+const Assistant = require("../../models");
 
 router.post("/teach", async (req, res) => {
   const { question, businessId } = req.body;

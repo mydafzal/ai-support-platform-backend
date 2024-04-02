@@ -13,8 +13,8 @@ const {
   deleteChunksByUrl,
   deleteChunksByDocument,
 } = require("../integrations/chromaDB");
-const Assistant = require("../models/assistant.model");
-const Document = require("../models/document.model");
+
+const { Assistant, Document, Business, Url } = require("../../models");
 
 const multer = require("multer");
 
@@ -28,27 +28,25 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 const { z } = require("zod");
-const Url = require("../models/url.model");
 const {
   generateTrainingAgentResponse,
 } = require("../controllers/trainingAgent.controller");
-const Business = require("../models/business.model");
 const { getBrowser } = require("../integrations/urlScreenshot");
 const { DOCUMENTS_BASE_PATH } = require("../utils/constants");
 
 const urlsValidationSchema = z.object({
   urls: z.array(z.string().url()),
-  userId: z.number(),
+  businessId: z.number(),
 });
 
 const teachChatValidationSchema = z.object({
   message: z.string(),
-  userId: z.number(),
+  businessId: z.number(),
 });
 
 router.post("/urls", async (req, res) => {
   try {
-    const { urls, userId } = req.body;
+    const { urls, businessId } = req.body;
 
     const { success, error } = await urlsValidationSchema.safeParseAsync(
       req.body
@@ -66,7 +64,7 @@ router.post("/urls", async (req, res) => {
 
     let assistant = await Assistant.findOne({
       where: {
-        userId,
+        businessId,
       },
     });
 
@@ -81,7 +79,7 @@ router.post("/urls", async (req, res) => {
     let addUrlsResult = await Url.bulkCreate(
       urls.map((url) => ({
         link: url,
-        userId,
+        businessId,
       }))
     );
 
@@ -93,7 +91,7 @@ router.post("/urls", async (req, res) => {
 
     await Promise.all(promises);
 
-    const destinationPath = path.join(DOCUMENTS_BASE_PATH, `${userId}`);
+    const destinationPath = path.join(DOCUMENTS_BASE_PATH, `${businessId}`);
 
     await fs.mkdir(destinationPath, { recursive: true });
 
@@ -130,24 +128,54 @@ router.post("/urls", async (req, res) => {
 
 router.delete("/urls/:id", async (req, res) => {
   const urlId = req.params.id;
-  const { userId } = req.body;
 
   try {
+    let url = await Url.findByPk(urlId, {
+      include: [
+        {
+          model: Business,
+          as: "business",
+          include: [{ model: Assistant, as: "assistant" }],
+        },
+      ],
+    });
+
+    if (!url) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Invalid url id." });
+    }
+
+    url = url?.toJSON();
+
     await Url.destroy({
       where: {
         id: urlId,
       },
     });
 
-    let assistant = await Assistant.findOne({
-      where: {
-        userId,
-      },
-    });
+    console.log("url ", url);
 
-    assistant = assistant.toJSON();
+    const {
+      id: businessId,
+      assistant: { knowledgeBaseName },
+    } = url.business;
 
-    await deleteChunksByUrl(assistant.knowledgeBaseName, urlId);
+    await deleteChunksByUrl(knowledgeBaseName, urlId);
+
+    const filePath = path.join(
+      DOCUMENTS_BASE_PATH,
+      `${businessId}`,
+      `url-${urlId}-preview.png`
+    );
+
+    fs.unlink(filePath)
+      .then(() => {
+        console.log("Url preview image deleted");
+      })
+      .catch(() => {
+        console.log("Error deleting url preview image.");
+      });
 
     res
       .status(200)
@@ -164,7 +192,7 @@ router.post("/documents", upload.array("files"), async (req, res) => {
       return res
         .status(400)
         .json({ success: false, message: "Provide one or more files." });
-    } else if (!req.body.userId) {
+    } else if (!req.body.businessId) {
       return res
         .status(400)
         .json({ success: false, message: "Invalid user id." });
@@ -172,7 +200,7 @@ router.post("/documents", upload.array("files"), async (req, res) => {
 
     let assistant = await Assistant.findOne({
       where: {
-        userId: req.body.userId,
+        businessId: req.body.businessId,
       },
     });
 
@@ -189,7 +217,7 @@ router.post("/documents", upload.array("files"), async (req, res) => {
         name: file.originalname,
         size: file.size,
         type: file.mimetype,
-        userId: req.body.userId,
+        businessId: req.body.businessId,
       }))
     );
 
@@ -217,7 +245,7 @@ router.post("/documents", upload.array("files"), async (req, res) => {
 
     const destinationPath = path.join(
       DOCUMENTS_BASE_PATH,
-      `${req.body.userId}`
+      `${req.body.businessId}`
     );
 
     await fs.mkdir(destinationPath, { recursive: true });
@@ -246,14 +274,13 @@ router.post("/documents", upload.array("files"), async (req, res) => {
 
 router.delete("/documents/:id", async (req, res) => {
   const documentId = req.params.id;
-  const { userId } = req.body;
 
   try {
     let document = await Document.findByPk(documentId);
 
     if (!document) {
       return res
-        .status(400)
+        .status(404)
         .json({ success: false, message: "Invalid document id." });
     }
 
@@ -266,10 +293,8 @@ router.delete("/documents/:id", async (req, res) => {
     });
 
     const filePath = path.join(
-      __dirname,
-      "..",
-      "..",
-      "documents",
+      DOCUMENTS_BASE_PATH,
+      `${document.businessId}`,
       document.name
     );
 
@@ -277,7 +302,7 @@ router.delete("/documents/:id", async (req, res) => {
 
     let assistant = await Assistant.findOne({
       where: {
-        userId,
+        businessId: document.businessId,
       },
     });
 
@@ -294,7 +319,7 @@ router.delete("/documents/:id", async (req, res) => {
 });
 
 router.post("/chat", async (req, res) => {
-  const { message, userId } = req.body;
+  const { message, businessId } = req.body;
 
   try {
     const { success, error } = await teachChatValidationSchema.safeParseAsync(
@@ -307,32 +332,19 @@ router.post("/chat", async (req, res) => {
         .json({ success: false, message: error.errors[0].message });
     }
 
-    let assistant = await Assistant.findOne({
-      where: {
-        userId,
-      },
-    });
-
-    if (!assistant) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid user id." });
-    }
-
-    assistant = assistant.toJSON();
-
     let business = await Business.findOne({
       where: {
-        userId,
+        id: businessId,
       },
+      include: [{ model: Assistant, as: "assistant" }],
     });
 
     business = business.toJSON();
 
     const aiResponse = await generateTrainingAgentResponse(
       message,
-      assistant.knowledgeBaseName,
-      business.businessName,
+      business.assistant.knowledgeBaseName,
+      business.assistant.businessName,
       userId
     );
 

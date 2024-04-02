@@ -1,9 +1,9 @@
 const router = require("express").Router();
-const User = require("../models/user.model");
+const User = require("../../models");
 
 const { z } = require("zod");
-const TeamGroup = require("../models/teamGroup.model");
-const TeamMember = require("../models/teamMember.model");
+const TeamGroup = require("../../models");
+const TeamMember = require("../../models");
 const { Op } = require("sequelize");
 
 const addTeamGroupValidationSchema = z.object({

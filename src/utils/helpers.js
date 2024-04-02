@@ -79,6 +79,13 @@ function generateJWT(payload) {
 }
 
 function generateEmailLink(request, path, queryParams) {
+  const referer = request.get("Referer");
+
+  if (referer) {
+    const baseUrl = new URL(referer).origin;
+    console.log("Referer - ", baseUrl);
+  }
+
   return `${request.protocol}://${request.get("host")}/${path}?${queryParams}`;
 }
 

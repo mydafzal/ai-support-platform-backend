@@ -30,10 +30,10 @@ const {
 } = require("../integrations/redis");
 const { convertTextToSpeech } = require("../integrations/textToSpeech");
 const { formatHubSpotContactDetails } = require("../utils/formatters");
-const Business = require("../models/business.model");
-const Assistant = require("../models/assistant.model");
-const Integration = require("../models/integration.model");
-const Call = require("../models/call.model");
+const Business = require("../../models");
+const Assistant = require("../../models");
+const Integration = require("../../models");
+const Call = require("../../models");
 const {
   AUDIO_FILES_BASE_PATH,
   AUDIO_FILES_EXTENSION,
@@ -42,7 +42,7 @@ const {
 } = require("../utils/constants");
 const { generateFilename } = require("../utils/helpers");
 const { sendEmail } = require("../integrations/nodemailer");
-const User = require("../models/user.model");
+const User = require("../../models");
 
 async function handleIncomingCall(request) {
   const VoiceResponse = twilio.twiml.VoiceResponse;

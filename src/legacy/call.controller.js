@@ -24,14 +24,14 @@ const {
   initializeConversation,
 } = require("./ai-model.controller");
 
-const Customer = require("../models/customer.model");
-const Assistant = require("../models/assistant.model");
-const CompanyHistory = require("../models/companyHistory.model");
-const Integration = require("../models/integration.model");
+const Customer = require("../../models/customer");
+const Assistant = require("../../models/assistant");
+const CompanyHistory = require("../../models/companyHistory");
+const Integration = require("../../models/integration");
 const { convertTextToSpeech } = require("../integrations/textToSpeech");
 const { uploadToS3 } = require("../integrations/s3Storage");
-const User = require("../models/user.model");
-const MeetingEvent = require("../models/meetingEvent.model");
+const User = require("../../models/user");
+const MeetingEvent = require("../../models/meetingEvent");
 
 async function createVerifyService(companyName) {
   try {

@@ -7,7 +7,8 @@ const {
   generateGoogleOAuthUrl,
 } = require("../integrations/googleOAuth");
 const { getHubSpotAccessToken } = require("../integrations/hubspotCRM");
-const Integration = require("../models/integration.model");
+
+const { Integration, BusinessIntegration } = require("../../models");
 
 const moment = require("moment");
 
@@ -15,8 +16,8 @@ const { z } = require("zod");
 const accessTokenValidationSchema = z.object({
   code: z.string(),
   redirectUri: z.string().optional(),
-  userId: z.number(),
-  name: z.enum(["Calendly", "HubSpot", "Google-OAuth"]),
+  businessId: z.number(),
+  integrationId: z.number(),
 });
 
 router.get("/google-oauth-url", (req, res) => {
@@ -30,7 +31,7 @@ router.get("/hubspot-auth-url", (req, res) => {
 
 router.get("/calendly-auth-url", (req, res) => {
   return res.status(200).json({
-    calendlyRedirectUrl: `https://calendly.com/oauth/authorize?client_id=${process.env.CALENDLY_CLIENT_ID}&response_type=code&redirect_uri=http://localhost:5000/`,
+    calendlyRedirectUrl: `https://calendly.com/oauth/authorize?client_id=${process.env.CALENDLY_CLIENT_ID}&response_type=code&redirect_uri=https://customer-bot-psi.vercel.app/app-integration?integrationId=3`,
   });
 });
 
@@ -46,36 +47,44 @@ router.post("/", async (req, res) => {
         .json({ success: false, message: error.errors[0].message });
     }
 
-    const { code, redirectUri, name, userId } = req.body;
+    const { code, redirectUri, integrationId, businessId } = req.body;
+
+    let integration = await Integration.findByPk(integrationId);
+
+    if (!integration) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Invalid integration id" });
+    }
+
+    integration = integration.toJSON();
 
     let response;
-
-    if (name === "Calendly") {
+    if (integration.name === "Calendly") {
       response = await getCalendlyAccessToken(code, redirectUri);
-    } else if (name === "HubSpot") {
+    } else if (integration.name === "HubSpot") {
       response = await getHubSpotAccessToken(code, redirectUri);
-    } else if (name === "Google-OAuth") {
+    } else if (integration.name === "Google Calendar") {
       response = await getGoogleOAuthAccessToken(code);
     }
 
     const { accessToken, refreshToken, expiresIn } = response;
 
-    let integration = await Integration.create({
-      userId,
+    let businessIntegration = await BusinessIntegration.create({
+      businessId,
       accessToken,
       refreshToken,
       expirationTime: `${moment(new Date())
         .add(expiresIn, "seconds")
         .toDate()}`,
-      name,
+      businessId,
+      integrationId,
     });
 
-    integration = integration.toJSON();
-    integration = {
-      userId: integration.userId,
-      name: integration.name,
-    };
+    businessIntegration = businessIntegration.toJSON();
 
+    integration.connected = true;
+    integration.businessIntegrationId = businessIntegration.id;
     res.status(201).json({ success: true, data: integration });
   } catch (error) {
     console.log("Error adding integration: ", error);
@@ -84,12 +93,14 @@ router.post("/", async (req, res) => {
 });
 
 router.delete("/:id", async (req, res) => {
+  const businessIntegrationId = req.params.id;
+
   try {
-    await Integration.destroy({
-      where: { id: req.params.id },
+    await BusinessIntegration.destroy({
+      where: { id: businessIntegrationId },
     });
 
-    res.status(204).json({ success: true });
+    res.status(204).send();
   } catch (error) {
     console.error("Error removing connected integration:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });

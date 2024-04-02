@@ -4,12 +4,16 @@ const router = Router();
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
-const User = require("../models/user.model");
+const {
+  User,
+  Business,
+  Assistant,
+  BusinessMembership,
+} = require("../../models");
 
 const { z } = require("zod");
 const { sendEmail } = require("../integrations/nodemailer");
-const Business = require("../models/business.model");
-const Assistant = require("../models/assistant.model");
+
 const {
   generateEmailVerificationToken,
   generateEmailLink,
@@ -44,19 +48,15 @@ router.post("/login", async (req, res) => {
 
     const { email, password, externalType, name } = req.body;
 
-    let user;
+    let user = await User.findOne({
+      where: { email },
+      attributes: {
+        exclude: ["emailVerificationToken", "resetPasswordToken"],
+      },
+    });
+
     // Social authentication
     if (externalType === "Google" || externalType === "Apple") {
-      user = await User.findOne({
-        where: {
-          email,
-          externalType,
-        },
-        attributes: {
-          exclude: ["emailVerificationToken", "resetPasswordToken"],
-        },
-      });
-
       if (!user) {
         if (!name) {
           return res.status(400).json({
@@ -71,18 +71,19 @@ router.post("/login", async (req, res) => {
           externalType,
           emailVerified: true,
         });
+      } else if (!user.toJSON().externalType) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "This is not the authentication method you used during signup.",
+        });
       }
+
+      user = user.toJSON();
     }
 
     // Perform email/password authentication
     else {
-      user = await User.findOne({
-        where: { email },
-        attributes: {
-          exclude: ["emailVerificationToken", "resetPasswordToken"],
-        },
-      });
-
       if (!user) {
         return res
           .status(401)
@@ -132,28 +133,24 @@ router.post("/login", async (req, res) => {
 
     delete user.password;
 
-    const business = await Business.findOne({
+    let businessMemberships = await BusinessMembership.findAll({
       where: {
         userId: user.id,
       },
-      attributes: {
-        exclude: ["userId"],
-      },
+      include: [
+        {
+          model: Business,
+          as: "business",
+          include: [{ model: Assistant, as: "assistant" }],
+        },
+      ],
     });
 
-    const assistant = await Assistant.findOne({
-      where: {
-        userId: user.id,
-      },
-      attributes: {
-        exclude: ["userId"],
-      },
-    });
+    businessMemberships = businessMemberships.map((item) => item.toJSON());
 
     const payload = {
       ...user,
-      assistant: assistant?.toJSON(),
-      business: business?.toJSON(),
+      businessMemberships,
     };
 
     const token = generateJWT(payload);
@@ -183,15 +180,17 @@ router.post("/forgot-password", async (req, res) => {
 
     if (!user) {
       return res.status(404).json({ success: false, message: "Invalid email" });
+    } else if (user.toJSON().externalType) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Password cannot be reset for the authentication method you used during signup.",
+      });
     }
 
-    const token = jwt.sign(
-      { userId: user.toJSON().id },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: "1h",
-      }
-    );
+    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
+      expiresIn: "1h",
+    });
 
     user.resetPasswordToken = token;
     await user.save();
@@ -328,8 +327,8 @@ router.post("/resend-verification-email", async (req, res) => {
       "verify-email",
       `token=${emailVerificationToken}`
     );
-
     const emailTemplate = `Please verify your email by clicking <a href=${emailLink}>here</a>`;
+
     await sendEmail(email, emailTemplate);
 
     res

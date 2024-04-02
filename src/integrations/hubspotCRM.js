@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 const hubspot = require("@hubspot/api-client");
-const Integration = require("../models/integration.model");
+const Integration = require("../../models/integration");
 const moment = require("moment");
 const hubspotClient = new hubspot.Client({
   apiKey: process.env.HUBSPOT_API_KEY,

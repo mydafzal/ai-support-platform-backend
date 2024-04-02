@@ -11,7 +11,7 @@ const {
   handleCompletedRecording,
 } = require("../controllers/call.controller");
 
-const Business = require("../models/business.model");
+const Business = require("../../models");
 
 const router = Router();
 

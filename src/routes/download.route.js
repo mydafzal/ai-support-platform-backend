@@ -3,13 +3,25 @@ const path = require("path");
 const fs = require("fs/promises");
 const { DOCUMENTS_BASE_PATH } = require("../utils/constants");
 
-router.get("/:fileName", async (req, res) => {
-  const userId = req?.user?.id || 2;
+const { Document } = require("../../models");
+
+router.get("/:id", async (req, res) => {
+  const documentId = req.params.id;
+
+  let document = await Document.findByPk(documentId);
+
+  if (!document) {
+    return res
+      .status(404)
+      .json({ success: false, message: "Invalid document id" });
+  }
+
+  document = document.toJSON();
 
   const filePath = path.join(
     DOCUMENTS_BASE_PATH,
-    `${userId}`,
-    req.params.fileName
+    `${document.businessId}`,
+    document.name
   );
 
   try {
