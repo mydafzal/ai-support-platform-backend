@@ -15,7 +15,7 @@
   },
   "production": {
     "username": "cheetahagency",
-    "password": "cheetah-agency-customer-bot",
+    "password": "cheetah",
     "database": "customer-bot",
     "host": "127.0.0.1",
     "dialect": "postgres"
