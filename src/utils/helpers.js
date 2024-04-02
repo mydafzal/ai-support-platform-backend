@@ -86,7 +86,7 @@ function generateEmailLink(request, path, queryParams) {
     console.log("Referer - ", baseUrl);
   }
 
-  return `${request.protocol}://${request.get("host")}/${path}?${queryParams}`;
+  return `${process.env.CLIENT_BASE_URL}/${path}?${queryParams}`;
 }
 
 module.exports = {

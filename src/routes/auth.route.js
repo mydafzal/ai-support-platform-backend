@@ -274,7 +274,11 @@ router.get("/verify-email", async (req, res) => {
 
     console.log("decodedToken.userId", decodedToken.userId);
 
-    let user = await User.findByPk(decodedToken.userId);
+    let user = await User.findByPk(decodedToken.userId, {
+      attributes: {
+        exclude: ["resetPasswordToken", "password"],
+      },
+    });
 
     if (!user?.toJSON() || user?.toJSON().emailVerificationToken !== token) {
       return res.status(400).json({ message: "Invalid or expired token" });
@@ -284,9 +288,36 @@ router.get("/verify-email", async (req, res) => {
     user.emailVerificationToken = null;
     await user.save();
 
-    res
-      .status(200)
-      .json({ success: true, message: "Email verified successfully" });
+    user = user.toJSON();
+    delete user.emailVerificationToken;
+
+    let businessMemberships = await BusinessMembership.findAll({
+      where: {
+        userId: decodedToken.userId,
+      },
+      include: [
+        {
+          model: Business,
+          as: "business",
+          include: [{ model: Assistant, as: "assistant" }],
+        },
+      ],
+    });
+
+    businessMemberships = businessMemberships.map((item) => item.toJSON());
+
+    const payload = {
+      ...user,
+      businessMemberships,
+    };
+
+    const authToken = generateJWT(payload);
+
+    res.status(200).json({
+      success: true,
+      data: authToken,
+      message: "Email verified successfully",
+    });
   } catch (err) {
     console.error("Error verifying email:", err);
     res.status(500).json({ message: "Internal server error" });
