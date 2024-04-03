@@ -176,7 +176,7 @@ async function generateTrainingAgentResponse(
     },
     {
       configurable: {
-        sessionId: `teach-chat-${threadId}`,
+        sessionId: `train-chat-${threadId}`,
       },
     }
   );

@@ -32,6 +32,8 @@ const {
 } = require("../utils/constants");
 const { Sequelize } = require("sequelize");
 
+const { redisClient } = require("../integrations/redis");
+
 const businessDetailsValidationSchema = z.object({
   userId: z.number(),
   businessName: z.string(),
@@ -265,11 +267,11 @@ router.get("/:id/urls", async (req, res) => {
   }
 });
 
-router.get("/:id/teach-chat-messages", async (req, res) => {
+router.get("/:id/train-chat-messages", async (req, res) => {
   const businessId = req.params.id;
 
   try {
-    let result = await redisClient.lRange(`teach-chat-${businessId}`, 0, -1);
+    let result = await redisClient.lRange(`train-chat-${businessId}`, 0, -1);
 
     result = result.map((item) => {
       item = JSON.parse(item);
@@ -281,9 +283,9 @@ router.get("/:id/teach-chat-messages", async (req, res) => {
       };
     });
 
-    res.status(200).json({ success: true, data: result });
+    res.status(200).json({ success: true, data: result?.reverse() });
   } catch (error) {
-    console.error("Error getting teach chat's messages:", error);
+    console.error("Error getting train chat's messages:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });

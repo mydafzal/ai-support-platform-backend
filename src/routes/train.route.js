@@ -344,8 +344,8 @@ router.post("/chat", async (req, res) => {
     const aiResponse = await generateTrainingAgentResponse(
       message,
       business.assistant.knowledgeBaseName,
-      business.assistant.businessName,
-      userId
+      business.assistant.name,
+      businessId
     );
 
     const data = {
