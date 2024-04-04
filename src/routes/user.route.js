@@ -1,15 +1,12 @@
 const router = require("express").Router();
-const { User } = require("../../models");
+const { User, Invitation } = require("../../models");
 
 const bcrypt = require("bcrypt");
 const saltRounds = 10;
 
 const { z } = require("zod");
-const { redisClient } = require("../integrations/redis");
-// const Chat = require("../../models/chat");
 
 const { sendEmail } = require("../integrations/nodemailer");
-// const TeamMember = require("../../models/teamMember");
 const {
   generateEmailVerificationToken,
   generateEmailLink,
@@ -18,7 +15,7 @@ const {
 
 const userValidationSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(4).optional(),
+  password: z.string().min(4),
   name: z.string(),
 });
 
@@ -48,10 +45,14 @@ router.post("/", async (req, res) => {
         .json({ success: false, message: "Email already exists." });
     }
 
-    let hashedPassword;
-    if (password?.length > 0) {
-      hashedPassword = await bcrypt.hash(password, saltRounds);
-    }
+    let invitation = await Invitation.findOne({
+      where: {
+        email,
+      },
+    });
+    invitation = invitation?.toJSON();
+
+    let hashedPassword = await bcrypt.hash(password, saltRounds);
 
     await User.create({
       name,
@@ -84,7 +85,8 @@ router.post("/", async (req, res) => {
     const emailTemplate = `Please verify your email by clicking <a href="${emailLink}">here</a>`;
     await sendEmail(user.email, emailTemplate);
 
-    const token = generateJWT(user);
+    const payload = { ...user, invitation };
+    const token = generateJWT(payload);
 
     res.status(201).json({
       success: true,
@@ -93,6 +95,29 @@ router.post("/", async (req, res) => {
     });
   } catch (error) {
     console.error("Error adding user:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.patch("/:id", async (req, res) => {
+  const userId = req.params.id;
+  const { businessId } = req.body;
+
+  try {
+    await User.update(
+      {
+        businessId,
+      },
+      {
+        where: {
+          id: userId,
+        },
+      }
+    );
+
+    res.status(204).send();
+  } catch (error) {
+    console.error("Error getting connected integrations:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });

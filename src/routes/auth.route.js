@@ -4,12 +4,7 @@ const router = Router();
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
-const {
-  User,
-  Business,
-  Assistant,
-  BusinessMembership,
-} = require("../../models");
+const { User, Business, Assistant, Invitation } = require("../../models");
 
 const { z } = require("zod");
 const { sendEmail } = require("../integrations/nodemailer");
@@ -28,6 +23,7 @@ const loginValidationSchema = z.object({
     .min(4, "Password must contain at least 4 characters.")
     .optional(),
   externalType: z.enum(["Google", "Apple", ""]),
+  profileImageUrl: z.string().optional(),
 });
 
 const emailValidationSchema = z.string().email();
@@ -46,7 +42,7 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    const { email, password, externalType, name } = req.body;
+    const { email, password, externalType, name, profileImageUrl } = req.body;
 
     let user = await User.findOne({
       where: { email },
@@ -55,8 +51,18 @@ router.post("/login", async (req, res) => {
       },
     });
 
+    let invitation = await Invitation.findOne({
+      where: {
+        email,
+      },
+    });
+    invitation = invitation?.toJSON();
+
     // Social authentication
     if (externalType === "Google" || externalType === "Apple") {
+      console.log("externalType - ", externalType);
+      console.log("user - ", user);
+
       if (!user) {
         if (!name) {
           return res.status(400).json({
@@ -70,6 +76,10 @@ router.post("/login", async (req, res) => {
           email,
           externalType,
           emailVerified: true,
+          profileImageUrl,
+          businessId:
+            invitation?.status === "Accepted" ? invitation.businessId : null,
+          role: invitation?.status === "Accepted" ? "TeamMember" : null,
         });
       } else if (!user.toJSON().externalType) {
         return res.status(400).json({
@@ -84,13 +94,20 @@ router.post("/login", async (req, res) => {
 
     // Perform email/password authentication
     else {
-      if (!user) {
+      if (!user || !password || !user.password) {
         return res
           .status(401)
           .json({ success: false, message: "Invalid email and/or password." });
       }
 
       user = user.toJSON();
+
+      const result = await bcrypt.compare(password, user.password);
+      if (!result) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Invalid email and/or password" });
+      }
 
       if (!user?.emailVerified) {
         const emailVerificationToken = generateEmailVerificationToken(user.id);
@@ -116,41 +133,40 @@ router.post("/login", async (req, res) => {
           }
         );
 
+        const payload = {
+          ...user,
+        };
+        const token = generateJWT(payload);
+
         return res.status(200).json({
-          success: false,
+          success: success,
+          data: token,
           message:
             "Email not verified. A new email verification link has been sent.",
         });
-      }
-
-      const result = await bcrypt.compare(password, user.password);
-      if (!result) {
-        return res
-          .status(401)
-          .json({ success: false, message: "Invalid email and/or password" });
       }
     }
 
     delete user.password;
 
-    let businessMemberships = await BusinessMembership.findAll({
+    let business = await Business.findOne({
       where: {
-        userId: user.id,
+        id: user.businessId,
       },
       include: [
         {
-          model: Business,
-          as: "business",
-          include: [{ model: Assistant, as: "assistant" }],
+          model: Assistant,
+          as: "assistant",
         },
       ],
     });
 
-    businessMemberships = businessMemberships.map((item) => item.toJSON());
+    business = business?.toJSON();
+    user.business = business;
 
     const payload = {
       ...user,
-      businessMemberships,
+      invitation: invitation?.status !== "Accepted" ? invitation : null,
     };
 
     const token = generateJWT(payload);
@@ -291,24 +307,8 @@ router.get("/verify-email", async (req, res) => {
     user = user.toJSON();
     delete user.emailVerificationToken;
 
-    let businessMemberships = await BusinessMembership.findAll({
-      where: {
-        userId: decodedToken.userId,
-      },
-      include: [
-        {
-          model: Business,
-          as: "business",
-          include: [{ model: Assistant, as: "assistant" }],
-        },
-      ],
-    });
-
-    businessMemberships = businessMemberships.map((item) => item.toJSON());
-
     const payload = {
       ...user,
-      businessMemberships,
     };
 
     const authToken = generateJWT(payload);
