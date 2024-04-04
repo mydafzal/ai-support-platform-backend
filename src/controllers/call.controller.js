@@ -30,10 +30,16 @@ const {
 } = require("../integrations/redis");
 const { convertTextToSpeech } = require("../integrations/textToSpeech");
 const { formatHubSpotContactDetails } = require("../utils/formatters");
-const Business = require("../../models");
-const Assistant = require("../../models");
-const Integration = require("../../models");
-const Call = require("../../models");
+const {
+  Business,
+  Assistant,
+  Integration,
+  BusinessIntegration,
+  IntegrationWarning,
+  Call,
+  User,
+} = require("../../models");
+
 const {
   AUDIO_FILES_BASE_PATH,
   AUDIO_FILES_EXTENSION,
@@ -42,7 +48,6 @@ const {
 } = require("../utils/constants");
 const { generateFilename } = require("../utils/helpers");
 const { sendEmail } = require("../integrations/nodemailer");
-const User = require("../../models");
 
 async function handleIncomingCall(request) {
   const VoiceResponse = twilio.twiml.VoiceResponse;
@@ -54,13 +59,11 @@ async function handleIncomingCall(request) {
 
   console.log("request.body.To", request.body);
 
-  // const call = await client.calls.get(request.body.CallSid).fetch();
-  // console.log("call instance", call);
-
   let business = await Business.findOne({
     where: {
       twilioNumber: businessPhoneNumber,
     },
+    include: [{ model: Assistant, as: "assistant" }],
   });
 
   business = business?.toJSON();
@@ -70,25 +73,20 @@ async function handleIncomingCall(request) {
     return twiml.toString();
   }
 
+  const { assistant } = business;
+
   await Call.create({
     id: callId,
     from: customerPhoneNumber,
-    userId: business.userId,
+    businessId: business.id,
   });
-
-  let assistant = await Assistant.findOne({
-    where: {
-      userId: business.userId,
-    },
-  });
-
-  assistant = assistant?.toJSON();
 
   let integration = await Integration.findOne({
     where: {
-      userId: business.userId,
       name: "HubSpot",
     },
+    attributes: ["id"],
+    include: [{ model: BusinessIntegration, as: "integration" }],
   });
 
   integration = integration?.toJSON();
@@ -96,7 +94,7 @@ async function handleIncomingCall(request) {
   let formattedCustomerDetails = "";
   let customerFullName = "";
 
-  if (!integration) {
+  if (integration?.integration?.length <= 0) {
     console.log(
       "HubSpot integration not available, couldn't retrieve customer's information"
     );
@@ -112,24 +110,57 @@ async function handleIncomingCall(request) {
       }
     );
 
-    let user = await User.findOne({
+    let integrationWarning = await IntegrationWarning.findOne({
       where: {
-        id: business.userId,
+        businessId: business.id,
+        integrationId: integration.id,
       },
     });
 
-    user = user.toJSON();
+    integrationWarning = integrationWarning?.toJSON();
 
-    // Trigger email to business to connect the CRM...
-    const emailLink = `${request.protocol}://${request.get(
-      "host"
-    )}/integration?callId=${callId}`;
+    const cooldownPeriod = 24 * 60 * 60 * 1000; // 24 hours cooldown period
+    const currentTime = Date.now();
 
-    const emailTemplate = `We couldn't retrieve details of your customer because you have not connected any CRM with Customer Bot. 
-    </br>
-    Click <a href="${emailLink}">here</a> to get redirected to the call during which this problem occured.`;
+    if (
+      !integrationWarning ||
+      currentTime - new Date(integrationWarning.lastEmailSentAt) >=
+        cooldownPeriod
+    ) {
+      let user = await User.findOne({
+        where: {
+          id: business.adminUserId,
+        },
+      });
 
-    await sendEmail(user.email, emailTemplate);
+      user = user.toJSON();
+
+      // Trigger email to business to connect the CRM...
+      const emailLink = `${process.env.CLIENT_BASE_URL}/integration?callId=${callId}`;
+
+      const emailTemplate = `We couldn't retrieve details of your customer because you have not connected any CRM with Customer Bot. 
+      </br>
+      Click <a href="${emailLink}">here</a> to get redirected to the call during which this problem occured.`;
+
+      await sendEmail(user.email, emailTemplate);
+
+      if (integrationWarning) {
+        await IntegrationWarning.update(
+          {
+            id: integrationWarning.id,
+          },
+          {
+            lastEmailSentAt: new Date(),
+          }
+        );
+      } else {
+        await IntegrationWarning.create({
+          businessId: business.id,
+          integrationId: integration.id,
+          lastEmailSentAt: new Date(),
+        });
+      }
+    }
   } else {
     const contact = await getContactByPhoneNumber(
       integration.accessToken,
@@ -219,6 +250,10 @@ async function handleSpeechInput(request) {
     shouldAddGreetingMessageToTranscription,
   } = callData;
 
+  if (!shouldAddGreetingMessageToTranscription) {
+    callData.shouldAddGreetingMessageToTranscription = true;
+  }
+
   if (!voiceInput) {
     twiml.play(farewellMessageUrl);
     twiml.hangup();
@@ -306,10 +341,6 @@ async function handleSpeechInput(request) {
     callData.audioFileNames = [fileName];
   } else {
     callData.audioFileNames.push(fileName);
-  }
-
-  if (!shouldAddGreetingMessageToTranscription) {
-    callData.shouldAddGreetingMessageToTranscription = true;
   }
 
   await updateCallConversation(callId, callData);
@@ -465,11 +496,11 @@ async function handleCallDisconnect(request) {
 
   if (callData?.shouldAddGreetingMessageToTranscription) {
     let call = await Call.findByPk(callId, {
-      attributes: ["userId"],
+      attributes: ["businessId"],
     });
 
     const assistant = await Assistant.findOne({
-      where: { userId: call.toJSON().userId },
+      where: { businessId: call.toJSON().businessId },
     });
 
     const greetingMessage = {
