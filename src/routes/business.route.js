@@ -6,8 +6,8 @@ const {
 const {
   Assistant,
   Business,
-  BusinessMembership,
   User,
+  Invitation,
   Url,
   Document,
   TeamGroup,
@@ -92,11 +92,15 @@ router.post("/", async (req, res) => {
 
     business = business.toJSON();
 
-    await BusinessMembership.create({
-      userId,
-      businessId: business.id,
-      role: "Admin",
-    });
+    await User.update(
+      {
+        businessId: business.id,
+        role: "Admin",
+      },
+      {
+        where: { id: userId },
+      }
+    );
 
     let promises = [
       convertTextToSpeech(greetingMessage, voiceId),
@@ -143,25 +147,29 @@ router.post("/", async (req, res) => {
       knowledgeBaseName: uuidv4(),
     });
 
-    let businessMemberships = await BusinessMembership.findAll({
+    user = await User.findOne({
       where: {
-        userId,
+        id: userId,
       },
       include: [
         {
           model: Business,
           as: "business",
-          include: [{ model: Assistant, as: "assistant" }],
+          include: [
+            {
+              model: Assistant,
+              as: "assistant",
+            },
+          ],
         },
       ],
     });
 
-    businessMemberships = businessMemberships.map((item) => item.toJSON());
+    user = user.toJSON();
 
     const token = jwt.sign(
       {
         ...user,
-        businessMemberships,
       },
       process.env.JWT_SECRET
     );
@@ -446,7 +454,7 @@ router.get("/:id/calls", async (req, res) => {
 
         return {
           ...call,
-          transcription: messages,
+          transcription: messages?.reverse(),
         };
       })
     );
@@ -510,6 +518,46 @@ router.get("/:id/integrations", async (req, res) => {
 
     integrations = integrations.map((item) => item.toJSON());
     res.status(200).json({ success: true, data: integrations });
+  } catch (error) {
+    console.error("Error getting connected integrations:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/team", async (req, res) => {
+  const businessId = req.params.id;
+
+  try {
+    let users = await User.findAll({
+      where: {
+        businessId,
+      },
+      attributes: {
+        exclude: [
+          "password",
+          "emailVerificationToken",
+          "resetPasswordToken",
+          "externalType",
+        ],
+      },
+    });
+
+    users = users?.map((item) => item.toJSON());
+
+    let invitations = await Invitation.findAll({
+      where: {
+        businessId,
+        status: "Pending",
+      },
+      attributes: {
+        exclude: ["token"],
+      },
+    });
+
+    invitations = invitations?.map((item) => item.toJSON());
+
+    const teamMembers = [...users, ...invitations];
+    res.status(200).json({ success: true, data: teamMembers });
   } catch (error) {
     console.error("Error getting connected integrations:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });

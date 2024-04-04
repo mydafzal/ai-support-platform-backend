@@ -1,12 +1,11 @@
 const router = require("express").Router();
-const CallTag = require("../../models");
+const { CallTag, Call } = require("../../models");
 
 const { z } = require("zod");
-const Call = require("../../models");
 
 const addCallTagValidationSchema = z.object({
   name: z.string(),
-  userId: z.number(),
+  businessId: z.number(),
 });
 
 const callTaggingValidationSchema = z.object({
@@ -25,9 +24,9 @@ router.post("/", async (req, res) => {
         .json({ success: false, message: error.errors[0].message });
     }
 
-    const { name, userId } = req.body;
+    const { name, businessId } = req.body;
 
-    let callTag = await CallTag.create({ name, userId });
+    let callTag = await CallTag.create({ name, businessId });
 
     res.status(200).json({ success: true, data: callTag });
   } catch (error) {
@@ -37,16 +36,16 @@ router.post("/", async (req, res) => {
 });
 
 router.delete("/:id", async (req, res) => {
-  const tagId = req.params.id;
+  const callTagId = req.params.id;
 
   try {
     const callsToDelete = await Call.findAll({
-      where: { tagId },
+      where: { callTagId },
     });
 
     await CallTag.destroy({
       where: {
-        id: tagId,
+        id: callTagId,
       },
     });
 
@@ -74,7 +73,7 @@ router.put("/:id", async (req, res) => {
     const { callIds } = req.body;
 
     await Call.update(
-      { tagId: req.params.id },
+      { callTagId: req.params.id },
       {
         where: {
           id: callIds,

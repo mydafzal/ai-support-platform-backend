@@ -1,14 +1,12 @@
 const router = require("express").Router();
-const User = require("../../models");
 
 const { z } = require("zod");
-const TeamGroup = require("../../models");
-const TeamMember = require("../../models");
+const { TeamGroup, User } = require("../../models");
 const { Op } = require("sequelize");
 
 const addTeamGroupValidationSchema = z.object({
   name: z.string(),
-  userId: z.number(),
+  businessId: z.number(),
 });
 
 const updateTeamGroupValidationSchema = z.object({
@@ -30,11 +28,11 @@ router.post("/", async (req, res) => {
         .json({ success: false, message: error.errors[0].message });
     }
 
-    const { name, userId } = req.body;
+    const { name, businessId } = req.body;
 
     let teamGroup = await TeamGroup.create({
       name,
-      userId,
+      businessId,
     });
 
     res.status(201).json({ success: true, data: teamGroup.toJSON() });
@@ -67,7 +65,7 @@ router.put("/:id/team-members", async (req, res) => {
         .json({ success: false, message: "Invalid group id." });
     }
 
-    await TeamMember.update(
+    await User.update(
       { teamGroupId },
       {
         where: {
