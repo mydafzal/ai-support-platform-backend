@@ -3,27 +3,14 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
+    /**
+     * Add altering commands here.
+     *
+     * Example:
+     * await queryInterface.createTable('users', { id: Sequelize.INTEGER });
+     */
+
     await queryInterface.addColumn("Businesses", "adminUserId", {
-      type: Sequelize.INTEGER,
-      references: {
-        model: "Users",
-        key: "id",
-      },
-      onUpdate: "CASCADE",
-      onDelete: "CASCADE",
-    });
-
-    await queryInterface.addColumn("BusinessMemberships", "businessId", {
-      type: Sequelize.INTEGER,
-      references: {
-        model: "Businesses",
-        key: "id",
-      },
-      onUpdate: "CASCADE",
-      onDelete: "CASCADE",
-    });
-
-    await queryInterface.addColumn("BusinessMemberships", "userId", {
       type: Sequelize.INTEGER,
       references: {
         model: "Users",
@@ -123,20 +110,64 @@ module.exports = {
       onDelete: "CASCADE",
     });
 
-    await queryInterface.addColumn("TeamGroupMemberships", "userId", {
+    await queryInterface.addColumn("IntegrationWarnings", "businessId", {
       type: Sequelize.INTEGER,
       references: {
-        model: "Users",
+        model: "Businesses",
         key: "id",
       },
       onUpdate: "CASCADE",
       onDelete: "CASCADE",
     });
 
-    await queryInterface.addColumn("TeamGroupMemberships", "teamGroupId", {
+    await queryInterface.addColumn("IntegrationWarnings", "integrationId", {
+      type: Sequelize.INTEGER,
+      references: {
+        model: "Integrations",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "CASCADE",
+    });
+
+    await queryInterface.changeColumn("Users", "role", {
+      type: Sequelize.ENUM("Admin", "TeamMember"),
+    });
+
+    await queryInterface.addColumn("Users", "businessId", {
+      type: Sequelize.INTEGER,
+      references: {
+        model: "Businesses",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "CASCADE",
+    });
+
+    await queryInterface.addColumn("Users", "teamGroupId", {
       type: Sequelize.INTEGER,
       references: {
         model: "TeamGroups",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "SET NULL",
+    });
+
+    await queryInterface.addColumn("Invitations", "teamGroupId", {
+      type: Sequelize.INTEGER,
+      references: {
+        model: "TeamGroups",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "SET NULL",
+    });
+
+    await queryInterface.addColumn("Invitations", "businessId", {
+      type: Sequelize.INTEGER,
+      references: {
+        model: "Businesses",
         key: "id",
       },
       onUpdate: "CASCADE",

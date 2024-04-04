@@ -2,16 +2,15 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable("BusinessMemberships", {
+    await queryInterface.createTable("IntegrationWarnings", {
       id: {
         allowNull: false,
         autoIncrement: true,
         primaryKey: true,
         type: Sequelize.INTEGER,
       },
-      role: {
-        type: Sequelize.ENUM("Admin", "TeamMember"),
-        allowNull: false,
+      lastEmailSentAt: {
+        type: Sequelize.DATE,
       },
       createdAt: {
         allowNull: false,
@@ -24,6 +23,6 @@ module.exports = {
     });
   },
   async down(queryInterface, Sequelize) {
-    await queryInterface.dropTable("BusinessMemberships");
+    await queryInterface.dropTable("IntegrationWarnings");
   },
 };

@@ -2,12 +2,21 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable("TeamGroupMemberships", {
+    await queryInterface.createTable("Invitations", {
       id: {
         allowNull: false,
         autoIncrement: true,
         primaryKey: true,
         type: Sequelize.INTEGER,
+      },
+      email: {
+        type: Sequelize.STRING,
+      },
+      token: {
+        type: Sequelize.STRING,
+      },
+      status: {
+        type: Sequelize.ENUM("Pending", "Accepted"),
       },
       createdAt: {
         allowNull: false,
@@ -20,6 +29,6 @@ module.exports = {
     });
   },
   async down(queryInterface, Sequelize) {
-    await queryInterface.dropTable("TeamGroupMemberships");
+    await queryInterface.dropTable("Invitations");
   },
 };
