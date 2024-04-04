@@ -9,26 +9,28 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       // define association here
-      User.hasOne(models.Business, {
-        foreignKey: "adminUserId",
-        as: "adminBusiness",
+      User.belongsTo(models.Business, {
+        foreignKey: "businessId",
+        as: "business",
       });
 
-      User.belongsToMany(models.Business, {
-        through: "BusinessMembership",
-        foreignKey: "userId",
-        as: "businesses",
+      User.belongsTo(models.TeamGroup, {
+        foreignKey: "teamGroupId",
+        as: "teamGroup",
       });
-      User.belongsToMany(models.TeamGroup, {
-        through: "TeamGroupMembership",
-        foreignKey: "userId",
-        as: "teamGroups",
+
+      User.hasOne(models.Business, {
+        foreignKey: "adminUserId",
+        as: "adminUser",
       });
     }
   }
   User.init(
     {
-      name: { type: DataTypes.STRING, allowNull: false },
+      name: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
       email: {
         type: DataTypes.STRING,
         allowNull: false,
@@ -37,11 +39,27 @@ module.exports = (sequelize, DataTypes) => {
           isEmail: true,
         },
       },
+      phone: {
+        type: DataTypes.STRING,
+      },
       password: { type: DataTypes.STRING },
       externalType: { type: DataTypes.ENUM("Google", "Apple") },
-      emailVerified: { type: DataTypes.BOOLEAN },
+      emailVerified: { type: DataTypes.BOOLEAN, defaultValue: false },
+      phoneVerified: { type: DataTypes.BOOLEAN, defaultValue: false },
       emailVerificationToken: { type: DataTypes.STRING },
       resetPasswordToken: { type: DataTypes.STRING },
+      profileImageUrl: { type: DataTypes.STRING },
+      role: {
+        type: DataTypes.STRING,
+      },
+      createdAt: {
+        allowNull: false,
+        type: DataTypes.DATE,
+      },
+      updatedAt: {
+        allowNull: false,
+        type: DataTypes.DATE,
+      },
     },
     {
       sequelize,

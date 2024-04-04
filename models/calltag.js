@@ -13,6 +13,10 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "callTagId",
         as: "calls",
       });
+      CallTag.belongsTo(models.Business, {
+        foreignKey: "businessId",
+        as: "business",
+      });
     }
   }
   CallTag.init(

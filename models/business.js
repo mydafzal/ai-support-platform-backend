@@ -11,7 +11,12 @@ module.exports = (sequelize, DataTypes) => {
       // define association here
       Business.belongsTo(models.User, {
         foreignKey: "adminUserId",
-        as: "admin",
+        as: "adminUser",
+      });
+
+      Business.hasMany(models.User, {
+        foreignKey: "businessId",
+        as: "users",
       });
       Business.hasOne(models.Assistant, {
         foreignKey: "businessId",
@@ -30,19 +35,15 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "businessId",
         as: "callTags",
       });
-      // Business.hasMany(models.BusinessMembership, {
-      //   foreignKey: "businessId",
-      //   as: "memberships",
-      // });
-
-      Business.belongsToMany(models.User, {
-        through: "BusinessMembership",
-        foreignKey: "businessId",
-      });
 
       Business.hasMany(models.TeamGroup, {
         foreignKey: "businessId",
         as: "teamGroups",
+      });
+
+      Business.hasMany(models.Invitation, {
+        foreignKey: "businessId",
+        as: "invitations",
       });
     }
   }
