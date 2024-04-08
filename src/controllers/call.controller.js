@@ -177,7 +177,7 @@ async function handleIncomingCall(request) {
   }
 
   let callDetails = {
-    businessName: business.businessName,
+    businessName: business.name,
     businessPhoneNumber: business.twilioNumber,
     voiceId: assistant.voiceId,
     greetingMessageUrl: assistant.greetingMessageUrl,
