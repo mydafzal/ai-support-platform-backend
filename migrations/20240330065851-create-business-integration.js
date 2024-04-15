@@ -9,6 +9,15 @@ module.exports = {
         primaryKey: true,
         type: Sequelize.INTEGER,
       },
+      accessToken: {
+        type: Sequelize.STRING,
+      },
+      refreshTokenToken: {
+        type: Sequelize.STRING,
+      },
+      expirationTime: {
+        type: Sequelize.DATE,
+      },
       createdAt: {
         allowNull: false,
         type: Sequelize.DATE,

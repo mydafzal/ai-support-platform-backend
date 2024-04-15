@@ -5,7 +5,7 @@ const Integration = require("../../models/integration");
 
 const SCOPES = ["https://www.googleapis.com/auth/calendar.events"];
 
-const { client_secret, client_id, redirect_uris } = oauthCredentials.installed;
+const { client_secret, client_id, redirect_uris } = oauthCredentials.web;
 const oAuth2Client = new google.auth.OAuth2(
   client_id,
   client_secret,

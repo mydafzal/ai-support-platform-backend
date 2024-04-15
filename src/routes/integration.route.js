@@ -77,7 +77,6 @@ router.post("/", async (req, res) => {
       expirationTime: `${moment(new Date())
         .add(expiresIn, "seconds")
         .toDate()}`,
-      businessId,
       integrationId,
     });
 

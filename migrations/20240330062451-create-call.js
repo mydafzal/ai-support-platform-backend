@@ -23,9 +23,7 @@ module.exports = {
         type: Sequelize.STRING,
       },
       warnings: {
-        type: Sequelize.ARRAY(
-          Sequelize.ENUM("HubSpot", "Google-OAuth", "Calendly")
-        ),
+        type: Sequelize.ARRAY(Sequelize.INTEGER),
       },
       createdAt: {
         allowNull: false,
