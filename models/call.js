@@ -41,9 +41,7 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
       },
       warnings: {
-        type: DataTypes.ARRAY(
-          DataTypes.ENUM("HubSpot", "Google-OAuth", "Calendly")
-        ),
+        type: DataTypes.ARRAY(DataTypes.INTEGER),
       },
     },
     {

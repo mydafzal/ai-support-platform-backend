@@ -21,8 +21,15 @@ module.exports = (sequelize, DataTypes) => {
   }
   BusinessIntegration.init(
     {
-      // businessId: DataTypes.INTEGER,
-      // integrationId: DataTypes.INTEGER,
+      accessToken: {
+        type: DataTypes.STRING,
+      },
+      refreshTokenToken: {
+        type: DataTypes.STRING,
+      },
+      expirationTime: {
+        type: DataTypes.DATE,
+      },
     },
     {
       sequelize,
