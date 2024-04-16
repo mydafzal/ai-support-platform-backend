@@ -33,8 +33,8 @@ async function createSupervisorChain(members) {
   
   Your instructions are straightforward:
   
-  1. If the query requires general information or guidance, direct it to the Answerer.
-  2. If the user needs assistance with scheduling a meeting, assign the query to the Meeting Scheduler. Only do this when the user explicitly and clearly asks to schedule a meeting.
+  1. If the user explicitly asks or indicates to schedule a meeting or appointment, output "Meeting Scheduler" because "MeetingScheduler" is responsible for handling this process.
+  1. Direct every other query to the Answerer. Simply output Answerer.
   3. Upon receiving answer from any of the {members}, respond with FINISH to indicate the end of the interaction.
   
   Your objective is to ensure seamless communication flow and efficient problem resolution within the team. Provide clear and concise instructions to agents while remaining responsive to user needs.`;
