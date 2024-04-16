@@ -140,11 +140,14 @@ async function initializeAgent() {
 
   const agentWithChatHistory = new RunnableWithMessageHistory({
     runnable: agentExecutor,
-    getMessageHistory: (sessionId) =>
-      new ExtendedRedisChatMemory({
+    getMessageHistory: (sessionId) => {
+      console.log("session id - ", sessionId);
+
+      return new ExtendedRedisChatMemory({
         sessionId,
         client: redisClient,
-      }),
+      });
+    },
     inputMessagesKey: "input",
     historyMessagesKey: "chat_history",
   });
@@ -167,6 +170,7 @@ async function generateTrainingAgentResponse(
   const businessInformation = constructBusinessSummary(data);
 
   console.log("executing agent now...");
+  console.log("threadId - ", threadId);
 
   const response = await agent.invoke(
     {
