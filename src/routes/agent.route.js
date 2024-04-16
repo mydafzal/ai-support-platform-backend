@@ -2,9 +2,6 @@ const router = require("express").Router();
 const {
   generateTrainingAgentResponse,
 } = require("../controllers/trainingAgent.controller");
-const {
-  generateCallAnsweringAgentResponse,
-} = require("../controllers/callAnsweringAgent.controller");
 const Assistant = require("../../models");
 
 router.post("/teach", async (req, res) => {
@@ -39,18 +36,6 @@ router.post("/ask-agent/business", async (req, res) => {
 
   try {
     const response = await generateAgentResponse(question);
-    res.status(200).send(response);
-  } catch (error) {
-    console.error("Error fetching customer:", error);
-    res.status(500).json({ error: "Internal Server Error" });
-  }
-});
-
-router.post("/ask-agent/customer", async (req, res) => {
-  const { question } = req.body;
-
-  try {
-    const response = await generateCallAnsweringAgentResponse(question);
     res.status(200).send(response);
   } catch (error) {
     console.error("Error fetching customer:", error);

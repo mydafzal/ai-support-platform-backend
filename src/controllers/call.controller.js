@@ -19,7 +19,7 @@ const { getContactByPhoneNumber } = require("../integrations/hubspotCRM");
 
 const {
   generateCallAnsweringAgentResponse,
-} = require("./callAnsweringAgent.controller");
+} = require("./callAnsweringAgent/answeringAgent");
 
 const {
   deleteCallData,
@@ -177,6 +177,7 @@ async function handleIncomingCall(request) {
   }
 
   let callDetails = {
+    businessId: business.id,
     businessName: business.name,
     businessPhoneNumber: business.twilioNumber,
     voiceId: assistant.voiceId,
@@ -184,7 +185,6 @@ async function handleIncomingCall(request) {
     farewellMessageUrl: assistant.farewellMessageUrl,
     assistantName: assistant.name,
     collectionName: assistant.knowledgeBaseName,
-    userId: business.userId,
     callId: callId,
     customerDetails: formattedCustomerDetails,
     customerName: customerFullName,
@@ -239,8 +239,10 @@ async function handleSpeechInput(request) {
 
   let {
     farewellMessageUrl,
+    businessId,
     businessName,
     customerName,
+    customerPhoneNumber,
     assistantName,
     customerDetails,
     voiceId,
@@ -264,14 +266,16 @@ async function handleSpeechInput(request) {
     return twiml.toString();
   }
 
-  let aiResponse = await generateCallAnsweringAgentResponse(
+  const aiResponse = await generateCallAnsweringAgentResponse(
     voiceInput,
+    businessId,
     businessName,
-    customerName,
     assistantName,
+    collectionName,
+    customerName,
+    customerPhoneNumber,
     customerDetails,
-    callId,
-    collectionName
+    callId
   );
 
   console.log("aiResponse", aiResponse);
@@ -555,8 +559,6 @@ async function startCallRecording(callId) {
 
 async function handleCompletedRecording(request) {
   const { CallSid, RecordingSid } = request.body;
-
-  // console.log("completed recording - ", request.body);
 
   try {
     const response = await axios.default.get(
