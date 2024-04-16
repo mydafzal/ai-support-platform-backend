@@ -547,7 +547,6 @@ router.get("/:id/team", async (req, res) => {
     let invitations = await Invitation.findAll({
       where: {
         businessId,
-        status: "Pending",
       },
       attributes: {
         exclude: ["token"],
