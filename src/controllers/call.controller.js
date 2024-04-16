@@ -101,7 +101,7 @@ async function handleIncomingCall(request) {
 
     await Call.update(
       {
-        warnings: ["HubSpot"],
+        warnings: [integration.id],
       },
       {
         where: {
@@ -167,7 +167,7 @@ async function handleIncomingCall(request) {
       integration.refreshToken,
       integration.expirationTime,
       customerPhoneNumber,
-      business.userId
+      business.id
     );
 
     if (contact) {
@@ -177,7 +177,7 @@ async function handleIncomingCall(request) {
   }
 
   let callDetails = {
-    businessName: business.businessName,
+    businessName: business.name,
     businessPhoneNumber: business.twilioNumber,
     voiceId: assistant.voiceId,
     greetingMessageUrl: assistant.greetingMessageUrl,
@@ -613,4 +613,5 @@ module.exports = {
   createVerifyService,
   handleCallDisconnect,
   handleCompletedRecording,
+  sendSMS,
 };
