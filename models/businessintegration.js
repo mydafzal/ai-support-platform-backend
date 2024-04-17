@@ -22,10 +22,10 @@ module.exports = (sequelize, DataTypes) => {
   BusinessIntegration.init(
     {
       accessToken: {
-        type: DataTypes.STRING,
+        type: DataTypes.TEXT,
       },
-      refreshTokenToken: {
-        type: DataTypes.STRING,
+      refreshToken: {
+        type: DataTypes.TEXT,
       },
       expirationTime: {
         type: DataTypes.DATE,
