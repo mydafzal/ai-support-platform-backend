@@ -62,16 +62,12 @@ async function getGoogleOAuthAccessToken(code) {
         console.error("Error retrieving google oauth access token", err);
         reject(err);
       } else {
-        console.log("expiry date", token.expiry_date);
-
         const currentTime = moment();
-
-        console.log("current time", currentTime);
 
         const futureTime = moment(token.expiry_date);
         const expiresIn = futureTime.diff(currentTime, "seconds");
 
-        console.log("expiresIn", expiresIn);
+        console.log("Google oauth token - ", token);
 
         const result = {
           accessToken: token.access_token,
@@ -116,7 +112,16 @@ async function refreshAccessToken(userId) {
   }
 }
 
+async function revokeAccessToken(accessToken) {
+  try {
+    await oAuth2Client.revokeToken(accessToken);
+  } catch (err) {
+    console.error("Error revoking access token:", err.message);
+  }
+}
+
 module.exports = {
   generateGoogleOAuthUrl,
   getGoogleOAuthAccessToken,
+  revokeAccessToken,
 };
