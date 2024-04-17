@@ -206,51 +206,9 @@ async function getCalendlyAccountDetails(accessToken) {
   return await response.json();
 }
 
-async function getOrganizationMember(
-  accessToken,
-  email,
-  expirationTime,
-  refreshToken
-) {
-  // if (hasAccessTokenExpired(expirationTime)) {
-  //   const updatedCredentials = await refreshCalendlyAccessToken(refreshToken);
-  //   accessToken = updatedCredentials.access_token;
-
-  //   // Save to db.
-  // }
-
-  const calendlyAccountDetails = await getCalendlyAccountDetails(accessToken);
-  const organizationUri = calendlyAccountDetails.resource.current_organization;
-
-  console.log("calendlyAccountDetails", calendlyAccountDetails);
-  console.log("organizationUri", organizationUri);
-
-  const response = await fetch(
-    `https://api.calendly.com/organization_memberships?organization=${organizationUri}`,
-    {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-    }
-  );
-
-  const data = await response.json();
-  console.log("getOrganizationMember - data", data);
-
-  const members = data?.collection;
-  members?.forEach((user) => console.log("----", user.user.email));
-
-  // if (members?.length > 0) {
-  //   return members.filter((user) => user.user.email === email);
-  // }
-}
-
 module.exports = {
   getAvailableTimeSlots,
   getCalendlyAccessToken,
   refreshCalendlyAccessToken,
   getCalendlyAccountDetails,
-  getOrganizationMember,
 };
