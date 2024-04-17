@@ -14,8 +14,8 @@ const AUDIO_FILES_EXTENSION = "mp3";
 const AUDIO_FILES_BASE_URL = `${process.env.BASE_URL}/data/ai-generated-speeches`;
 
 const HUBPOST_INTEGRATION_ID = 1;
-const GOOGLE_CALENDAR_INTEGRATION_ID = 1;
-const CALENDLY_INTEGRATION_ID = 1;
+const GOOGLE_CALENDAR_INTEGRATION_ID = 2;
+const CALENDLY_INTEGRATION_ID = 3;
 
 module.exports = {
   AUDIO_FILES_BASE_PATH,

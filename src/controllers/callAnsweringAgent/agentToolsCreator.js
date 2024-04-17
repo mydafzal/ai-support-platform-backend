@@ -1,11 +1,31 @@
 const { createRetrieverTool } = require("langchain/tools/retriever");
 const { getVectoreStore } = require("../../integrations/chromaDB");
 const { DynamicStructuredTool } = require("@langchain/core/tools");
-const { BusinessIntegration } = require("../../../models");
-
-const { Op } = require("sequelize");
 const { z } = require("zod");
 const { sendSMS } = require("../call.controller");
+const {
+  checkSlotAvailability,
+  getNextThreeSlots,
+  getSlotsForNextDate,
+  scheduleMeeting,
+} = require("./meetingScheduler");
+
+const monthsEnum = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+const datesEnum = Array.from({ length: 31 }, (_, index) => `${index + 1}`);
+const hoursEnum = Array.from({ length: 23 }, (_, index) => `${index}`);
 
 async function createInformationRetrieverTool(collectionName) {
   const vectorStore = await getVectoreStore(collectionName);
@@ -25,37 +45,44 @@ function createMeetingSchedulerTool(businessId) {
       "Schedule the user's meeting based on the time slot accepted by the user. Provide month, date and hour all three to schedule the meeting.",
     schema: z.object({
       month: z
-        .enum([
-          "January",
-          "February",
-          "March",
-          "April",
-          "May",
-          "June",
-          "July",
-          "August",
-          "September",
-          "October",
-          "November",
-          "December",
-        ])
+        .enum(monthsEnum)
         .describe(
           "The month in which the user would like to get his/her meeting scheduled."
         ),
       date: z
-        .enum(Array.from({ length: 31 }, (_, index) => index + 1))
+        .enum(datesEnum)
         .describe(
           "The specific date of the given month on which the user would like to get his/her meeting scheduled."
         ),
       hour: z
-        .enum(Array.from({ length: 23 }, (_, index) => index))
+        .enum(hoursEnum)
         .describe(
           "The specific hour between 0 to 23 at which the user would like to get his/her meeting scheduled."
         ),
+      customerEmail: z
+        .string()
+        .email()
+        .describe(
+          "Customer's email for sending email notification after scheduling the meeting."
+        ),
+      meetingDescription: z
+        .string()
+        .describe(
+          "Anyone information extracted from the conversation that could help us know the purpose for scheduling this meeting."
+        ),
     }),
-    func: ({ month, date, hour }) => {
+    func: async ({ month, date, hour, customerEmail, meetingDescription }) => {
       console.log("schedule meeting called");
-      return "";
+      console.log("meetingDescription - ", meetingDescription);
+
+      return await scheduleMeeting(
+        month,
+        parseInt(date),
+        parseInt(hour),
+        meetingDescription,
+        customerEmail,
+        businessId
+      );
     },
   });
 }
@@ -67,41 +94,37 @@ function createSlotAvailaibilityCheckerTool(businessId) {
       "Based on the month, date and hour provided by the user, check if the slot is available.",
     schema: z.object({
       month: z
-        .enum([
-          "January",
-          "February",
-          "March",
-          "April",
-          "May",
-          "June",
-          "July",
-          "August",
-          "September",
-          "October",
-          "November",
-          "December",
-        ])
+        .enum(monthsEnum)
         .describe(
           "The month in which the user would like to get his/her meeting scheduled."
         ),
       date: z
-        .enum(Array.from({ length: 31 }, (_, index) => index + 1))
+        .enum(datesEnum)
         .describe(
           "The date of the month on which the user would like to get his/her meeting scheduled."
         ),
       hour: z
-        .enum(Array.from({ length: 23 }, (_, index) => index))
+        .enum(hoursEnum)
         .describe(
           "The specific hour between 0 to 23 at which the user would like to get his/her meeting scheduled."
         ),
     }),
-    func: ({ month, date, hour }) => {
+    func: async ({ month, date, hour }) => {
       console.log("check-slot-availability called");
       console.log("month - ", month);
       console.log("date - ", date);
       console.log("hour - ", hour);
 
-      return "";
+      const response = await checkSlotAvailability(
+        month,
+        parseInt(date),
+        parseInt(hour),
+        businessId
+      );
+
+      console.log("checkSlotAvailability - response", response);
+
+      return response;
     },
   });
 }
@@ -113,41 +136,33 @@ function createNextSlotsGetterTool(businessId) {
       "The user declined your request to schedule meeting on the slot that you communicated as the next available slot, that is next to the one the user originally requested. The slot that you communicated was available but the user refused to schedule meeting on that slot.",
     schema: z.object({
       month: z
-        .enum([
-          "January",
-          "February",
-          "March",
-          "April",
-          "May",
-          "June",
-          "July",
-          "August",
-          "September",
-          "October",
-          "November",
-          "December",
-        ])
+        .enum(monthsEnum)
         .describe(
           "The month in which the user would like to get his/her meeting scheduled."
         ),
       date: z
-        .enum(Array.from({ length: 31 }, (_, index) => index + 1))
+        .enum(datesEnum)
         .describe(
           "The date of the month on which the user would like to get his/her meeting scheduled."
         ),
       hour: z
-        .enum(Array.from({ length: 23 }, (_, index) => index))
+        .enum(hoursEnum)
         .describe(
           "The specific hour you communicated to the user as the next available time slot."
         ),
     }),
-    func: ({ month, date, hour }) => {
+    func: async ({ month, date, hour }) => {
       console.log("get-next-three-slots called");
       console.log("month - ", month);
       console.log("date - ", date);
       console.log("hour - ", hour);
 
-      return "";
+      return await getNextThreeSlots(
+        month,
+        parseInt(date),
+        parseInt(hour),
+        businessId
+      );
     },
   });
 }
@@ -159,62 +174,22 @@ function createNextDateSlotsGetterTool(businessId) {
       "No time slots are left on the date you currently provided so now get available slots for the next date.",
     schema: z.object({
       month: z
-        .enum([
-          "January",
-          "February",
-          "March",
-          "April",
-          "May",
-          "June",
-          "July",
-          "August",
-          "September",
-          "October",
-          "November",
-          "December",
-        ])
+        .enum(monthsEnum)
         .describe(
           "The month in which the user would like to get his/her meeting scheduled. If you incremented the date parameter and that date exceeds the month given by the user, then you should also move the month to next one."
         ),
       date: z
-        .enum(Array.from({ length: 31 }, (_, index) => index + 1))
+        .enum(datesEnum)
         .describe(
           "The date next to the one that you previously provided for checking available time slots."
         ),
     }),
-    func: ({ month, date }) => {
+    func: async ({ month, date }) => {
       console.log("get-slots-for-next-date called");
       console.log("month - ", month);
       console.log("date - ", date);
 
-      return "";
-    },
-  });
-}
-
-function canScheduleMeeting(businessId) {
-  return new DynamicStructuredTool({
-    name: "can-schedule-meeting",
-    description:
-      "No time slots are left on the date you currently provided so now get available slots for the next date.",
-    schema: z.object({}),
-    func: async () => {
-      console.log("can-schedule-meeting - called");
-
-      const count = await BusinessIntegration.count({
-        where: {
-          businessId,
-          integrationId: {
-            [Op.in]: [2, 3],
-          },
-        },
-      });
-
-      if (count !== 2) {
-        return false;
-      }
-
-      return true;
+      return await getSlotsForNextDate(month, parseInt(date), businessId);
     },
   });
 }
@@ -232,9 +207,9 @@ function createSmsSenderTool() {
     func: async () => {
       console.log("sms sender tool - called");
 
-      const messageBody = `We can't schedule your meeting at this time. Please visit the following link and provide some basic details. Then try again and we will get your meeting scheduled.
+      const messageBody = `We can't schedule your meeting at this time. Please visit the following link and provide some details. Then try again and we will get your meeting scheduled.
       
-      http://localhost:3000
+      ${process.env.CLIENT_BASE_URL}
       `;
 
       await sendSMS(phoneNumber, messageBody);
@@ -249,6 +224,5 @@ module.exports = {
   createNextDateSlotsGetterTool,
   createMeetingSchedulerTool,
   createInformationRetrieverTool,
-  canScheduleMeeting,
   createSmsSenderTool,
 };

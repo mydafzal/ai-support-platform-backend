@@ -5,6 +5,7 @@ const { getCalendlyAccessToken } = require("../integrations/calendly");
 const {
   getGoogleOAuthAccessToken,
   generateGoogleOAuthUrl,
+  revokeAccessToken,
 } = require("../integrations/googleOAuth");
 const { getHubSpotAccessToken } = require("../integrations/hubspotCRM");
 
@@ -31,7 +32,7 @@ router.get("/hubspot-auth-url", (req, res) => {
 
 router.get("/calendly-auth-url", (req, res) => {
   return res.status(200).json({
-    calendlyRedirectUrl: `https://calendly.com/oauth/authorize?client_id=${process.env.CALENDLY_CLIENT_ID}&response_type=code&redirect_uri=https://customer-bot-psi.vercel.app/app-integration?integrationId=3`,
+    calendlyRedirectUrl: `https://calendly.com/oauth/authorize?client_id=${process.env.CALENDLY_CLIENT_ID}&response_type=code&redirect_uri=http://localhost:3000/connect-integration`,
   });
 });
 
@@ -65,7 +66,7 @@ router.post("/", async (req, res) => {
     } else if (integration.name === "HubSpot") {
       response = await getHubSpotAccessToken(code, redirectUri);
     } else if (integration.name === "Google Calendar") {
-      response = await getGoogleOAuthAccessToken(code);
+      response = await getGoogleOAuthAccessToken(decodeURIComponent(code));
     }
 
     const { accessToken, refreshToken, expiresIn } = response;
@@ -95,6 +96,15 @@ router.delete("/:id", async (req, res) => {
   const businessIntegrationId = req.params.id;
 
   try {
+    let businessIntegration = await BusinessIntegration.findByPk(
+      businessIntegrationId
+    );
+
+    if (businessIntegration) {
+      businessIntegration = businessIntegration?.toJSON();
+      await revokeAccessToken(businessIntegration.accessToken);
+    }
+
     await BusinessIntegration.destroy({
       where: { id: businessIntegrationId },
     });

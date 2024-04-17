@@ -37,7 +37,6 @@ async function getContactByPhoneNumber(
   });
 
   if (hasAccessTokenExpired(expirationTime)) {
-    console.log("token expired.....");
     const updatedToken = await refreshAccessToken(refreshToken);
 
     await Integration.update(
@@ -83,11 +82,9 @@ async function getContactByPhoneNumber(
       PublicObjectSearchRequest
     );
 
-    console.log("get contact response,", apiResponse);
-
     if (apiResponse.total < 1) {
       console.log("Hubspot contact not found");
-      return null;
+      return;
     }
 
     return apiResponse.results[0];
@@ -115,8 +112,6 @@ async function refreshAccessToken(refreshToken) {
 }
 
 function hasAccessTokenExpired(expirationTime) {
-  // const currentTime = Math.floor(new Date().getTime() / 1000);
-
   return new Date() >= new Date(expirationTime);
 }
 
@@ -130,29 +125,6 @@ async function readAllProperties(accessToken) {
     accessToken,
   });
 
-  // const objectType = "contacts";
-  // const groupName = "contactinformation";
-
-  // contactinformation
-
-  // try {
-  //   // const apiResponse = await hubspotClient.crm.properties.groupsApi.getAll(
-  //   //   objectType
-  //   // );
-  //   // console.log(JSON.stringify(apiResponse, null, 2));
-
-  //   const apiResponse = await hubspotClient.crm.properties.groupsApi.getByName(
-  //     objectType,
-  //     groupName
-  //   );
-
-  //   console.log(JSON.stringify(apiResponse, null, 2));
-  // } catch (e) {
-  //   e.message === "HTTP request failed"
-  //     ? console.error(JSON.stringify(e.response, null, 2))
-  //     : console.error(e);
-  // }
-
   const objectType = "contacts";
   const archived = false;
   const properties = undefined;
@@ -164,14 +136,6 @@ async function readAllProperties(accessToken) {
       properties
     );
     console.log("all properties...");
-
-    const propertyNames = apiResponse.results.map((property) => property.name);
-    console.log(
-      "properties",
-      apiResponse.results
-        .filter((property) => property.groupName === "contactinformation")
-        .map((item) => item.name)
-    );
 
     return apiResponse;
   } catch (e) {

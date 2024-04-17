@@ -4,36 +4,28 @@ const {
 } = require("../../integrations/googleCalendar");
 const { getAvailableTimeSlots } = require("../../integrations/calendly");
 
-async function checkSlotAvailability(month, date, hour) {
+async function checkSlotAvailability(month, date, hour, businessId) {
   let convertedDate = constructDate(month, date, hour);
   convertedDate = handleTimeZoneDifference(convertedDate);
 
-  const slots = await getAvailableTimeSlots(convertedDate);
-
-  console.log("getAvailableTimeSlots - response", slots);
-  return slots;
+  return await getAvailableTimeSlots(convertedDate, false, businessId);
 }
 
-async function getNextThreeSlots(month, date, hour) {
+async function getNextThreeSlots(month, date, hour, businessId) {
   hour = parseInt(hour) + 1;
 
   let convertedDate = constructDate(month, date, hour);
   convertedDate = handleTimeZoneDifference(convertedDate);
 
-  const response = await getAvailableTimeSlots(convertedDate, true);
-
-  console.log("getNextThreeSlots - response", response);
+  const response = await getAvailableTimeSlots(convertedDate, true, businessId);
   return response;
 }
 
-async function getSlotsForNextDate(month, date) {
+async function getSlotsForNextDate(month, date, businessId) {
   let convertedDate = constructDate(month, date, 0);
   convertedDate = handleTimeZoneDifference(convertedDate);
 
-  const slots = await getAvailableTimeSlots(convertedDate);
-
-  console.log("getSlotsForNextDate - response", slots);
-  return slots;
+  return await getAvailableTimeSlots(convertedDate, false, businessId);
 }
 
 function constructDate(month, date, hour) {
@@ -85,13 +77,10 @@ async function scheduleMeeting(
   month,
   date,
   hour,
-  projectType = "Project Type",
-  customerEmail
+  meetingDescription,
+  customerEmail,
+  businessId
 ) {
-  console.log("schedule meeting called.....");
-
-  console.log("args", month, date, hour, projectType);
-
   const convertedDate = constructDate(month, date, hour);
 
   const timezoneDifferenceInHours =
@@ -117,14 +106,10 @@ async function scheduleMeeting(
     )
   );
 
-  console.log("meetingStartTime", moment(meetingStartTime).format("hh:mm a"));
-  console.log("meetingEndTime", moment(meetingEndTime).format("hh:mm a"));
-  console.log("format(dddd)", moment(meetingEndTime).format("dddd"));
-
   await addEventToGoogleCalendar(
+    businessId,
     customerEmail,
-    "meetingEvent.name",
-    "meetingEvent.description",
+    meetingDescription,
     meetingStartTime.toISOString(),
     meetingEndTime.toISOString()
   );

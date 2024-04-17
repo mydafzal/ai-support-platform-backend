@@ -6,21 +6,12 @@ const path = require("path");
 require("dotenv").config();
 
 const { connectRedis } = require("./src/integrations/redis");
-const { initializeBrowser } = require("./src/integrations/urlScreenshot");
 connectRedis();
 
+const { initializeBrowser } = require("./src/integrations/urlScreenshot.js");
 initializeBrowser();
 
 const app = express();
-
-// app.use(express.json());
-// app.use(
-//   "/documents",
-//   express.static(path.join(__dirname, "documents"), {
-//     maxAge: 0,
-//     etag: false,
-//   })
-// );
 
 app.use(
   "/data",
@@ -34,52 +25,26 @@ app.use(bodyParser.json());
 app.use(cookieParser());
 app.use(cors());
 
-const authRouter = require("./src/routes/auth.route");
-const callsRouter = require("./src/routes/call.route");
-const callTagsRouter = require("./src/routes/callTag.route");
-const usersRouter = require("./src/routes/user.route");
-const businessesRouter = require("./src/routes/business.route");
-const trainRouter = require("./src/routes/train.route");
-const agentsRouter = require("./src/routes/agent.route");
-const voicesRouter = require("./src/routes/voice.route");
-const downloadsRouter = require("./src/routes/download.route");
-// const chatsRouter = require("./src/routes/chat.route");
-const teamGroupsRouter = require("./src/routes/teamGroup.route");
-const integrationsRouter = require("./src/routes/integration.route");
-const invitationsRouter = require("./src/routes/invitation.route");
-const db = require("./models");
+app.use("/auth", require("./src/routes/auth.route"));
+app.use("/calls", require("./src/routes/call.route"));
+app.use("/call-tags", require("./src/routes/callTag.route"));
+app.use("/businesses", require("./src/routes/business.route"));
+app.use("/users", require("./src/routes/user.route"));
+app.use("/invitations", require("./src/routes/invitation.route"));
+app.use("/train", require("./src/routes/train.route"));
+app.use("/agents", require("./src/routes/agent.route"));
+app.use("/voices", require("./src/routes/voice.route"));
+app.use("/download", require("./src/routes/download.route"));
+app.use("/team-groups", require("./src/routes/teamGroup.route"));
+app.use("/integrations", require("./src/routes/integration.route"));
+// app.use("/chats", require("./src/routes/chat.route"));
 
-app.get("/speech", async (req, res) => {
-  const response = await convertTextToSpeech(
-    // "Hey! I'm MichaelX, your friendly ai assistant. What would you like to talk about?"
-    // "It's been a pleasure assisting you. Goodbye!",
-    // "Hi, thanks for calling Cheetah. I am an AI assistant who can help you do all kinds of things, like setup a meeting or answer questions about the agency. If at any point you would like to speak to a person directly, please just say 'I'd like to speak to a human'",
-    "Hi, thanks for calling Cheetah Agency. I'm Adam, an AI trained to help potential and current customers learn more about the agency and our storied history or schedule meetings with our engineers or creative team. I can also forward you to one of my favourite humans here at Cheetah. Just say 'I love humans' and I'll forward you. Anyways, tell me what you want to do - I can handle it."
-  );
-
-  res.status(200).json({ response });
+app.get("/", (req, res) => {
+  res.status(200).json({ token: "Server is running..." });
 });
 
 app.post("/test", async (req, res) => {
-  res.status(200).json({ response: "" });
-});
-
-app.use("/auth", authRouter);
-app.use("/calls", callsRouter);
-app.use("/call-tags", callTagsRouter);
-app.use("/businesses", businessesRouter);
-app.use("/users", usersRouter);
-app.use("/invitations", invitationsRouter);
-app.use("/train", trainRouter);
-app.use("/agents", agentsRouter);
-app.use("/voices", voicesRouter);
-app.use("/download", downloadsRouter);
-app.use("/team-groups", teamGroupsRouter);
-app.use("/integrations", integrationsRouter);
-// app.use("/chats", chatsRouter);
-
-app.get("/", (req, res) => {
-  res.status(200).json({ token: "token 123" });
+  res.status(200).json({ response: "Test" });
 });
 
 app.listen(process.env.PORT, () => {

@@ -10,10 +10,10 @@ module.exports = {
         type: Sequelize.INTEGER,
       },
       accessToken: {
-        type: Sequelize.STRING,
+        type: Sequelize.TEXT,
       },
-      refreshTokenToken: {
-        type: Sequelize.STRING,
+      refreshToken: {
+        type: Sequelize.TEXT,
       },
       expirationTime: {
         type: Sequelize.DATE,

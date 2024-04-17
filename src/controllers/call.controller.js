@@ -45,9 +45,13 @@ const {
   AUDIO_FILES_EXTENSION,
   AUDIO_FILES_BASE_URL,
   CALL_RECORDINGS_BASE_PATH,
+  CALENDLY_INTEGRATION_ID,
+  GOOGLE_CALENDAR_INTEGRATION_ID,
+  HUBPOST_INTEGRATION_ID,
 } = require("../utils/constants");
 const { generateFilename } = require("../utils/helpers");
 const { sendEmail } = require("../integrations/nodemailer");
+const { Op } = require("sequelize");
 
 async function handleIncomingCall(request) {
   const VoiceResponse = twilio.twiml.VoiceResponse;
@@ -83,10 +87,17 @@ async function handleIncomingCall(request) {
 
   let integration = await Integration.findOne({
     where: {
-      name: "HubSpot",
+      id: HUBPOST_INTEGRATION_ID,
     },
-    attributes: ["id"],
-    include: [{ model: BusinessIntegration, as: "integration" }],
+    include: [
+      {
+        model: BusinessIntegration,
+        as: "integration",
+        where: {
+          businessId: business.id,
+        },
+      },
+    ],
   });
 
   integration = integration?.toJSON();
@@ -94,74 +105,24 @@ async function handleIncomingCall(request) {
   let formattedCustomerDetails = "";
   let customerFullName = "";
 
-  if (integration?.integration?.length <= 0) {
+  if (
+    !integration ||
+    !integration?.integration ||
+    integration?.integration?.length <= 0
+  ) {
     console.log(
-      "HubSpot integration not available, couldn't retrieve customer's information"
+      "HubSpot integration not available, couldn't retrieve customer's information."
     );
 
-    await Call.update(
-      {
-        warnings: [integration.id],
-      },
-      {
-        where: {
-          id: callId,
-        },
-      }
+    await handleIntegrationWarning(
+      callId,
+      HUBPOST_INTEGRATION_ID,
+      business.id,
+      business.adminUserId
     );
-
-    let integrationWarning = await IntegrationWarning.findOne({
-      where: {
-        businessId: business.id,
-        integrationId: integration.id,
-      },
-    });
-
-    integrationWarning = integrationWarning?.toJSON();
-
-    const cooldownPeriod = 24 * 60 * 60 * 1000; // 24 hours cooldown period
-    const currentTime = Date.now();
-
-    if (
-      !integrationWarning ||
-      currentTime - new Date(integrationWarning.lastEmailSentAt) >=
-        cooldownPeriod
-    ) {
-      let user = await User.findOne({
-        where: {
-          id: business.adminUserId,
-        },
-      });
-
-      user = user.toJSON();
-
-      // Trigger email to business to connect the CRM...
-      const emailLink = `${process.env.CLIENT_BASE_URL}/integration?callId=${callId}`;
-
-      const emailTemplate = `We couldn't retrieve details of your customer because you have not connected any CRM with Customer Bot. 
-      </br>
-      Click <a href="${emailLink}">here</a> to get redirected to the call during which this problem occured.`;
-
-      await sendEmail(user.email, emailTemplate);
-
-      if (integrationWarning) {
-        await IntegrationWarning.update(
-          {
-            id: integrationWarning.id,
-          },
-          {
-            lastEmailSentAt: new Date(),
-          }
-        );
-      } else {
-        await IntegrationWarning.create({
-          businessId: business.id,
-          integrationId: integration.id,
-          lastEmailSentAt: new Date(),
-        });
-      }
-    }
   } else {
+    integration = integration.integration[0];
+
     const contact = await getContactByPhoneNumber(
       integration.accessToken,
       integration.refreshToken,
@@ -175,6 +136,18 @@ async function handleIncomingCall(request) {
       customerFullName = `${contact.properties.firstname} ${contact.properties.lastname}`;
     }
   }
+
+  const count = await BusinessIntegration.count({
+    where: {
+      businessId: business.id,
+      integrationId: {
+        [Op.in]: [CALENDLY_INTEGRATION_ID, GOOGLE_CALENDAR_INTEGRATION_ID],
+      },
+    },
+  });
+
+  // Businesses must connect both Google Calendar and Calendly integrations so that customers can schedule meetings.
+  let canScheduleMeeting = count !== 2 ? false : true;
 
   let callDetails = {
     businessId: business.id,
@@ -191,12 +164,10 @@ async function handleIncomingCall(request) {
     customerPhoneNumber,
     shouldAddGreetingMessageToTranscription: false,
     shouldAddFarewellMessageToTranscription: false,
+    canScheduleMeeting,
   };
 
   await storeCallData(callId, callDetails);
-
-  // https://psychix.s3.amazonaws.com/ai-bot/customer-1/greetingMessage.mp3
-  // https://c06d-119-73-113-87.ngrok-free.app/public/greeting-message-adam.mp3
 
   twiml.play(callDetails.greetingMessageUrl);
 
@@ -250,6 +221,7 @@ async function handleSpeechInput(request) {
     audioFileNames,
     phoneNumbers,
     shouldAddGreetingMessageToTranscription,
+    canScheduleMeeting,
   } = callData;
 
   if (!shouldAddGreetingMessageToTranscription) {
@@ -275,7 +247,8 @@ async function handleSpeechInput(request) {
     customerName,
     customerPhoneNumber,
     customerDetails,
-    callId
+    callId,
+    canScheduleMeeting
   );
 
   console.log("aiResponse", aiResponse);
@@ -599,6 +572,80 @@ async function handleCompletedRecording(request) {
     console.log("saved call recording");
   } catch (error) {
     console.log("Error downloading call recording from Twilio: ", error);
+  }
+}
+
+async function handleIntegrationWarning(
+  callId,
+  integrationId,
+  businessId,
+  adminUserId
+) {
+  try {
+    await Call.update(
+      {
+        warnings: [integrationId],
+      },
+      {
+        where: {
+          id: callId,
+        },
+      }
+    );
+
+    let integrationWarning = await IntegrationWarning.findOne({
+      where: {
+        businessId,
+        integrationId: integrationId,
+      },
+    });
+
+    integrationWarning = integrationWarning?.toJSON();
+
+    const cooldownPeriod = 24 * 60 * 60 * 1000; // 24 hours cooldown period
+    const currentTime = Date.now();
+
+    if (
+      !integrationWarning ||
+      currentTime - new Date(integrationWarning.lastEmailSentAt) >=
+        cooldownPeriod
+    ) {
+      let user = await User.findOne({
+        where: {
+          id: adminUserId,
+        },
+      });
+
+      user = user.toJSON();
+
+      // Trigger email to business to connect the CRM...
+      const emailLink = `${process.env.CLIENT_BASE_URL}/integration?callId=${callId}`;
+
+      const emailTemplate = `We couldn't retrieve details of your customer because you have not connected any CRM with Customer Bot. 
+      </br>
+      Click <a href="${emailLink}">here</a> to get redirected to the call during which this problem occured.`;
+
+      await sendEmail(user.email, emailTemplate);
+
+      if (integrationWarning) {
+        await IntegrationWarning.update(
+          {
+            id: integrationWarning.id,
+          },
+          {
+            lastEmailSentAt: new Date(),
+          }
+        );
+      } else {
+        await IntegrationWarning.create({
+          businessId,
+          integrationId,
+          lastEmailSentAt: new Date(),
+        });
+      }
+    }
+  } catch (error) {
+    console.log("handleIntegrationWarning error - ", error);
   }
 }
 
