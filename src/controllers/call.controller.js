@@ -45,9 +45,12 @@ const {
   AUDIO_FILES_EXTENSION,
   AUDIO_FILES_BASE_URL,
   CALL_RECORDINGS_BASE_PATH,
+  CALENDLY_INTEGRATION_ID,
+  GOOGLE_CALENDAR_INTEGRATION_ID,
 } = require("../utils/constants");
 const { generateFilename } = require("../utils/helpers");
 const { sendEmail } = require("../integrations/nodemailer");
+const { Op } = require("sequelize");
 
 async function handleIncomingCall(request) {
   const VoiceResponse = twilio.twiml.VoiceResponse;
@@ -176,6 +179,18 @@ async function handleIncomingCall(request) {
     }
   }
 
+  const count = await BusinessIntegration.count({
+    where: {
+      businessId: business.id,
+      integrationId: {
+        [Op.in]: [CALENDLY_INTEGRATION_ID, GOOGLE_CALENDAR_INTEGRATION_ID],
+      },
+    },
+  });
+
+  // Businesses must connect both Google Calendar and Calendly integrations so that customers can schedule meetings.
+  let canScheduleMeeting = count !== 2 ? false : true;
+
   let callDetails = {
     businessId: business.id,
     businessName: business.name,
@@ -191,6 +206,7 @@ async function handleIncomingCall(request) {
     customerPhoneNumber,
     shouldAddGreetingMessageToTranscription: false,
     shouldAddFarewellMessageToTranscription: false,
+    canScheduleMeeting,
   };
 
   await storeCallData(callId, callDetails);
@@ -250,6 +266,7 @@ async function handleSpeechInput(request) {
     audioFileNames,
     phoneNumbers,
     shouldAddGreetingMessageToTranscription,
+    canScheduleMeeting,
   } = callData;
 
   if (!shouldAddGreetingMessageToTranscription) {
@@ -275,7 +292,8 @@ async function handleSpeechInput(request) {
     customerName,
     customerPhoneNumber,
     customerDetails,
-    callId
+    callId,
+    canScheduleMeeting
   );
 
   console.log("aiResponse", aiResponse);
