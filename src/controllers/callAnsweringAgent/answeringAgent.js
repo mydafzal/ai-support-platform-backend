@@ -17,6 +17,7 @@ const { redisClient } = require("../../integrations/redis");
 async function initializeMultiAgentWorkflow(
   answeringAgentPrompt,
   schedulerAgentPrompt,
+  supervisorAgentPromt,
   canScheduleMeeting,
   callId,
   collectionName,
@@ -99,7 +100,10 @@ async function initializeMultiAgentWorkflow(
     channels: agentStateChannels,
   });
 
-  const supervisorChain = await createSupervisorChain(members);
+  const supervisorChain = await createSupervisorChain(
+    members,
+    supervisorAgentPromt
+  );
 
   workflow.addNode("Answerer", answeringNode);
   workflow.addNode("MeetingScheduler", meetingSchedulerNode);
@@ -171,9 +175,12 @@ async function generateCallAnsweringAgentResponse(
     canScheduleMeeting
   );
 
+  const supervisorAgentPromt = createSupervisorAgentPrompt();
+
   const graph = await initializeMultiAgentWorkflow(
     anweringAgentPrompt,
     schedulerAgentPrompt,
+    supervisorAgentPromt,
     canScheduleMeeting,
     callId,
     collectionName,
@@ -271,40 +278,44 @@ function createSchedulerAgentPrompt(
     Here's a detailed guide on how to effectively navigate through the meeting scheduling process:
 
       1. Initial Inquiry: 
-      When a customer indicates a desire to schedule a meeting, prompt them to provide specific details:
-        - Ask for the month (January to December).
-        - Request the date of the month.
-        - Inquire about the desired hour in 24-hour format.
+      When a customer indicates a desire to schedule a meeting, prompt them to provide specific details in a step-by-step manner:
+        - First, ask the user to provide the specific month (January to December).
+        - Then ask for date of the month.
+        - Finally, ask for specific hour in 24-hour format.
+        - Don't process until the customer has provided all three.
       
       2. Check Slot Availability:
-        - Utilize the 'check-slot-availability' function with the provided date, month, and hour.
-        - If the slot is available (result is positive):
-            - Call 'schedule_meeting' to confirm the meeting.
-            - Inform the customer about the scheduled meeting.
-        - If the slot is unavailable:
-            - Communicate this to the customer.
-            - Prompt the customer to provide an available date and hour.
-      
+        - Utilize the 'check-slot-availability' tool with the provided date, month, and hour.
+        - If the result of 'check-slot-availability' tool indicates that the exact slot that the customer requested is available:
+            - Communicate this slot to the user and ask for confirmation
+            - If customer accepts the slot, move to step 6 (Confirmation) of the process.
+            - Otherwise proceed to step 3 (Suggest Next Available Slot) of the process.
+       
       3. Suggest Next Available Slot:
-        - If an alternative slot is available:
-            - Suggest the next available slot to the customer.
-            - If accepted, proceed to schedule the meeting as in step 2.
-            - If refused, continue suggesting available slots.
-        - If no alternative slots are available on the given date:
-            - Move to the next date.
-            - Call 'get-slots-for-next-date' to retrieve available slots.
-            - Suggest available slots to the customer.
+        - If the result of 'check-slot-availability' tool indicates that the slot is unavailable but provides the next available slot:
+            - Communicate this next slot to the customer and ask for confirmation.
+            - If customer accepts this slot, jump to step 6 (Confirmation) of the process.
+            - If customer rejects this slot, jump to step 4 (Suggest Next Three Available Slots) of the process.
+        - If the result of 'check-slot-availability' tool indicates no slot is available:
+            - Jump to step 4 (Suggest Next Three Available Slots) of the process.
 
-      4. Repeat Process for Next Dates:
-        - Continue suggesting available slots on subsequent dates until a suitable slot is confirmed.
-        - If no slots are available for any dates provided by the customer, restart the process.
-      
-      5. Account Verification: 
-        - Ensure that the customer has an account before proceeding with the scheduling process.
-        - If the customer has not created an account, do not proceed.
-      
+      4. Suggest Next Three Available Slots:
+         Call 'get-next-three-slots' tool to retrieve next three available slots.
+            - If no slots are available, jump to step 5 (Get Slots for Next Date) of the process.
+            - If the ''get-next-three-slots' tool returns one or more slots, communicate these slots to the customer and ask for confirmation.
+            - If customer accepts one of the slots, jump to step 6 (Confirmation) of the process.
+            - If customer doesn't accept any of the communicated slots, repeat the step 4 of the process again to get next three slots
+
+      5. Get Slots for Next Date:
+        Move to next date and call 'get-slots-for-next-date' tool to retrieve the first three available slots.
+         - If no slots are available, start the step 5 (Get Slots for Next Date) again.
+         - If one or more are slots available, communicate these slots to the customer and ask for confirmation.
+         - If customer accepts one of the slots, jump to step 6 (Confirmation) of the process.
+         - If customer doesn't accept any of the communicated slots, jump to step 4 of the process.
+          
       6. Confirmation:
-        - Once the customer confirms a suitable time slot, call 'schedule-meeting' with the correct details.
+        - Once the customer confirms a suitable time slot, ask the customer to provide some information about their specific problem or their purpose for scheduling this meeting. Remember, you MUST ask the customer to provide this information.
+        - Finally, call 'schedule-meeting' with the correct details to schedule the meeting.
         - Inform the customer about the status of the scheduled meeting.
 
       Your objective is to facilitate seamless communication and coordination between customers and support staff, ensuring efficient scheduling of meetings while prioritizing customer convenience and satisfaction.
@@ -326,24 +337,19 @@ function createSchedulerAgentPrompt(
   return prompt;
 }
 
+function createSupervisorAgentPrompt(businessName) {
+  return `As the Supervisor overseeing the interaction, your role is crucial in directing user queries to the appropriate team member or signaling the end of the interaction. Your responses should be limited to either providing the name of the next agent to handle the query or signaling the completion of the interaction with FINISH. Here's a concise breakdown of each team member's responsibilities:
+
+  1. Answerer: Responsible for addressing general queries about ${businessName}, providing information about the business, and guiding users with initial inquiries.
+  2. Meeting Scheduler: Assists users in scheduling meetings with the support staff of ${businessName}.
+  
+  Your instructions are straightforward:
+  
+  1. If the user explicitly asks or indicates to schedule a meeting or appointment, output "Meeting Scheduler" because "MeetingScheduler" is responsible for handling this process.
+  1. Direct every other query to the Answerer. Simply output Answerer.
+  3. Upon receiving answer from any of the {members}, respond with FINISH to indicate the end of the interaction.
+  
+  Your objective is to ensure seamless communication flow and efficient problem resolution within the team. Provide clear and concise instructions to agents while remaining responsive to user needs`;
+}
+
 module.exports = { generateCallAnsweringAgentResponse };
-
-/*
-1. Customer calls
-2. Agent responds
-3. Customer asks to schedule meeting
-4. Agents checks if business has connected calendar and calendly integrations
-  4.1. If no, apologizes with a message to the customer that meeting can't be schedule at this time.
-  4.1. If yes, proceeds to the next step. 
-5. Agents checks if it has access to customer's details
-  5.1. If no, outputs a friendly message and a flag to send registration form via SMS to the customer
-  5.2. If yes, proceeds with the meeting schedule process.
-6. Asks customer to provide date, month and hour at which to schedule the meeting.
-  6.1. Customer provides date, month and hour
-  6.2. Checks availability
-  6.3. If slot available, schedules meeting
-  6.4. If slot not available, communicates next available slot
-  6.5. If customers accepts slot, schedules meeting
-  6.6. If not, communicates next three until customer accepts or ends the calls or indicates to terminate the schedule meeting process.
-
-*/
