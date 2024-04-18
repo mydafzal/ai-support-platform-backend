@@ -11,9 +11,17 @@ const {
   handleCompletedRecording,
 } = require("../controllers/call.controller");
 
-const Business = require("../../models");
+const { Business, User } = require("../../models");
 
 const router = Router();
+
+const { z } = require("zod");
+
+const verficationCheckValidationSchema = z.object({
+  code: z.string().length(4),
+  phone: z.string(),
+  userId: z.number(),
+});
 
 router.get("/access-token/:id?", (req, res) => {
   const result = getTwilioAccessToken(req.params.id);
@@ -34,10 +42,41 @@ router.post("/verification", async (req, res) => {
 });
 
 router.post("/verification-check", async (req, res) => {
-  const { code, phoneNumber } = req.body;
+  const { code, phone, userId } = req.body;
 
-  const isVerified = await checkVerification(code, phoneNumber);
-  res.status(200).send(isVerified);
+  try {
+    const { success, error } =
+      await verficationCheckValidationSchema.safeParseAsync(req.body);
+
+    if (!success) {
+      return res
+        .status(400)
+        .json({ success: false, message: error.errors[0].message });
+    }
+
+    const isVerified = await checkVerification(code, phone);
+
+    await User.update(
+      {
+        phoneVerified: isVerified,
+      },
+      {
+        where: {
+          userId,
+        },
+      }
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        isVerified,
+      },
+    });
+  } catch (error) {
+    console.log("Error verifying phone number: ", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
 });
 
 router.post("/incoming-call", async (req, res) => {
