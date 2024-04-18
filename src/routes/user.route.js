@@ -1,5 +1,5 @@
 const router = require("express").Router();
-const { User, Invitation } = require("../../models");
+const { User, Invitation, Business, Assistant } = require("../../models");
 
 const bcrypt = require("bcrypt");
 const saltRounds = 10;
@@ -12,11 +12,17 @@ const {
   generateEmailLink,
   generateJWT,
 } = require("../utils/helpers");
+const { createVerification } = require("../controllers/call.controller");
 
 const userValidationSchema = z.object({
   email: z.string().email(),
   password: z.string().min(4),
   name: z.string(),
+});
+
+const updateUserValidationSchema = z.object({
+  name: z.string().optional(),
+  phone: z.string().optional(),
 });
 
 router.post("/", async (req, res) => {
@@ -118,6 +124,86 @@ router.patch("/:id", async (req, res) => {
     res.status(204).send();
   } catch (error) {
     console.error("Error getting connected integrations:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.put("/:id", async (req, res) => {
+  const userId = req.params.id;
+
+  try {
+    const { success, error } = await updateUserValidationSchema.safeParseAsync(
+      req.body
+    );
+
+    if (!success) {
+      return res
+        .status(400)
+        .json({ success: false, message: error.errors[0].message });
+    }
+
+    let user = await User.findByPk(userId, {
+      include: {
+        model: Business,
+        as: "business",
+        include: [
+          {
+            model: Assistant,
+            as: "assistant",
+          },
+        ],
+      },
+      attributes: {
+        exclude: ["emailVerificationToken", "resetPasswordToken"],
+      },
+    });
+
+    if (!user) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid user id." });
+    }
+
+    if (req.body.phone) {
+      user.phone = req.body.phone;
+    }
+    if (req.body.name) {
+      user.name = req.body.name;
+    }
+
+    await user.save();
+
+    user = user.toJSON();
+
+    if (req.body.phone?.length > 0) {
+      await createVerification(
+        req.body.phone,
+        process.env.TWIML_VERIFY_SERVICE_ID
+      );
+    }
+
+    delete user.password;
+
+    let invitation = await Invitation.findOne({
+      where: {
+        email: user.email,
+      },
+    });
+    invitation = invitation?.toJSON();
+
+    const payload = {
+      ...user,
+      invitation: invitation?.status !== "Accepted" ? invitation : null,
+    };
+
+    const token = generateJWT(payload);
+
+    res.status(200).json({
+      success: true,
+      data: token,
+    });
+  } catch (error) {
+    console.error("Error adding user:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });

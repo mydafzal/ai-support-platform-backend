@@ -37,6 +37,7 @@ app.use("/voices", require("./src/routes/voice.route"));
 app.use("/download", require("./src/routes/download.route"));
 app.use("/team-groups", require("./src/routes/teamGroup.route"));
 app.use("/integrations", require("./src/routes/integration.route"));
+app.use("/form-links", require("./src/routes/form.route.js"));
 // app.use("/chats", require("./src/routes/chat.route"));
 
 app.get("/", (req, res) => {

@@ -33,7 +33,7 @@ async function initializeMultiAgentWorkflow(
   const slotAvailaibilityCheckerTool =
     createSlotAvailaibilityCheckerTool(businessId);
 
-  const smsSenderTool = createSmsSenderTool();
+  const smsSenderTool = createSmsSenderTool(businessId);
 
   const informationRetrieverTool = await createInformationRetrieverTool(
     collectionName

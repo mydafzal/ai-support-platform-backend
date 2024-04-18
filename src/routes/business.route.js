@@ -3,6 +3,8 @@ const {
   createVerifyService,
 } = require("../controllers/call.controller");
 
+const sequelize = require("sequelize");
+
 const {
   Assistant,
   Business,
@@ -81,12 +83,12 @@ router.post("/", async (req, res) => {
     }
 
     // const twilioNumber = await buyPhoneNumber();
-    // const verifyServiceId = await createVerifyService(companyName);
+    const verifyServiceId = await createVerifyService(businessName);
 
     let business = await Business.create({
       name: businessName,
       twilioNumber: "+14697074725",
-      verifyServiceId: "",
+      verifyServiceId,
       adminUserId: userId,
     });
 
@@ -395,12 +397,44 @@ router.get("/:id/team-groups", async (req, res) => {
 
   try {
     let teamGroups = await TeamGroup.findAll({
-      where: {
-        businessId,
-      },
+      where: { businessId },
+      attributes: [
+        "id",
+        "name",
+        [sequelize.fn("COUNT", sequelize.col("users.id")), "userCount"],
+        [
+          sequelize.literal(`(
+            SELECT COUNT(*)
+            FROM "Invitations"
+            WHERE "Invitations"."teamGroupId" = "TeamGroup"."id"
+            AND "Invitations"."status" = 'Accepted'
+            AND NOT EXISTS (
+              SELECT 1
+              FROM "Users"
+              WHERE "Users"."teamGroupId" = "TeamGroup"."id"
+              AND "Users"."email" = "Invitations"."email"
+            )
+          )`),
+          "invitationCount",
+        ],
+      ],
+      include: [
+        {
+          model: User,
+          as: "users",
+          attributes: [],
+        },
+        {
+          model: Invitation,
+          as: "invitations",
+          attributes: [],
+        },
+      ],
+      group: ["TeamGroup.id"],
     });
 
     teamGroups = teamGroups.map((item) => item.toJSON());
+
     res.status(200).json({ success: true, data: teamGroups });
   } catch (error) {
     console.error("Error getting team groups:", error);

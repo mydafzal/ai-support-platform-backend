@@ -2,8 +2,9 @@ const fs = require("fs");
 const path = require("path");
 
 const hubspot = require("@hubspot/api-client");
-const Integration = require("../../models/integration");
+const { BusinessIntegration } = require("../../models");
 const moment = require("moment");
+const { HUBPOST_INTEGRATION_ID } = require("../utils/constants");
 const hubspotClient = new hubspot.Client({
   apiKey: process.env.HUBSPOT_API_KEY,
 });
@@ -39,7 +40,7 @@ async function getContactByPhoneNumber(
   if (hasAccessTokenExpired(expirationTime)) {
     const updatedToken = await refreshAccessToken(refreshToken);
 
-    await Integration.update(
+    await BusinessIntegration.update(
       {
         accessToken: updatedToken.accessToken,
         refreshToken: updatedToken.refreshToken,
@@ -50,7 +51,7 @@ async function getContactByPhoneNumber(
       {
         where: {
           businessId,
-          integrationType: "HubSpot",
+          integrationId: HUBPOST_INTEGRATION_ID,
         },
       }
     );
@@ -145,8 +146,60 @@ async function readAllProperties(accessToken) {
   }
 }
 
+async function createContact(
+  accessToken,
+  refreshToken,
+  expirationTime,
+  businessId,
+  customerDetails
+) {
+  const hubspot = require("@hubspot/api-client");
+  const hubspotClient = new hubspot.Client({
+    accessToken,
+  });
+
+  if (hasAccessTokenExpired(expirationTime)) {
+    const updatedToken = await refreshAccessToken(refreshToken);
+
+    await BusinessIntegration.update(
+      {
+        accessToken: updatedToken.accessToken,
+        refreshToken: updatedToken.refreshToken,
+        expirationTime: moment(new Date())
+          .add(updatedToken.expiresIn, "seconds")
+          .toDate(),
+      },
+      {
+        where: {
+          businessId,
+          integrationId: HUBPOST_INTEGRATION_ID,
+        },
+      }
+    );
+
+    hubspotClient.setAccessToken(updatedToken?.accessToken);
+  }
+
+  const PublicObjectCreateRequest = {
+    properties: {
+      ...customerDetails,
+    },
+  };
+
+  try {
+    const apiResponse = await hubspotClient.crm.contacts.basicApi.create(
+      PublicObjectCreateRequest
+    );
+
+    console.log("createContact response - ", apiResponse);
+  } catch (error) {
+    console.log("getContactByPhoneNumber error", error);
+  }
+}
+
 module.exports = {
   getHubSpotAccessToken,
   getContactByPhoneNumber,
   readAllProperties,
+  createContact,
 };

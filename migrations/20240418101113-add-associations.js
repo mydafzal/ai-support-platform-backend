@@ -173,6 +173,16 @@ module.exports = {
       onUpdate: "CASCADE",
       onDelete: "CASCADE",
     });
+
+    await queryInterface.addColumn("FormLinks", "businessId", {
+      type: Sequelize.INTEGER,
+      references: {
+        model: "Businesses",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "CASCADE",
+    });
   },
 
   async down(queryInterface, Sequelize) {
