@@ -499,7 +499,7 @@ async function handleCallDisconnect(request) {
       },
     };
 
-    await redisClient.rPush(
+    await redisClient.lPush(
       `transcription-${callId}`,
       JSON.stringify(greetingMessage)
     );
@@ -513,7 +513,7 @@ async function handleCallDisconnect(request) {
         },
       };
 
-      await redisClient.lPush(
+      await redisClient.rPush(
         `transcription-${callId}`,
         JSON.stringify(farewellMessage)
       );
