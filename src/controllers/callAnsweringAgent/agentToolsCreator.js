@@ -10,6 +10,16 @@ const {
   scheduleMeeting,
 } = require("./meetingScheduler");
 
+const jwt = require("jsonwebtoken");
+
+const { FormLink } = require("../../../models");
+
+const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
+const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
+const twilio = require("twilio");
+const client = twilio(ACCOUNT_SID, AUTH_TOKEN);
+const MESSAGING_SERVICE_SID = process.env.TWILIO_MESSAGING_SERVICE_SID;
+
 const monthsEnum = [
   "January",
   "February",
@@ -111,9 +121,6 @@ function createSlotAvailaibilityCheckerTool(businessId) {
     }),
     func: async ({ month, date, hour }) => {
       console.log("check-slot-availability called");
-      console.log("month - ", month);
-      console.log("date - ", date);
-      console.log("hour - ", hour);
 
       const response = await checkSlotAvailability(
         month,
@@ -186,15 +193,13 @@ function createNextDateSlotsGetterTool(businessId) {
     }),
     func: async ({ month, date }) => {
       console.log("get-slots-for-next-date called");
-      console.log("month - ", month);
-      console.log("date - ", date);
 
       return await getSlotsForNextDate(month, parseInt(date), businessId);
     },
   });
 }
 
-function createSmsSenderTool() {
+function createSmsSenderTool(businessId) {
   return new DynamicStructuredTool({
     name: "send-sms",
     description:
@@ -204,16 +209,34 @@ function createSmsSenderTool() {
         .string()
         .describe("Customer's phone number for sending the SMS."),
     }),
-    func: async () => {
+    func: async ({ phoneNumber }) => {
       console.log("sms sender tool - called");
+
+      const token = jwt.sign(
+        { phoneNumber, timestamp: `${new Date()}` },
+        process.env.JWT_SECRET
+      );
 
       const messageBody = `We can't schedule your meeting at this time. Please visit the following link and provide some details. Then try again and we will get your meeting scheduled.
       
-      ${process.env.CLIENT_BASE_URL}
+      ${process.env.CLIENT_BASE_URL}/form?token=${token}
       `;
 
-      await sendSMS(phoneNumber, messageBody);
-      return "SMS has been to the customer.";
+      const message = await client.messages.create({
+        body: messageBody,
+        messagingServiceSid: MESSAGING_SERVICE_SID,
+        to: phoneNumber,
+      });
+
+      await FormLink.create({
+        phone: phoneNumber,
+        token,
+        businessId,
+      });
+
+      console.log("message.sid=====", message.sid);
+
+      return "SMS has been sent to the customer.";
     },
   });
 }
