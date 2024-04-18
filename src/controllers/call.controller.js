@@ -1,10 +1,11 @@
 const MESSAGING_SERVICE_SID = process.env.TWILIO_MESSAGING_SERVICE_SID;
-const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const API_KEY = process.env.TWILIO_API_KEY;
 const API_SECRET = process.env.TWILIO_API_SECRET;
 const TWIML_APP_SID = process.env.TWIML_APP_SID;
+const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 const BASE_URL = process.env.BASE_URL;
+const TWIML_VERIFY_SERVICE_ID = process.env.TWIML_VERIFY_SERVICE_ID;
 
 const fs = require("fs");
 const uuid = require("uuid");
@@ -141,13 +142,17 @@ async function handleIncomingCall(request) {
     where: {
       businessId: business.id,
       integrationId: {
-        [Op.in]: [CALENDLY_INTEGRATION_ID, GOOGLE_CALENDAR_INTEGRATION_ID],
+        [Op.in]: [
+          CALENDLY_INTEGRATION_ID,
+          GOOGLE_CALENDAR_INTEGRATION_ID,
+          HUBPOST_INTEGRATION_ID,
+        ],
       },
     },
   });
 
   // Businesses must connect both Google Calendar and Calendly integrations so that customers can schedule meetings.
-  let canScheduleMeeting = count !== 2 ? false : true;
+  let canScheduleMeeting = count !== 3 ? false : true;
 
   let callDetails = {
     businessId: business.id,
@@ -325,10 +330,10 @@ async function handleSpeechInput(request) {
   return twiml.toString();
 }
 
-async function createVerifyService(companyName) {
+async function createVerifyService(businessName) {
   try {
     const service = await client.verify.v2.services.create({
-      friendlyName: companyName,
+      friendlyName: businessName,
       codeLength: 4,
     });
 
@@ -374,13 +379,17 @@ async function addVerifiedCallerId(phoneNumber) {
 }
 
 async function sendSMS(phoneNumber, body) {
-  const message = await client.messages.create({
-    body,
-    messagingServiceSid: MESSAGING_SERVICE_SID,
-    to: phoneNumber,
-  });
+  try {
+    const message = await client.messages.create({
+      body,
+      messagingServiceSid: MESSAGING_SERVICE_SID,
+      to: phoneNumber,
+    });
 
-  console.log("message.sid=====", message.sid);
+    console.log("message.sid=====", message.sid);
+  } catch (error) {
+    console.log("sendSMS error - ", error);
+  }
 }
 
 function getTwilioAccessToken(userId) {
@@ -429,7 +438,7 @@ async function checkVerification(code, phoneNumber) {
 
   try {
     const verificationCheck = await client.verify.v2
-      .services(VERIFY_SERVICE_SID)
+      .services(TWIML_VERIFY_SERVICE_ID)
       .verificationChecks.create({
         to: phoneNumber,
         code: code,
@@ -438,6 +447,8 @@ async function checkVerification(code, phoneNumber) {
     if (verificationCheck.status === "approved") {
       isVerified = true;
     }
+
+    return isVerified;
   } catch (error) {
     console.error("Error checking verification code:", error.message);
   }
