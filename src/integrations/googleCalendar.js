@@ -1,7 +1,7 @@
 const { google } = require("googleapis");
 const credentials = require("../../credentials.json");
 
-const { BusinessIntegration } = require("../../models");
+const { BusinessIntegration, Business, User } = require("../../models");
 const { GOOGLE_CALENDAR_INTEGRATION_ID } = require("../utils/constants");
 
 let auth, calendar;
@@ -92,6 +92,18 @@ async function addEventToGoogleCalendar(
     auth = await authorize(businessId);
   }
 
+  let business = await Business.findByPk(businessId, {
+    include: [
+      {
+        model: User,
+        as: "adminUser",
+        include: ["email"],
+      },
+    ],
+  });
+
+  business = business.toJSON();
+
   if (!calendar) {
     calendar = google.calendar({ version: "v3", auth });
   }
@@ -127,7 +139,7 @@ async function addEventToGoogleCalendar(
 
   calendar.events.insert(
     {
-      calendarId: "hammad@cheetahagency.com",
+      calendarId: business.adminUser.email,
       requestBody: event,
       sendNotifications: true,
       sendUpdates: "all",
