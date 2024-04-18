@@ -21,7 +21,8 @@ async function initializeMultiAgentWorkflow(
   canScheduleMeeting,
   callId,
   collectionName,
-  businessId
+  businessId,
+  isNewCustomer
 ) {
   const llm = new ChatOpenAI({ modelName: "gpt-3.5-turbo-1106" });
 
@@ -54,17 +55,24 @@ async function initializeMultiAgentWorkflow(
     };
   }
 
+  let meetingSchedulerAgentTools;
+
+  if (!canScheduleMeeting) {
+    meetingSchedulerAgentTools = [];
+  } else if (isNewCustomer) {
+    meetingSchedulerAgentTools = [smsSenderTool];
+  } else {
+    meetingSchedulerAgentTools = [
+      slotAvailaibilityCheckerTool,
+      nextSlotsGetterTool,
+      nextDateSlotsGetterTool,
+      meetingSchedulerTool,
+    ];
+  }
+
   const meetingSchedulerAgent = await createAgent({
     llm,
-    tools: canScheduleMeeting
-      ? [
-          slotAvailaibilityCheckerTool,
-          nextSlotsGetterTool,
-          nextDateSlotsGetterTool,
-          meetingSchedulerTool,
-          smsSenderTool,
-        ]
-      : [],
+    tools: meetingSchedulerAgentTools,
     systemPrompt: schedulerAgentPrompt,
   });
 
@@ -177,6 +185,8 @@ async function generateCallAnsweringAgentResponse(
 
   const supervisorAgentPromt = createSupervisorAgentPrompt();
 
+  let isNewCustomer = customerName ? false : true;
+
   const graph = await initializeMultiAgentWorkflow(
     anweringAgentPrompt,
     schedulerAgentPrompt,
@@ -184,7 +194,8 @@ async function generateCallAnsweringAgentResponse(
     canScheduleMeeting,
     callId,
     collectionName,
-    businessId
+    businessId,
+    isNewCustomer
   );
 
   console.log("executing agent now...");
@@ -279,15 +290,15 @@ function createSchedulerAgentPrompt(
 
       1. Initial Inquiry: 
       When a customer indicates a desire to schedule a meeting, prompt them to provide specific details in a step-by-step manner:
-        - First, ask the user to provide the specific month (January to December).
-        - Then ask for date of the month.
-        - Finally, ask for specific hour in 24-hour format.
+        - First, ask the customer to provide the specific month.
+        - After the customer provides the month, ask for date of the month.
+        - After that, finally ask for specific hour in 24-hour format.
         - Don't process until the customer has provided all three.
       
       2. Check Slot Availability:
         - Utilize the 'check-slot-availability' tool with the provided date, month, and hour.
         - If the result of 'check-slot-availability' tool indicates that the exact slot that the customer requested is available:
-            - Communicate this slot to the user and ask for confirmation
+            - Communicate this slot to the customer and ask for confirmation
             - If customer accepts the slot, move to step 6 (Confirmation) of the process.
             - Otherwise proceed to step 3 (Suggest Next Available Slot) of the process.
        
@@ -315,6 +326,9 @@ function createSchedulerAgentPrompt(
           
       6. Confirmation:
         - Once the customer confirms a suitable time slot, ask the customer to provide some information about their specific problem or their purpose for scheduling this meeting. Remember, you MUST ask the customer to provide this information.
+        NOTE: You are NOT allowed to call the 'schedule-meeting' tool until the customer has"
+          1. Explicitly acccepted the slot you communicated
+          2. Provided some information about the purpose of the meeting.
         - Finally, call 'schedule-meeting' with the correct details to schedule the meeting.
         - Inform the customer about the status of the scheduled meeting.
 
@@ -328,7 +342,7 @@ function createSchedulerAgentPrompt(
 
     Here is what you are required to do:
 
-    1. If Use the 'send-sms' tool to send an SMS containing link to a form that the customer could fill to provide some essential information. The customer's phone number is ${customerPhoneNumber} to which the SMS should be sent. REMEMBER: If the SMS has already been sent to this customer during on-going conversation. just skip this step (don't send the SMS).
+    1. Use the 'send-sms' tool to send an SMS containing link to a form that the customer could fill to provide some essential information. The customer's phone number is ${customerPhoneNumber} to which the SMS should be sent. REMEMBER: If the SMS has already been sent to this customer during on-going conversation. just skip this step (don't send the SMS).
     2. Inform the customer that meeting couldn't be scheduled and an SMS has been sent to the customer for gathering the customer's essential details.
     3. Terminate the meeting schedule process.
     `;
