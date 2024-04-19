@@ -45,7 +45,11 @@ async function deleteCollection(collectionName) {
 
   console.log("collections ", collections?.length);
 
-  await client.deleteCollection({ name: collectionName });
+  if (collections?.length > 0) {
+    await Promise.all(
+      collections.map((item) => client.deleteCollection({ name: item.name }))
+    );
+  }
 }
 
 async function deleteChunksByUrl(collectionName, urlId) {
