@@ -351,18 +351,17 @@ async function buyPhoneNumber() {
 
   console.log("number to purchase", availableNumbers?.[0]?.phoneNumber);
 
-  // const phoneNumberToPurchase = availableNumbers[0].phoneNumber;
+  const phoneNumberToPurchase = availableNumbers[0].phoneNumber;
 
-  // const purchasedNumber = await client.incomingPhoneNumbers.create({
-  //   phoneNumber: phoneNumberToPurchase,
-  //   friendlyName: "My Twilio Number",
-  // });
+  const purchasedNumber = await client.incomingPhoneNumbers.create({
+    phoneNumber: phoneNumberToPurchase,
+    friendlyName: "My Twilio Number",
+  });
 
-  // console.log("purchasedNumber.phoneNumber", purchasedNumber.phoneNumber);
+  console.log("purchasedNumber.phoneNumber", purchasedNumber.phoneNumber);
 
-  // return purchasedNumber.phoneNumber;
-
-  return "+14697074725";
+  return purchasedNumber.phoneNumber;
+  // return "+14697074725";
 }
 
 async function addVerifiedCallerId(phoneNumber) {
