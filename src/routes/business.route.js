@@ -443,7 +443,7 @@ router.get("/:id/team-groups", async (req, res) => {
 });
 
 router.get("/:id/calls", async (req, res) => {
-  let { page = 1, pageSize = 10, tagId } = req.query;
+  let { page = 1, pageSize = 10, callTagId } = req.query;
 
   if (page < 1) {
     page = 1;
@@ -456,8 +456,8 @@ router.get("/:id/calls", async (req, res) => {
     const offset = (page - 1) * pageSize;
 
     let whereCondition = { businessId: req.params.id };
-    if (tagId) {
-      whereCondition.tagId = tagId;
+    if (callTagId) {
+      whereCondition.callTagId = callTagId;
     }
 
     let calls = await Call.findAll({
