@@ -576,6 +576,9 @@ router.get("/:id/team", async (req, res) => {
           "externalType",
         ],
       },
+      include: [
+        { model: TeamGroup, as: "teamGroup", attributes: ["name", "id"] },
+      ],
     });
 
     users = users?.map((item) => item.toJSON());
