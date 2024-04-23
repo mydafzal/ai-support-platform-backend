@@ -7,6 +7,7 @@ const { z } = require("zod");
 
 const { sendEmail } = require("../integrations/nodemailer");
 const { generateEmailLink } = require("../utils/helpers");
+const { Op } = require("sequelize");
 
 const invitationValidationSchema = z.object({
   email: z.string().email(),
@@ -38,11 +39,14 @@ router.post("/", async (req, res) => {
       user = await User.findOne({
         where: {
           email,
+          businessId: {
+            [Op.not]: null,
+          },
         },
       });
     }
 
-    if (user?.toJSON()?.email) {
+    if (user) {
       return res.status(400).json({
         success: false,
         message:
