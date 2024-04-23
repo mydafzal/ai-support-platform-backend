@@ -82,13 +82,13 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const twilioNumber = await buyPhoneNumber();
+    // const twilioNumber = await buyPhoneNumber();
     const verifyServiceId = await createVerifyService(businessName);
 
     let business = await Business.create({
       name: businessName,
-      // twilioNumber: "+14697074725",
-      twilioNumber: twilioNumber || "+14697074725",
+      twilioNumber: "+14697074725",
+      // twilioNumber: twilioNumber || "+14697074725",
       verifyServiceId,
       adminUserId: userId,
     });
@@ -584,10 +584,18 @@ router.get("/:id/team", async (req, res) => {
 
     users = users?.map((item) => item.toJSON());
 
+    let whereCondition = {
+      businessId,
+    };
+
+    if (users?.length > 0) {
+      whereCondition.email = {
+        [sequelize.Op.notIn]: users.map((item) => item.email),
+      };
+    }
+
     let invitations = await Invitation.findAll({
-      where: {
-        businessId,
-      },
+      where: whereCondition,
       attributes: {
         exclude: ["token"],
       },
