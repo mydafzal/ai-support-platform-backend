@@ -81,7 +81,7 @@ router.post("/login", async (req, res) => {
           role: invitation ? "TeamMember" : null,
         });
 
-        if (invitation.status !== "Accepted") {
+        if (invitation && invitation?.status !== "Accepted") {
           await Invitation.update(
             {
               status: "Accepted",
