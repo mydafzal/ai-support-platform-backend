@@ -154,7 +154,44 @@ router.put("/", async (req, res) => {
       message: `You have been added to the organization ${business.name}.`,
     });
   } catch (error) {
-    console.error("Error adding user:", error);
+    console.error("Error accepting invitation:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.delete("/:id", async (req, res) => {
+  try {
+    let invitation = await Invitation.findByPk(req.params.id);
+
+    await Invitation.destroy({
+      where: {
+        id: req.params.id,
+      },
+    });
+
+    if (invitation) {
+      invitation = invitation.toJSON();
+
+      let business = await Business.findByPk(invitation.businessId);
+      const { name } = business.toJSON();
+
+      let user = await User.findByPk(business.toJSON().adminUserId);
+      user = user.toJSON();
+
+      let emailTemplate;
+
+      if (invitation.status === "Pending") {
+        emailTemplate = `Your invitation for organization ${name} has been cancelled.`;
+      } else {
+        emailTemplate = `${user.email} removed you from organization ${name}.`;
+      }
+
+      await sendEmail(invitation.email, emailTemplate);
+    }
+
+    res.status(204).send();
+  } catch (error) {
+    console.error("Error deleting invitation: ", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });
