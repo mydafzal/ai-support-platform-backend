@@ -100,7 +100,7 @@ router.post("/", async (req, res) => {
       message: "Email verification link sent.",
     });
   } catch (error) {
-    console.error("Error adding user:", error);
+    console.error("Error adding user: ", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });
@@ -121,9 +121,21 @@ router.patch("/:id", async (req, res) => {
       }
     );
 
+    if (!businessId) {
+      let user = await User.findByPk(userId);
+
+      if (user) {
+        await Invitation.destroy({
+          where: {
+            email: user.toJSON().email,
+          },
+        });
+      }
+    }
+
     res.status(204).send();
   } catch (error) {
-    console.error("Error getting connected integrations:", error);
+    console.error("Error updating user: ", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });
@@ -203,7 +215,7 @@ router.put("/:id", async (req, res) => {
       data: token,
     });
   } catch (error) {
-    console.error("Error adding user:", error);
+    console.error("Error updating user: ", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });
