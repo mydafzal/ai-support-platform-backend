@@ -9,6 +9,8 @@ const {
   createNextSlotsGetterTool,
   createSlotAvailaibilityCheckerTool,
   createSmsSenderTool,
+  createGroupSaverTool,
+  createUpdateCallDataTool,
 } = require("./agentToolsCreator");
 const { HumanMessage } = require("@langchain/core/messages");
 const { createSupervisorChain } = require("./supervisorAgent");
@@ -18,14 +20,16 @@ async function initializeMultiAgentWorkflow(
   answeringAgentPrompt,
   schedulerAgentPrompt,
   supervisorAgentPromt,
+  callRedirectionAgentPrompt,
   canScheduleMeeting,
   callId,
   collectionName,
-  businessId
+  businessId,
+  teamGroups
 ) {
   const llm = new ChatOpenAI({ modelName: "gpt-3.5-turbo-1106" });
 
-  const members = ["Answerer", "MeetingScheduler"];
+  const members = ["Answerer", "MeetingScheduler", "CallRedirector"];
 
   const meetingSchedulerTool = createMeetingSchedulerTool(businessId);
   const nextDateSlotsGetterTool = createNextDateSlotsGetterTool(businessId);
@@ -39,6 +43,9 @@ async function initializeMultiAgentWorkflow(
     collectionName
   );
 
+  const groupSaverTool = await createGroupSaverTool();
+  const updateCallDataTool = await createUpdateCallDataTool();
+
   const anweringAgent = await createAgent({
     llm,
     tools: [informationRetrieverTool],
@@ -50,6 +57,24 @@ async function initializeMultiAgentWorkflow(
     return {
       messages: [
         new HumanMessage({ content: result.output, name: "Answerer" }),
+      ],
+    };
+  }
+
+  const callRedirectorAgent = await createAgent({
+    llm,
+    tools: teamGroups?.length > 0 ? [groupSaverTool] : [updateCallDataTool],
+    systemPrompt: callRedirectionAgentPrompt,
+  });
+
+  async function callRedirectorNode(state, config) {
+    const result = await callRedirectorAgent.invoke(state, config);
+    return {
+      messages: [
+        new HumanMessage({
+          content: result.output || result,
+          name: "CallRedirector",
+        }),
       ],
     };
   }
@@ -107,6 +132,7 @@ async function initializeMultiAgentWorkflow(
 
   workflow.addNode("Answerer", answeringNode);
   workflow.addNode("MeetingScheduler", meetingSchedulerNode);
+  workflow.addNode("CallRedirector", callRedirectorNode);
   workflow.addNode("Supervisor", supervisorChain);
 
   members.forEach((member) => {
@@ -129,7 +155,7 @@ async function initializeMultiAgentWorkflow(
         const lastMessageIndex = x.messages.length - 1;
         const agentName = x.messages[lastMessageIndex]?.name;
 
-        // If supervisor received response from "Answerer" or "Meeting Scheduler", it should respond back to the user:
+        // If supervisor received response from "Answerer" or "Meeting Scheduler" or "Call Redirector", it should respond back to the user:
         if (members.includes(agentName)) {
           return "FINISH";
         }
@@ -157,6 +183,7 @@ async function generateCallAnsweringAgentResponse(
   customerPhoneNumber,
   customerDetails,
   callId,
+  teamGroups,
   canScheduleMeeting
 ) {
   const anweringAgentPrompt = createAnsweringAgentPrompt(
@@ -164,6 +191,7 @@ async function generateCallAnsweringAgentResponse(
     assistantName,
     customerName,
     customerDetails,
+    teamGroups,
     collectionName
   );
 
@@ -177,14 +205,22 @@ async function generateCallAnsweringAgentResponse(
 
   const supervisorAgentPromt = createSupervisorAgentPrompt();
 
+  const callRedirectionAgentPrompt = createCallRedirectionAgentPrompt(
+    businessName,
+    callId,
+    teamGroups
+  );
+
   const graph = await initializeMultiAgentWorkflow(
     anweringAgentPrompt,
     schedulerAgentPrompt,
     supervisorAgentPromt,
+    callRedirectionAgentPrompt,
     canScheduleMeeting,
     callId,
     collectionName,
-    businessId
+    businessId,
+    teamGroups
   );
 
   console.log("executing agent now...");
@@ -221,7 +257,9 @@ function createAnsweringAgentPrompt(
   let isNewCustomer = customerName ? false : true;
 
   if (!isNewCustomer) {
-    prompt = `You are one of ${businessName}'s AI Assistant, ${assistantName}. You are talking to ${customerName}, a valued customer, on a phone call. You will help ${businessName}'s potential and current customers learn more about the business, help them solve any problems, guide them on how to solve specific problems, and connect them to human agents of the business. It's essential to note that there is another AI Assistant in your team, the Meeting Scheduler, who specifically handles scheduling meetings with the support staff.
+    prompt = `You are one of ${businessName}'s AI Assistant, ${assistantName}. You are talking to ${customerName}, a valued customer, on a phone call. You will help ${businessName}'s potential and current customers learn more about the business, help them solve any problems, guide them on how to solve specific problems, and connect them to human agents of the business. It's essential to note that there are other AI Assistants in your team:
+    1. The Meeting Scheduler, who specifically handles scheduling meetings with the support staff. 
+    2. The Call Redirector, who specifically re-directs customer calls to the support staff.
 
     Here is the customer's information:
     ${customerDetails}
@@ -232,13 +270,14 @@ function createAnsweringAgentPrompt(
     2. Information Provision: Offer a comprehensive overview of ${businessName}, highlighting its key services, values, and unique selling points.
     3. Problem Resolution: Address customer queries promptly and effectively, providing relevant information and solutions to their concerns.
     4. Engagement: Maintain a friendly and professional tone throughout the interaction, actively engaging with the customer to keep them interested and satisfied.
-    5. Transition to Human Agents: Guide customers on how to connect with human agents for more personalized assistance, if necessary.
-    6. Tool Utilization: Utilize the 'search-business-information' tool to retrieve relevant data for answering inquiries about the business. Ensure that all responses are focused and pertinent to the business and its activities. 
-    7. Contextual Querying: When utilizing the 'search-business-information' tool, pass contextual queries based on ${businessName}'s information and the ongoing conversation with ${customerName} to retrieve relevant data.
-    8. Conciseness: Provide extremely concise responses as if you are on a phone call, ensuring that information is conveyed efficiently.
+    5. Tool Utilization: Utilize the 'search-business-information' tool to retrieve relevant data for answering inquiries about the business. Ensure that all responses are focused and pertinent to the business and its activities. 
+    6. Contextual Querying: When utilizing the 'search-business-information' tool, pass contextual queries based on ${businessName}'s information and the ongoing conversation with ${customerName} to retrieve relevant data.
+    7. Conciseness: Provide extremely concise responses as if you are on a phone call, ensuring that information is conveyed efficiently.
     `;
   } else {
-    prompt = `You are one of ${businessName}'s AI assistants, ${assistantName}. You are engaging with a new customer who is eager to learn more about ${businessName}. Your goal is to provide an overview of the business, answer any initial questions, and guide the customer on how to connect with human agents for more personalized assistance. It's essential to note that there is another AI Assistant in your team, the Meeting Scheduler, who specifically handles scheduling meetings with the support staff.
+    prompt = `You are one of ${businessName}'s AI assistants, ${assistantName}. You are engaging with a new customer who is eager to learn more about ${businessName}. Your goal is to provide an overview of the business, answer any initial questions, and guide the customer on how to connect with human agents for more personalized assistance. It's essential to note that there are other AI Assistants in your team:
+    1. The Meeting Scheduler, who specifically handles scheduling meetings with the support staff. 
+    2. The Call Redirector, who specifically re-directs customer calls to the support staff.
 
 
     Here's how you can excel in your role:
@@ -247,10 +286,9 @@ function createAnsweringAgentPrompt(
     2. Information Provision: Offer a comprehensive overview of ${businessName}, highlighting its key services, values, and unique selling points.
     3. Problem Resolution: Address customer queries promptly and effectively, providing relevant information and solutions to their concerns.
     4. Engagement: Maintain a friendly and professional tone throughout the interaction, actively engaging with the customer to keep them interested and satisfied.
-    5. Transition to Human Agents: Guide customers on how to connect with human agents for more personalized assistance, if necessary.
-    6. Tool Utilization: Utilize the 'search-business-information' tool to retrieve relevant data for answering inquiries about the business. Ensure that all responses are focused and pertinent to the business and its activities.
-    7. Contextual Querying: When utilizing the 'search-business-information' tool, pass contextual queries based on ${businessName}'s information and the ongoing conversation with ${customerName} to retrieve relevant data.
-    8. Conciseness: Provide extremely concise responses as if you are on a phone call, ensuring that information is conveyed efficiently.
+    5. Tool Utilization: Utilize the 'search-business-information' tool to retrieve relevant data for answering inquiries about the business. Ensure that all responses are focused and pertinent to the business and its activities.
+    6. Contextual Querying: When utilizing the 'search-business-information' tool, pass contextual queries based on ${businessName}'s information and the ongoing conversation with ${customerName} to retrieve relevant data.
+    7. Conciseness: Provide extremely concise responses as if you are on a phone call, ensuring that information is conveyed efficiently.
     `;
   }
 
@@ -338,18 +376,56 @@ function createSchedulerAgentPrompt(
 }
 
 function createSupervisorAgentPrompt(businessName) {
-  return `As the Supervisor overseeing the interaction, your role is crucial in directing user queries to the appropriate team member or signaling the end of the interaction. Your responses should be limited to either providing the name of the next agent to handle the query or signaling the completion of the interaction with FINISH. Here's a concise breakdown of each team member's responsibilities:
+  return `As the Supervisor overseeing the interaction, your role is crucial in directing customer queries to the appropriate team member or signaling the end of the interaction. Your responses should be limited to either providing the name of the next agent to handle the query or signaling the completion of the interaction with FINISH. Here's a concise breakdown of each team member's responsibilities:
 
-  1. Answerer: Responsible for addressing general queries about ${businessName}, providing information about the business, and guiding users with initial inquiries.
-  2. Meeting Scheduler: Assists users in scheduling meetings with the support staff of ${businessName}.
+  1. Answerer: Responsible for addressing general queries about ${businessName}, providing information about the business, and guiding customers with initial inquiries.
+  2. MeetingScheduler: Assists customers in scheduling meetings with the support staff of ${businessName}.
+  3. CallRedirector: Re-directs customer calls to the support staff of ${businessName}. 
+
+  NOTE: Meeting Scheduling and Call Redirection are two separate things. We must seek clarficiation from the customer whehter they want to schedule a meeting or get their call redirected to a human agent.
+
+  A KEY NOTE: Customers must not aware of these different assisants such as MeetingScheduler, CallRedirector or Answerer.
   
   Your instructions are straightforward:
   
-  1. If the user explicitly asks or indicates to schedule a meeting or appointment, output "Meeting Scheduler" because "MeetingScheduler" is responsible for handling this process.
-  1. Direct every other query to the Answerer. Simply output Answerer.
-  3. Upon receiving answer from any of the {members}, respond with FINISH to indicate the end of the interaction.
+  1. If the customer explicitly asks or clearly indicates to schedule a meeting or appointment, output "MeetingScheduler" because "MeetingScheduler" is responsible for handling this process.
+  2. If the customer explicitly asks or clearly indicates to connect to a human or re-direct their call, output "CallRedirector" because "CallRedirector" is responsible for handling this process.
+  3. Direct every other query to the Answerer. Simply output Answerer.
+  4. Upon receiving answer from any of the {members}, respond with FINISH to indicate the end of the interaction.
   
-  Your objective is to ensure seamless communication flow and efficient problem resolution within the team. Provide clear and concise instructions to agents while remaining responsive to user needs`;
+  Your objective is to ensure seamless communication flow and efficient problem resolution within the team. Provide clear and concise instructions to agents while remaining responsive to customer needs`;
+}
+
+function createCallRedirectionAgentPrompt(businessName, callId, teamGroups) {
+  if (teamGroups?.length > 0) {
+    return `You are one of ${businessName}'s AI assistants collaborating with other assistants. You talk to customers on phone calls. Your role as the Call Redirector is crucial in connecting, or more specifically redirecting customer calls to staff of ${businessName}. Your specific role is only to facilitate the process of re-directing customers calls to human agents or support staff.
+
+    Here is the identifier of the current call that you might need to use when calling the tools: ${callId}
+
+    Customer calls might belong to one of the following group (or departments) of ${businessName}:
+    ===============
+    ${teamGroups}
+    ===============
+
+    Following the following instructions to excel in your role:
+    
+    - First, ask the customer to provide some information about the purpose of their call. You MUST require this information from the customer.
+    - Based on the information provided by the customer, and the context of the conversation, decide which of the above given groups the customer's call shall be re-directed to.
+    - Call the 'group-saver' tool to save the group to which the call shall be re-directed. You MUST call this tool.
+    - Output some message to tell the customer that they are being connected to a human.
+   `;
+  } else {
+    return `You are one of ${businessName}'s AI assistants collaborating with other assistants. You talk to customers on phone calls. Your role as the Call Redirector is crucial in connecting, or more specifically redirecting customer calls to staff of ${businessName}. Your specific role is only to facilitate the process of re-directing customers calls to human agents or support staff.
+
+    Here is the identifier of the current call that you might need to use when calling the tools: ${callId}
+    
+    Following the following instructions to excel in your role:
+
+    - First, ask the customer to provide some information about the purpose of their call. You MUST require this information from the customer.
+    - Call the 'update-call-data' tool to save information about the status of redirecting the call. You MUST call this tool.
+    - Output some message to tell the customer that they are being connected to a human.
+   `;
+  }
 }
 
 module.exports = { generateCallAnsweringAgentResponse };

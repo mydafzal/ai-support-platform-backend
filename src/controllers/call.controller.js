@@ -30,7 +30,10 @@ const {
   redisClient,
 } = require("../integrations/redis");
 const { convertTextToSpeech } = require("../integrations/textToSpeech");
-const { formatHubSpotContactDetails } = require("../utils/formatters");
+const {
+  formatHubSpotContactDetails,
+  formatTeamGroups,
+} = require("../utils/formatters");
 const {
   Business,
   Assistant,
@@ -39,6 +42,7 @@ const {
   IntegrationWarning,
   Call,
   User,
+  TeamGroup,
 } = require("../../models");
 
 const {
@@ -154,6 +158,20 @@ async function handleIncomingCall(request) {
   // Businesses must connect both Google Calendar and Calendly integrations so that customers can schedule meetings.
   let canScheduleMeeting = count !== 3 ? false : true;
 
+  let teamGroups = await TeamGroup.findAll({
+    where: {
+      businessId: business.id,
+    },
+    attributes: ["name"],
+  });
+
+  teamGroups = teamGroups.map((member) => member.toJSON());
+  teamGroups = formatTeamGroups(teamGroups);
+
+  console.log("teamGroups - ", teamGroups);
+
+  // Get all groups here and add to call data...
+
   let callDetails = {
     businessId: business.id,
     businessName: business.name,
@@ -170,6 +188,7 @@ async function handleIncomingCall(request) {
     shouldAddGreetingMessageToTranscription: false,
     shouldAddFarewellMessageToTranscription: false,
     canScheduleMeeting,
+    teamGroups,
   };
 
   await storeCallData(callId, callDetails);
@@ -224,8 +243,9 @@ async function handleSpeechInput(request) {
     voiceId,
     collectionName,
     audioFileNames,
-    phoneNumbers,
+    businessPhoneNumber,
     shouldAddGreetingMessageToTranscription,
+    teamGroups,
     canScheduleMeeting,
   } = callData;
 
@@ -253,17 +273,11 @@ async function handleSpeechInput(request) {
     customerPhoneNumber,
     customerDetails,
     callId,
+    teamGroups,
     canScheduleMeeting
   );
 
   console.log("aiResponse", aiResponse);
-
-  let shouldRedirectCall = false;
-  if (aiResponse === "connect_to_human") {
-    aiResponse = "You are now being connected to a human agent.";
-    shouldRedirectCall = true;
-  }
-
   const cleanedAiResponse = aiResponse.replace(/^\w+:\s*/i, "").trim();
 
   let generatedSpeechFile = await convertTextToSpeech(
@@ -282,35 +296,75 @@ async function handleSpeechInput(request) {
 
   const textToSpeechFileURL = `${AUDIO_FILES_BASE_URL}/${fileName}`;
 
-  console.log("cleanedAiResponse", cleanedAiResponse);
-  console.log("textToSpeechFileURL", textToSpeechFileURL);
-
   twiml.play(textToSpeechFileURL);
 
-  if (shouldRedirectCall && phoneNumbers?.length > 0) {
+  const { shouldRedirect, groupToRedirect } = await getCallData(callId);
+
+  if (shouldRedirect) {
     console.log("Dialing the human agent's number...");
+    console.log("groupToRedirect - ", groupToRedirect);
 
-    await Call.update(
-      {
-        status: "Redirected",
-      },
-      {
+    let teamGroup;
+
+    if (groupToRedirect?.length > 0) {
+      teamGroup = await TeamGroup.findOne({
         where: {
-          id: callId,
+          businessId,
+          name: groupToRedirect,
         },
-      }
-    );
+      });
+    }
 
-    twiml
-      .dial({
-        callerId: phoneNumbers[0],
-        action: `${BASE_URL}/call/redirected-call-disconnect`,
-        method: "POST",
-      })
-      .number(phoneNumbers[0]);
+    let whereCondition = { businessId, phone: { [Op.not]: null } };
+
+    if (teamGroup) {
+      teamGroup = teamGroup.toJSON();
+      whereCondition.teamGroupId = teamGroup.id;
+    }
+
+    let teamMember = await User.findOne({
+      where: whereCondition,
+    });
+
+    if (!teamMember) {
+      delete whereCondition.teamGroupId;
+
+      teamMember = await User.findOne({
+        where: whereCondition,
+      });
+    }
+
+    if (!teamMember) {
+      twiml.pay(
+        "We couldn't connect your call to a human agent at the moment."
+      );
+    } else {
+      teamMember = teamMember.toJSON();
+
+      await Call.update(
+        {
+          status: "Redirected",
+          redirectedTo: teamMember.name,
+        },
+        {
+          where: {
+            id: callId,
+          },
+        }
+      );
+
+      twiml
+        .dial({
+          callerId: businessPhoneNumber,
+        })
+        .number(
+          {
+            statusCallback: `${BASE_URL}/calls/disconnect`,
+          },
+          teamMember.phone
+        );
+    }
   } else {
-    console.log("redirect true - gather -speech");
-
     twiml.redirect(
       {
         method: "POST",
@@ -319,11 +373,8 @@ async function handleSpeechInput(request) {
     );
   }
 
-  if (!audioFileNames) {
-    callData.audioFileNames = [fileName];
-  } else {
-    callData.audioFileNames.push(fileName);
-  }
+  if (!audioFileNames) callData.audioFileNames = [fileName];
+  else callData.audioFileNames.push(fileName);
 
   await updateCallConversation(callId, callData);
 
