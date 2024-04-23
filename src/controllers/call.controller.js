@@ -360,6 +360,19 @@ async function buyPhoneNumber() {
 
   console.log("purchasedNumber.phoneNumber", purchasedNumber.phoneNumber);
 
+  const list = await client.incomingPhoneNumbers.list({
+    phoneNumber: purchasedNumber.phoneNumber,
+  });
+
+  if (list.length > 0) {
+    const sid = list[0].sid;
+
+    await client.incomingPhoneNumbers(sid).update({
+      voiceUrl: `${process.env.BASE_URL}/calls/incoming-call`,
+      statusCallback: `${process.env.BASE_URL}/calls/disconnect`,
+    });
+  }
+
   return purchasedNumber.phoneNumber;
   // return "+14697074725";
 }
