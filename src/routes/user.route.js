@@ -110,17 +110,6 @@ router.patch("/:id", async (req, res) => {
   const { businessId } = req.body;
 
   try {
-    await User.update(
-      {
-        businessId,
-      },
-      {
-        where: {
-          id: userId,
-        },
-      }
-    );
-
     if (!businessId) {
       let user = await User.findByPk(userId);
 
@@ -133,6 +122,8 @@ router.patch("/:id", async (req, res) => {
           },
         });
 
+        console.log(" user - ", user);
+
         let business = await Business.findByPk(user.businessId);
         const { name } = business.toJSON();
 
@@ -142,6 +133,17 @@ router.patch("/:id", async (req, res) => {
         let emailTemplate = `${adminUser.email} removed you from organization ${name}.`;
 
         await sendEmail(user.email, emailTemplate);
+
+        await User.update(
+          {
+            businessId,
+          },
+          {
+            where: {
+              id: userId,
+            },
+          }
+        );
       }
     }
 
