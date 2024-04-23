@@ -77,10 +77,24 @@ router.post("/login", async (req, res) => {
           externalType,
           emailVerified: true,
           profileImageUrl,
-          businessId:
-            invitation?.status === "Accepted" ? invitation.businessId : null,
-          role: invitation?.status === "Accepted" ? "TeamMember" : null,
+          businessId: invitation ? invitation.businessId : null,
+          role: invitation ? "TeamMember" : null,
         });
+
+        if (invitation.status !== "Accepted") {
+          await Invitation.update(
+            {
+              status: "Accepted",
+            },
+            {
+              where: {
+                email,
+              },
+            }
+          );
+
+          invitation.status = "Accepted";
+        }
       } else if (!user.toJSON().externalType) {
         return res.status(400).json({
           success: false,
@@ -166,7 +180,7 @@ router.post("/login", async (req, res) => {
 
     const payload = {
       ...user,
-      invitation: invitation?.status !== "Accepted" ? invitation : null,
+      invitation,
     };
 
     const token = generateJWT(payload);
@@ -288,27 +302,66 @@ router.get("/verify-email", async (req, res) => {
 
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
 
-    console.log("decodedToken.userId", decodedToken.userId);
-
     let user = await User.findByPk(decodedToken.userId, {
       attributes: {
         exclude: ["resetPasswordToken", "password"],
       },
     });
 
-    if (!user?.toJSON() || user?.toJSON().emailVerificationToken !== token) {
+    if (!user?.toJSON() || user.toJSON().emailVerificationToken !== token) {
       return res.status(400).json({ message: "Invalid or expired token" });
+    }
+
+    let invitation = await Invitation.findOne({
+      email: user.toJSON().email,
+    });
+
+    invitation = invitation?.toJSON();
+
+    if (invitation) {
+      await Invitation.update(
+        {
+          status: "Accepted",
+        },
+        {
+          where: {
+            id: invitation.id,
+          },
+        }
+      );
+
+      user.role = "TeamMember";
     }
 
     user.emailVerified = true;
     user.emailVerificationToken = null;
+    user.businessId = invitation.businessId;
+
     await user.save();
 
     user = user.toJSON();
     delete user.emailVerificationToken;
 
+    if (invitation) {
+      let business = await Business.findOne({
+        where: {
+          id: invitation.businessId,
+        },
+        include: [
+          {
+            model: Assistant,
+            as: "assistant",
+          },
+        ],
+      });
+
+      business = business?.toJSON();
+      user.business = business;
+    }
+
     const payload = {
       ...user,
+      invitation,
     };
 
     const authToken = generateJWT(payload);
