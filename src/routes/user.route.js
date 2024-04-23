@@ -125,11 +125,23 @@ router.patch("/:id", async (req, res) => {
       let user = await User.findByPk(userId);
 
       if (user) {
+        user = user.toJSON();
+
         await Invitation.destroy({
           where: {
-            email: user.toJSON().email,
+            email: user.email,
           },
         });
+
+        let business = await Business.findByPk(user.businessId);
+        const { name } = business.toJSON();
+
+        let adminUser = await User.findByPk(business.toJSON().adminUserId);
+        adminUser = adminUser.toJSON();
+
+        let emailTemplate = `${adminUser.email} removed you from organization ${name}.`;
+
+        await sendEmail(user.email, emailTemplate);
       }
     }
 
