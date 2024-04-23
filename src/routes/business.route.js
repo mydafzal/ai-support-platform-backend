@@ -599,6 +599,9 @@ router.get("/:id/team", async (req, res) => {
       attributes: {
         exclude: ["token"],
       },
+      include: [
+        { model: TeamGroup, as: "teamGroup", attributes: ["name", "id"] },
+      ],
     });
 
     invitations = invitations?.map((item) => item.toJSON());
