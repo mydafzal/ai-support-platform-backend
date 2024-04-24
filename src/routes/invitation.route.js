@@ -111,7 +111,16 @@ router.put("/", async (req, res) => {
   try {
     const { token } = req.query;
 
-    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    let decodedToken;
+
+    try {
+      decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (error) {
+      console.log("Error verifying invitation token - ", error);
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid or expired token." });
+    }
 
     if (!decodedToken || !decodedToken.invitationId) {
       return res
@@ -127,10 +136,10 @@ router.put("/", async (req, res) => {
         .json({ success: false, message: "Invalid or expired token." });
     }
 
-    if (!invitation?.toJSON()?.status === "Accepted") {
+    if (invitation?.toJSON()?.status === "Accepted") {
       return res
-        .status(400)
-        .json({ success: false, message: "The invite was already accepted." });
+        .status(200)
+        .json({ success: true, message: "The invite was already accepted." });
     }
 
     invitation.token = null;
