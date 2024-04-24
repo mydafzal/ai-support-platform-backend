@@ -128,7 +128,7 @@ router.post("/login", async (req, res) => {
 
         const emailLink = generateEmailLink(
           req,
-          "verify-email",
+          "email-verification",
           `token=${emailVerificationToken}`
         );
 
@@ -291,7 +291,6 @@ router.post("/reset-password/:token", async (req, res) => {
 router.get("/verify-email", async (req, res) => {
   try {
     const { token } = req.query;
-
     console.log("token ", token);
 
     if (!token) {
@@ -408,7 +407,7 @@ router.post("/resend-verification-email", async (req, res) => {
 
     const emailLink = generateEmailLink(
       req,
-      "verify-email",
+      "email-verification",
       `token=${emailVerificationToken}`
     );
     const emailTemplate = `Please verify your email by clicking <a href=${emailLink}>here</a>`;

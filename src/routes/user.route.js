@@ -85,7 +85,7 @@ router.post("/", async (req, res) => {
 
     const emailLink = generateEmailLink(
       req,
-      "verify-email",
+      "email-verification",
       `token=${emailVerificationToken}`
     );
     const emailTemplate = `Please verify your email by clicking <a href="${emailLink}">here</a>`;
