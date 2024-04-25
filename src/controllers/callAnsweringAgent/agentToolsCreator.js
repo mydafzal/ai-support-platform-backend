@@ -2,7 +2,6 @@ const { createRetrieverTool } = require("langchain/tools/retriever");
 const { getVectoreStore } = require("../../integrations/chromaDB");
 const { DynamicStructuredTool } = require("@langchain/core/tools");
 const { z } = require("zod");
-const { sendSMS } = require("../call.controller");
 const {
   checkSlotAvailability,
   getNextThreeSlots,
@@ -17,6 +16,10 @@ const { FormLink } = require("../../../models");
 const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 const twilio = require("twilio");
+const {
+  getCallData,
+  updateCallConversation,
+} = require("../../integrations/redis");
 const client = twilio(ACCOUNT_SID, AUTH_TOKEN);
 const MESSAGING_SERVICE_SID = process.env.TWILIO_MESSAGING_SERVICE_SID;
 
@@ -241,6 +244,53 @@ function createSmsSenderTool(businessId) {
   });
 }
 
+async function createGroupSaverTool() {
+  return new DynamicStructuredTool({
+    name: "group-saver",
+    description: "Save the group to which the customer's calls belongs.",
+    schema: z.object({
+      callId: z.string().describe("The id of the current call."),
+      groupName: z
+        .string()
+        .describe(
+          "Name of the group to which the customer's call shall be connected. If no groups are available, don't provide the group name."
+        )
+        .optional(),
+    }),
+    func: async ({ callId, groupName }) => {
+      console.log("group-saver tool called - ", groupName, callId);
+
+      const callData = await getCallData(callId);
+      callData.shouldRedirect = true;
+      callData.groupToRedirect = groupName;
+
+      await updateCallConversation(callId, callData);
+
+      return "";
+    },
+  });
+}
+
+async function createUpdateCallDataTool() {
+  return new DynamicStructuredTool({
+    name: "update-call-data",
+    description:
+      "Update the data of the call to store information about whether the current call should be redirected to someone.",
+    schema: z.object({
+      callId: z.string().describe("The id of the current call."),
+    }),
+    func: async ({ callId }) => {
+      console.log("update-call-data tool called - ", callId);
+
+      const callData = await getCallData(callId);
+      callData.shouldRedirect = true;
+      await updateCallConversation(callId, callData);
+
+      return "";
+    },
+  });
+}
+
 module.exports = {
   createSlotAvailaibilityCheckerTool,
   createNextSlotsGetterTool,
@@ -248,4 +298,6 @@ module.exports = {
   createMeetingSchedulerTool,
   createInformationRetrieverTool,
   createSmsSenderTool,
+  createGroupSaverTool,
+  createUpdateCallDataTool,
 };

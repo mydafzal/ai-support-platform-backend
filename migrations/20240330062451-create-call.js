@@ -19,6 +19,9 @@ module.exports = {
         type: Sequelize.ENUM("Redirected", "Bot-handled"),
         defaultValue: "Bot-handled",
       },
+      redirectedTo: {
+        type: Sequelize.STRING,
+      },
       recordingUrl: {
         type: Sequelize.STRING,
       },

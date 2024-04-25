@@ -46,7 +46,7 @@ router.post("/", async (req, res) => {
       });
     }
 
-    if (user?.toJSON()?.email) {
+    if (user) {
       return res.status(400).json({
         success: false,
         message:

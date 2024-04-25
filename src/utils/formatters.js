@@ -11,4 +11,14 @@ function formatHubSpotContactDetails(customer) {
   return formattedDetails;
 }
 
-module.exports = { formatHubSpotContactDetails };
+function formatTeamGroups(teamGroups) {
+  let formattedString = "";
+
+  teamGroups.forEach((item) => {
+    formattedString += `- ${item.name}\n`;
+  });
+
+  return formattedString;
+}
+
+module.exports = { formatHubSpotContactDetails, formatTeamGroups };

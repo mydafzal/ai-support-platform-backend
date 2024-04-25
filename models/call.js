@@ -37,6 +37,9 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.ENUM("Redirected", "Bot-handled"),
         defaultValue: "Bot-handled",
       },
+      redirectedTo: {
+        type: DataTypes.STRING,
+      },
       recordingUrl: {
         type: DataTypes.STRING,
       },

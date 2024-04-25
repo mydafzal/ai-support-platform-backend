@@ -62,7 +62,7 @@ router.post("/verification-check", async (req, res) => {
       },
       {
         where: {
-          userId,
+          id: userId,
         },
       }
     );
