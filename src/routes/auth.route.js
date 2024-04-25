@@ -330,11 +330,11 @@ router.get("/verify-email", async (req, res) => {
       );
 
       user.role = "TeamMember";
+      user.businessId = invitation.businessId;
     }
 
     user.emailVerified = true;
     user.emailVerificationToken = null;
-    user.businessId = invitation.businessId;
 
     await user.save();
 
