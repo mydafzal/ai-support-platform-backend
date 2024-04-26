@@ -1,8 +1,8 @@
 const router = require("express").Router();
 
 const { z } = require("zod");
-const { TeamGroup, User } = require("../../models");
-const { Op } = require("sequelize");
+const { TeamGroup, User, Invitation } = require("../../models");
+const { Op, Sequelize } = require("sequelize");
 
 const addTeamGroupValidationSchema = z.object({
   name: z.string(),
@@ -14,7 +14,8 @@ const updateTeamGroupValidationSchema = z.object({
 });
 
 const assignGroupToMembersValidationSchema = z.object({
-  teamMemberIds: z.array(z.number()),
+  userIds: z.array(z.number()),
+  invitationIds: z.array(z.number()),
 });
 
 router.post("/", async (req, res) => {
@@ -55,9 +56,9 @@ router.put("/:id/team-members", async (req, res) => {
         .json({ success: false, message: error.errors[0].message });
     }
 
-    const { teamMemberIds } = req.body;
+    const { userIds, invitationIds } = req.body;
 
-    const teamGroup = await TeamGroup.findByPk(teamGroupId);
+    let teamGroup = await TeamGroup.findByPk(teamGroupId);
 
     if (!teamGroup) {
       return res
@@ -65,19 +66,75 @@ router.put("/:id/team-members", async (req, res) => {
         .json({ success: false, message: "Invalid group id." });
     }
 
-    await User.update(
-      { teamGroupId },
-      {
-        where: {
-          id: {
-            [Op.in]: teamMemberIds,
+    if (userIds?.length > 0) {
+      await User.update(
+        { teamGroupId },
+        {
+          where: {
+            id: {
+              [Op.in]: userIds,
+            },
           },
+        }
+      );
+    }
+
+    if (invitationIds?.length > 0) {
+      await Invitation.update(
+        { teamGroupId },
+        {
+          where: {
+            id: {
+              [Op.in]: invitationIds,
+            },
+          },
+        }
+      );
+    }
+
+    teamGroup = await TeamGroup.findOne({
+      where: { id: teamGroupId },
+      attributes: [
+        "id",
+        "name",
+        [Sequelize.fn("COUNT", Sequelize.col("users.id")), "userCount"],
+        [
+          Sequelize.literal(`(
+            SELECT COUNT(*)
+            FROM "Invitations"
+            WHERE "Invitations"."teamGroupId" = "TeamGroup"."id"
+            AND NOT EXISTS (
+              SELECT 1
+              FROM "Users"
+              WHERE "Users"."teamGroupId" = "TeamGroup"."id"
+              AND "Users"."email" = "Invitations"."email"
+            )
+          )`),
+          "invitationCount",
+        ],
+      ],
+      include: [
+        {
+          model: User,
+          as: "users",
+          attributes: [],
         },
-      }
-    );
-    res
-      .status(200)
-      .json({ success: true, message: "Updated group of team members." });
+        {
+          model: Invitation,
+          as: "invitations",
+          attributes: [],
+        },
+      ],
+      group: ["TeamGroup.id"],
+    });
+
+    teamGroup = teamGroup?.toJSON();
+
+    res.status(200).json({
+      success: true,
+      data: teamGroup,
+      message: "Updated group of team members.",
+    });
   } catch (error) {
     console.error("Error adding teamGroup:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });

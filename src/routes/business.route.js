@@ -408,7 +408,6 @@ router.get("/:id/team-groups", async (req, res) => {
             SELECT COUNT(*)
             FROM "Invitations"
             WHERE "Invitations"."teamGroupId" = "TeamGroup"."id"
-            AND "Invitations"."status" = 'Accepted'
             AND NOT EXISTS (
               SELECT 1
               FROM "Users"
