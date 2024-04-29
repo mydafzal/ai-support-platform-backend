@@ -219,7 +219,7 @@ router.put("/:id", async (req, res) => {
 
     const payload = {
       ...user,
-      invitation: invitation?.status !== "Accepted" ? invitation : null,
+      invitation,
     };
 
     const token = generateJWT(payload);
