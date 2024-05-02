@@ -20,7 +20,7 @@ const { getContactByPhoneNumber } = require("../integrations/hubspotCRM");
 
 const {
   generateCallAnsweringAgentResponse,
-} = require("./callAnsweringAgent/answeringAgent");
+} = require("./callAnsweringAgent.controller");
 
 const {
   deleteCallData,

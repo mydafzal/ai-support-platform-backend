@@ -1,6 +1,6 @@
 const { ChatOpenAI } = require("@langchain/openai");
 const { StateGraph, END } = require("@langchain/langgraph");
-const { createAgent } = require("./agentCreator");
+const { createAgent } = require("./multiAgentWorkflow/agentCreator");
 
 const {
   createInformationRetrieverTool,
@@ -11,10 +11,13 @@ const {
   createSmsSenderTool,
   createGroupSaverTool,
   createUpdateCallDataTool,
-} = require("./agentToolsCreator");
+} = require("./multiAgentWorkflow/agentToolsCreator");
 const { HumanMessage } = require("@langchain/core/messages");
-const { createSupervisorChain } = require("./supervisorAgent");
-const { redisClient } = require("../../integrations/redis");
+
+const {
+  createSupervisorChain,
+} = require("./multiAgentWorkflow/supervisorAgent");
+const { redisClient } = require("../integrations/redis");
 
 async function initializeMultiAgentWorkflow(
   answeringAgentPrompt,
