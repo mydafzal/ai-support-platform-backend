@@ -1,164 +1,354 @@
-const { createRetrieverTool } = require("langchain/tools/retriever");
-const {
-  ChatPromptTemplate,
-  MessagesPlaceholder,
-  SystemMessagePromptTemplate,
-  HumanMessagePromptTemplate,
-} = require("@langchain/core/prompts");
-
-const {
-  createOpenAIFunctionsAgent,
-  AgentExecutor,
-} = require("langchain/agents");
-
-const { RunnableWithMessageHistory } = require("@langchain/core/runnables");
-
-const { getVectoreStore } = require("../integrations/chromaDB");
 const { ChatOpenAI } = require("@langchain/openai");
-const { formatDocumentsAsString } = require("langchain/util/document");
+const { StateGraph, END } = require("@langchain/langgraph");
+const { createAgent } = require("./multiAgentWorkflow/agentCreator");
 
-const { ExtendedRedisChatMemory } = require("../utils/helpers");
+const {
+  createInformationRetrieverTool,
+  createMeetingSchedulerTool,
+  createNextDateSlotsGetterTool,
+  createNextSlotsGetterTool,
+  createSlotAvailaibilityCheckerTool,
+  createUpdateCallDataTool,
+} = require("./multiAgentWorkflow/agentToolsCreator");
+
+const { HumanMessage, AIMessage } = require("@langchain/core/messages");
+const {
+  createSupervisorChain,
+} = require("./multiAgentWorkflow/supervisorAgent");
 const { redisClient } = require("../integrations/redis");
 
-async function initializeAgent(knowledgeBaseName) {
-  const vectorStore = await getVectoreStore(knowledgeBaseName);
-  const retriever = vectorStore.asRetriever();
+async function initializeMultiAgentWorkflow(
+  systemPrompts,
+  businessId,
+  chatId,
+  collectionName,
+  canScheduleMeeting
+) {
+  const llm = new ChatOpenAI({ modelName: "gpt-3.5-turbo-1106" });
 
-  const informationRetrieverTool = createRetrieverTool(retriever, {
-    name: "search-business-information",
-    description:
-      "Search for any information about the business. For any questions about the business, you must use this tool!",
+  const members = ["Answerer", "MeetingScheduler", "HumanConnector"];
+
+  // Initialize tools to be used by different agents.
+  const meetingSchedulerTool = createMeetingSchedulerTool(businessId);
+  const nextDateSlotsGetterTool = createNextDateSlotsGetterTool(businessId);
+  const nextSlotsGetterTool = createNextSlotsGetterTool(businessId);
+  const slotAvailaibilityCheckerTool =
+    createSlotAvailaibilityCheckerTool(businessId);
+
+  const informationRetrieverTool = await createInformationRetrieverTool(
+    collectionName
+  );
+
+  const updateCallDataTool = await createUpdateCallDataTool();
+
+  // Create different agents for handling the conversation.
+  const anweringAgent = await createAgent({
+    llm,
+    tools: [informationRetrieverTool],
+    systemPrompt: systemPrompts.answeringAgentPrompt,
   });
 
-  const tools = [informationRetrieverTool];
-
-  const chatModel = new ChatOpenAI({
-    modelName: "gpt-3.5-turbo-1106",
-    temperature: 0,
+  const meetingSchedulerAgent = await createAgent({
+    llm,
+    tools: canScheduleMeeting
+      ? [
+          slotAvailaibilityCheckerTool,
+          nextSlotsGetterTool,
+          nextDateSlotsGetterTool,
+          meetingSchedulerTool,
+        ]
+      : [],
+    systemPrompt: systemPrompts.schedulerAgentPrompt,
   });
 
-  const systemTemplate = `{systemPrompt}`;
-
-  const systemPromptTemplate =
-    SystemMessagePromptTemplate.fromTemplate(systemTemplate);
-
-  const humanTemplate = "{input}";
-  const humanPromptTemplate =
-    HumanMessagePromptTemplate.fromTemplate(humanTemplate);
-
-  const prompt = ChatPromptTemplate.fromMessages([
-    systemPromptTemplate,
-    new MessagesPlaceholder("chat_history"),
-    new MessagesPlaceholder("agent_scratchpad"),
-    humanPromptTemplate,
-  ]);
-
-  const agent = await createOpenAIFunctionsAgent({
-    llm: chatModel,
-    tools,
-    prompt,
+  const humanConnectorAgent = await createAgent({
+    llm,
+    tools: [updateCallDataTool],
+    systemPrompt: systemPrompts.humanConnectorAgentPrompt,
   });
 
-  const agentExecutor = new AgentExecutor({
-    agent,
-    tools,
+  // Represent each agent as node in the graph.
+  async function answeringNode(state, config) {
+    const result = await anweringAgent.invoke(state, config);
+    return {
+      messages: [
+        new HumanMessage({ content: result.output, name: "Answerer" }),
+      ],
+    };
+  }
+
+  async function humanConnectorNode(state, config) {
+    const result = await humanConnectorAgent.invoke(state, config);
+    return {
+      messages: [
+        new HumanMessage({
+          content: result.output || result,
+          name: "HumanConnector",
+        }),
+      ],
+    };
+  }
+
+  async function meetingSchedulerNode(state, config) {
+    const result = await meetingSchedulerAgent.invoke(state, config);
+
+    return {
+      messages: [
+        new HumanMessage({
+          content: result.output || result,
+          name: "MeetingScheduler",
+        }),
+      ],
+    };
+  }
+
+  // Retrieve existing messages of the current conversation.
+  let messages = await redisClient.lRange(`chat-${chatId}`, 0, -1);
+
+  messages = messages.filter(
+    (item) => JSON.parse(item)?.type !== "pre-chat-form"
+  );
+
+  messages = messages.map((item) => {
+    item = JSON.parse(item);
+
+    return item.type === "ai"
+      ? new AIMessage(item.content)
+      : new HumanMessage(item.content);
   });
 
-  const agentWithChatHistory = new RunnableWithMessageHistory({
-    runnable: agentExecutor,
-    getMessageHistory: (sessionId) =>
-      new ExtendedRedisChatMemory({
-        sessionId,
-        client: redisClient,
-      }),
-    inputMessagesKey: "input",
-    historyMessagesKey: "chat_history",
+  const agentStateChannels = {
+    messages: {
+      value: (x, y) => x.concat(y),
+      default: () => messages,
+    },
+    next: "Answerer",
+  };
+
+  const workflow = new StateGraph({
+    channels: agentStateChannels,
   });
 
-  return agentWithChatHistory;
+  const supervisorChain = await createSupervisorChain(
+    members,
+    systemPrompts.supervisorAgentPromt
+  );
+
+  workflow.addNode("Answerer", answeringNode);
+  workflow.addNode("MeetingScheduler", meetingSchedulerNode);
+  workflow.addNode("HumanConnector", humanConnectorNode);
+  workflow.addNode("Supervisor", supervisorChain);
+
+  members.forEach((member) => {
+    workflow.addEdge(member, "Supervisor");
+  });
+
+  const conditionalMap = members.reduce((acc, member) => {
+    acc[member] = member;
+    return acc;
+  }, {});
+
+  conditionalMap["FINISH"] = END;
+
+  workflow.addConditionalEdges(
+    "Supervisor",
+    (x) => {
+      console.log("x.messages", x.messages[x.messages.length - 1]?.name);
+
+      if (x.messages?.length > 1) {
+        const lastMessageIndex = x.messages.length - 1;
+        const agentName = x.messages[lastMessageIndex]?.name;
+
+        // If supervisor received response from "Answerer" or "Meeting Scheduler" or "Human Connector", it should respond back to the user:
+        if (members.includes(agentName)) {
+          return "FINISH";
+        }
+      }
+
+      return x.next;
+    },
+
+    conditionalMap
+  );
+
+  workflow.setEntryPoint("Supervisor");
+
+  const graph = workflow.compile();
+  return graph;
 }
 
 async function generateChatbotAgentResponse(
   userQuery,
+  businessId,
   businessName,
   assistantName,
-  knowledgeBaseName,
+  collectionName,
+  customerDetails,
   chatId,
-  chatMode
+  canScheduleMeeting
 ) {
-  const agent = await initializeAgent(knowledgeBaseName);
-
-  const vectorStore = await getVectoreStore(knowledgeBaseName);
-  const similarityResponse = await vectorStore
-    .asRetriever(3)
-    .getRelevantDocuments(businessName);
-
-  const formattedBusinessDetails = formatDocumentsAsString(similarityResponse);
-  console.log("formattedBusinessDetails", formattedBusinessDetails);
-
-  // return formattedBusinessDetails;
-
-  const systemPrompt = createSystemPrompt(
+  const answeringAgentPrompt = createAgentPrompt(
     businessName,
     assistantName,
-    chatMode,
-    formattedBusinessDetails
+    customerDetails
+  );
+
+  const schedulerAgentPrompt = createSchedulerAgentPrompt(
+    businessName,
+    customerDetails,
+    canScheduleMeeting
+  );
+
+  const supervisorAgentPromt = createSupervisorAgentPrompt(businessName);
+
+  const humanConnectorAgentPrompt =
+    createHumanConnectorAgentPrompt(businessName);
+
+  const systemPrompts = {
+    answeringAgentPrompt,
+    schedulerAgentPrompt,
+    supervisorAgentPromt,
+    humanConnectorAgentPrompt,
+  };
+
+  const graph = await initializeMultiAgentWorkflow(
+    systemPrompts,
+    businessId,
+    chatId,
+    collectionName,
+    canScheduleMeeting
   );
 
   console.log("executing agent now...");
 
-  const response = await agent.invoke(
-    {
-      input: userQuery,
-      systemPrompt,
-    },
-    {
-      configurable: {
-        sessionId: chatId,
-      },
-    }
-  );
+  const response = await graph.invoke({
+    messages: [
+      new HumanMessage({
+        content: userQuery,
+      }),
+    ],
+  });
 
-  return response.output;
+  let aiMessage = response.messages[response.messages.length - 1];
+  return aiMessage.content;
 }
 
-function createSystemPrompt(
-  businessName,
-  assistantName,
-  chatMode,
-  businessDetails
-) {
-  let prompt;
+function createAgentPrompt(businessName, assistantName, customerDetails) {
+  let prompt = `You are one of ${businessName}'s AI Assistant, ${assistantName}. You are talking to a valued customer through a chat. You will help ${businessName}'s potential and current customers learn more about the business, help them solve any problems, guide them on how to solve specific problems, and connect them to human agents of the business. It's essential to note that there are other AI Assistants in your team:
+  1. The Meeting Scheduler, who specifically handles scheduling meetings with the support staff. 
+  2. The Agent Connector, who specifically connects on-going customer chats to the support staff and the rest of the conversation happens between the customer and the human agent to whom the chat is transferred.
 
-  if (chatMode === "specific") {
-    console.log("chat mode ------", chatMode);
-
-    //   prompt = `You are ${businessName}'s AI Assistant, ${assistantName}. You are actually supposed to talk to customers of the business based on the information that the business has provided you. But in this conversation you are talking to the business itself. You are supposed to engage in insightful and engaging conversations about the business. To any answer question about business or related to the business, you must call the 'search-business-information' tool. Whenever you call this tool retrieve the information you need to answer question, you must first create a contextual query based on the business and the previous conversation and then pass this query to the tool. Don't makup answers from yourself.
-    // `;
-
-    // prompt = `You are ${businessName}'s AI Assistant, ${assistantName}. Your primary function is to engage with customers based solely on the information provided by the business. However, in this conversation, you are communicating directly with the business itself. When responding to inquiries about the business or related topics, you must utilize the 'search-business-information' tool to retrieve relevant data. Ensure that each query to the tool is contextual, incorporating information from the business and the ongoing conversation. Avoid providing answers based on personal judgment, outside knowledge. Remember, you are NOT supposed to engage in conversations on general topics that are not specifically related to the business ${businessName}.  Your role is to facilitate insightful and accurate discussions about the business.`;
-
-    prompt = `You are ${businessName}'s AI Assistant, ${assistantName}. Your purpose is to engage exclusively in discussions related to the business and its operations. When communicating with the business, refrain from discussing general topics or providing information outside the scope of the business's domain. If asked about non-business-related matters, politely inform the user that your function is restricted to discussing only business-related topics. Utilize the 'search-business-information' tool to retrieve relevant data for answering inquiries about the business. Ensure that all responses are focused and pertinent to the business and its activities. If the information returned from 'search-business-information' tool does not make sense and is not related to the business, don't answer the question.
-    
-    
-    Here is some information about the business to help you figure out whether a user question is related to the business or not:
-    ${businessDetails}
-    
-    `;
-  } else {
-    prompt = `You are ${businessName}'s AI Assistant, ${assistantName}. In this conversation, you're engaging with the business in a more generalized manner, drawing upon both the specific data provided by the business and your broader knowledge base. You can provide insights, recommendations, and information beyond the scope of the business's training data.
+  Here is the customer's information:
+  ${customerDetails}
   
-    Your goal is to foster informative and thought-provoking discussions with the business. While you can still utilize the 'search-business-information' tool when necessary, you're also empowered to draw upon your general knowledge to enrich the conversation.
-    
-    Remember to adapt your responses based on the context of the conversation and the needs of the business. Your role is to be a knowledgeable and resourceful partner in dialogue, capable of providing valuable insights and assistance beyond the confines of the business's specific data.
-    
-    
-    Here is some information about the business to help you figure out whether a user question is related to the business or not:
-    ${businessDetails}
-    `;
+  Here's how you can excel in your role:
+
+  1. Introduction: Start by introducing yourself as ${businessName}'s AI Assistant, ${assistantName}, and extend a warm welcome to the customer.
+  2. Information Provision: Offer a comprehensive overview of ${businessName}, highlighting its key services, values, and unique selling points.
+  3. Problem Resolution: Address customer queries promptly and effectively, providing relevant information and solutions to their concerns.
+  4. Engagement: Maintain a friendly and professional tone throughout the interaction, actively engaging with the customer to keep them interested and satisfied.
+  5. Tool Utilization: Utilize the 'search-business-information' tool to retrieve relevant data for answering inquiries about the business. Ensure that all responses are focused and pertinent to the business and its activities. 
+  6. Contextual Querying: When utilizing the 'search-business-information' tool, pass contextual queries based on ${businessName}'s information and the ongoing conversation with the customer to retrieve relevant data.
+  7. Conciseness: Provide extremely concise responses as if you are on a phone call, ensuring that information is conveyed efficiently.
+  `;
+
+  return prompt;
+}
+
+function createSchedulerAgentPrompt(
+  businessName,
+  customerDetails,
+  canScheduleMeeting
+) {
+  if (!canScheduleMeeting) {
+    return `Your role as the Meeting Scheduler is crucial in facilitating the scheduling of meetings between users and the support staff of ${businessName}. But right now you can't schedule the customer's meeting due to some unknown reasons. You must inform the customer that meeting can't be scheduled at this time and simply terminate the process.`;
+  } else {
+    return `Your role as the Meeting Scheduler is crucial in facilitating the scheduling of meetings between customers and the support staff of ${businessName}. 
+   
+    Here's a detailed guide on how to effectively navigate through the meeting scheduling process:
+
+      1. Initial Inquiry: 
+      When a customer indicates a desire to schedule a meeting, prompt them to provide specific details in a step-by-step manner:
+        - First, ask the user to provide the specific month (January to December).
+        - Then ask for date of the month.
+        - Finally, ask for specific hour in 24-hour format.
+        - Don't process until the customer has provided all three.
+      
+      2. Check Slot Availability:
+        - Utilize the 'check-slot-availability' tool with the provided date, month, and hour.
+        - If the result of 'check-slot-availability' tool indicates that the exact slot that the customer requested is available:
+            - Communicate this slot to the user and ask for confirmation
+            - If customer accepts the slot, move to step 6 (Confirmation) of the process.
+            - Otherwise proceed to step 3 (Suggest Next Available Slot) of the process.
+       
+      3. Suggest Next Available Slot:
+        - If the result of 'check-slot-availability' tool indicates that the slot is unavailable but provides the next available slot:
+            - Communicate this next slot to the customer and ask for confirmation.
+            - If customer accepts this slot, jump to step 6 (Confirmation) of the process.
+            - If customer rejects this slot, jump to step 4 (Suggest Next Three Available Slots) of the process.
+        - If the result of 'check-slot-availability' tool indicates no slot is available:
+            - Jump to step 4 (Suggest Next Three Available Slots) of the process.
+
+      4. Suggest Next Three Available Slots:
+         Call 'get-next-three-slots' tool to retrieve next three available slots.
+            - If no slots are available, jump to step 5 (Get Slots for Next Date) of the process.
+            - If the ''get-next-three-slots' tool returns one or more slots, communicate these slots to the customer and ask for confirmation.
+            - If customer accepts one of the slots, jump to step 6 (Confirmation) of the process.
+            - If customer doesn't accept any of the communicated slots, repeat the step 4 of the process again to get next three slots
+
+      5. Get Slots for Next Date:
+        Move to next date and call 'get-slots-for-next-date' tool to retrieve the first three available slots.
+         - If no slots are available, start the step 5 (Get Slots for Next Date) again.
+         - If one or more are slots available, communicate these slots to the customer and ask for confirmation.
+         - If customer accepts one of the slots, jump to step 6 (Confirmation) of the process.
+         - If customer doesn't accept any of the communicated slots, jump to step 4 of the process.
+          
+      6. Confirmation:
+        - Once the customer confirms a suitable time slot, ask the customer to provide some information about their specific problem or their purpose for scheduling this meeting. Remember, you MUST ask the customer to provide this information.
+        - Finally, call 'schedule-meeting' with the correct details to schedule the meeting.
+        - Inform the customer about the status of the scheduled meeting.
+
+      Your objective is to facilitate seamless communication and coordination between customers and support staff, ensuring efficient scheduling of meetings while prioritizing customer convenience and satisfaction.
+      
+      Here are the customer's details that you might need during the above mentioned meeting schedule process:
+      ${customerDetails}
+      `;
   }
 
   return prompt;
+}
+
+function createSupervisorAgentPrompt(businessName) {
+  return `As the Supervisor overseeing the interaction, your role is crucial in directing customer queries to the appropriate team member or signaling the end of the interaction. Your responses should be limited to either providing the name of the next agent to handle the query or signaling the completion of the interaction with FINISH. Here's a concise breakdown of each team member's responsibilities:
+
+  1. Answerer: Responsible for addressing general queries about ${businessName}, providing information about the business, and guiding customers with initial inquiries.
+  2. MeetingScheduler: Assists customers in scheduling meetings with the support staff of ${businessName}.
+  3. HummanAgentConnector: Transfers on-going chat conversations to a member of the support staff of ${businessName}. 
+
+  NOTE: Meeting Scheduling and connecting human agent (means tranferring chats to human agents) are two separate things. We must seek clarficiation from the customer whether they want to schedule a meeting or get their call redirected to a human agent.
+
+  A KEY NOTE: Customers must not aware of these different assisants such as MeetingScheduler, HummanAgentConnector or Answerer.
+  
+  Your instructions are straightforward:
+  
+  1. If the customer explicitly asks or clearly indicates to schedule a meeting or appointment, output "MeetingScheduler" because "MeetingScheduler" is responsible for handling this process.
+  2. If the customer explicitly asks or clearly indicates to connect to a human, output "HummanAgentConnector" because "HummanAgentConnector" is responsible for handling this process.
+  3. Direct every other query to the Answerer. Simply output Answerer.
+  4. Upon receiving answer from any of the {members}, respond with FINISH to indicate the end of the interaction.
+  
+  Your objective is to ensure seamless communication flow and efficient problem resolution within the team. Provide clear and concise instructions to agents while remaining responsive to customer needs`;
+}
+
+function createHumanConnectorAgentPrompt(businessName) {
+  return `You are one of ${businessName}'s AI assistants collaborating with other assistants. You talk to customers through chats. Your role as the Human Connector is crucial in connecting, or more specifically transferring customer chats to staff of ${businessName}. Your specific role is only to facilitate the process of connecting customer chats to human agents or support staff.
+
+    Following the following instructions to excel in your role:
+    
+    - First, ask the customer to provide some information about the purpose of their call. You MUST require this information from the customer.
+    - Based on the information provided by the customer, and the context of the conversation, decide which of the above given groups the customer's call shall be re-directed to.
+    - Call the 'group-saver' tool to save the group to which the call shall be re-directed. You MUST call this tool.
+    - Output some message to tell the customer that they are being connected to a human.
+   `;
 }
 
 module.exports = { generateChatbotAgentResponse };
