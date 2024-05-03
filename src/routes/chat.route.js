@@ -3,8 +3,10 @@ const {
   Chat,
   Business,
   Assistant,
-  BusinessIntegration,
   ChatWidget,
+  ChatGroupAssignment,
+  User,
+  TeamGroup,
 } = require("../../models");
 
 const {
@@ -13,13 +15,10 @@ const {
 
 const { z } = require("zod");
 const { redisClient } = require("../integrations/redis");
-const { Op } = require("sequelize");
-const {
-  CALENDLY_INTEGRATION_ID,
-  GOOGLE_CALENDAR_INTEGRATION_ID,
-  HUBPOST_INTEGRATION_ID,
-} = require("../utils/constants");
+
 const { formatObjectToString } = require("../utils/formatters");
+const { hasConnectedRequiredIntegrations } = require("../utils/helpers");
+const { Op } = require("sequelize");
 
 const chatMessageValidationSchema = z.object({
   message: z.string(),
@@ -31,6 +30,11 @@ const preChatFormValidationSchema = z.object({
   email: z.string().email(),
   teamGroupName: z.string().optional(),
   teamGroupId: z.number().optional(),
+});
+
+const chatValidationSchema = z.object({
+  status: z.string().optional(),
+  teamGroupIds: z.array(z.number()).optional(),
 });
 
 router.post("/", async (req, res) => {
@@ -54,7 +58,10 @@ router.post("/", async (req, res) => {
     });
 
     if (!chatWidget) {
-      return res.status(400).json({ success: true, data: "Invalid request." });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid request. Please create a chat widget first.",
+      });
     }
 
     chatWidget = chatWidget.toJSON();
@@ -62,10 +69,16 @@ router.post("/", async (req, res) => {
     let chat = await Chat.create({
       title: name,
       businessId,
-      teamGroupId,
     });
 
     chat = chat.toJSON();
+
+    if (teamGroupId && teamGroupName) {
+      await ChatGroupAssignment.create({
+        chatId: chat.id,
+        teamGroupId,
+      });
+    }
 
     const preChatForm = {
       type: "pre-chat-form",
@@ -130,17 +143,20 @@ router.put("/:id/pre-chat-form", async (req, res) => {
 
     chatWidget = chatWidget.toJSON();
 
-    if (teamGroupId) {
-      await Chat.update(
-        {
+    if (teamGroupId && teamGroupName) {
+      // First, check if the customer again selected the same group.
+      let chatGroupAssignment = await ChatGroupAssignment.findOne({
+        chatId,
+        teamGroupId,
+      });
+
+      // If no, then this time the customer's queries belong to a different group (department)
+      if (!chatGroupAssignment) {
+        await ChatGroupAssignment.create({
+          chatId,
           teamGroupId,
-        },
-        {
-          where: {
-            id: chatId,
-          },
-        }
-      );
+        });
+      }
     }
 
     const preChatForm = {
@@ -214,21 +230,9 @@ router.post("/:id/messages", async (req, res) => {
 
     chat = chat.toJSON();
 
-    const count = await BusinessIntegration.count({
-      where: {
-        businessId: chat.businessId,
-        integrationId: {
-          [Op.in]: [
-            CALENDLY_INTEGRATION_ID,
-            GOOGLE_CALENDAR_INTEGRATION_ID,
-            HUBPOST_INTEGRATION_ID,
-          ],
-        },
-      },
-    });
-
-    // Businesses must connect both Google Calendar and Calendly integrations so that customers can schedule meetings.
-    let canScheduleMeeting = count !== 3 ? false : true;
+    let canScheduleMeeting = await hasConnectedRequiredIntegrations(
+      chat.businessId
+    );
 
     let customerDetails = await redisClient.lIndex(`chat-${chat.id}`, 0);
 
@@ -244,6 +248,7 @@ router.post("/:id/messages", async (req, res) => {
 
     const humanMessage = {
       type: "human",
+      senderId: null,
       content: message,
       timestamp: new Date().getTime(),
     };
@@ -263,13 +268,50 @@ router.post("/:id/messages", async (req, res) => {
 
     const aiMessage = {
       type: "ai",
-      content: response,
+      content: response.content,
       timestamp: new Date().getTime(),
     };
 
     await redisClient.rPush(`chat-${chatId}`, JSON.stringify(aiMessage));
 
-    res.status(200).json({ success: true, data: aiMessage });
+    chat = await Chat.findOne({
+      where: {
+        id: chatId,
+      },
+      include: [
+        {
+          model: User,
+          as: "connectedUser",
+          attributes: ["id", "name", "profileImageUrl"],
+        },
+      ],
+    });
+
+    chat = chat.toJSON();
+
+    if (response?.name === "HumanConnector" && chat.connectedUser) {
+      // Trigger notification to the connected agent.
+    }
+
+    // Finally, re-open the chat.
+    if (chat.status !== "open") {
+      await Chat.update(
+        {
+          status: "open",
+        },
+        {
+          where: {
+            id: chatId,
+          },
+        }
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      data: aiMessage,
+      connectedUser: chat.connectedUser,
+    });
   } catch (error) {
     console.error("Error getting chatbot agent's response: ", error);
     res.status(500).json({ success: false, error: "Internal Server Error" });
@@ -284,9 +326,11 @@ router.get("/:id/messages", async (req, res) => {
 
     if (!chat) {
       return res
-        .status(400)
+        .status(404)
         .json({ success: true, message: "Invalid chat id." });
     }
+
+    chat = chat.toJSON();
 
     let messages = await redisClient.lRange(`chat-${chat.id}`, 0, -1);
     messages = messages.map((item) => JSON.parse(item));
@@ -295,6 +339,129 @@ router.get("/:id/messages", async (req, res) => {
   } catch (error) {
     console.error("Error getting chat messages: ", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.get("/:id", async (req, res) => {
+  try {
+    let chat = await Chat.findOne({
+      where: { id: req.params.id },
+      include: [
+        {
+          model: User,
+          as: "connectedUser",
+          attributes: ["id", "name", "profileImageUrl"],
+        },
+      ],
+    });
+
+    if (!chat) {
+      return res
+        .status(404)
+        .json({ success: true, message: "Invalid chat id." });
+    }
+
+    chat = chat.toJSON();
+
+    let messages = await redisClient.lRange(`chat-${chat.id}`, 0, -1);
+    messages = messages.map((item) => JSON.parse(item));
+
+    res.status(200).json({ success: true, data: { chat, messages } });
+  } catch (error) {
+    console.error("Error getting chat messages: ", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.patch("/:id", async (req, res) => {
+  const chatId = req.params.id;
+
+  try {
+    const { success, error } = await chatValidationSchema.safeParseAsync(
+      req.body
+    );
+
+    if (!success) {
+      return res
+        .status(400)
+        .json({ success: false, message: error.errors[0].message });
+    }
+
+    let { status, teamGroupIds } = req.body;
+
+    await Chat.update(
+      {
+        status,
+      },
+      {
+        where: {
+          id: chatId,
+        },
+      }
+    );
+
+    if (teamGroupIds?.length > 0) {
+      await ChatGroupAssignment.destroy({
+        where: {
+          chatId,
+          teamGroupId: {
+            [Op.notIn]: teamGroupIds,
+          },
+        },
+      });
+
+      let currentlyAssignedGroups = await ChatGroupAssignment.findAll({
+        where: {
+          chatId,
+          teamGroupId: {
+            [Op.in]: teamGroupIds,
+          },
+        },
+      });
+
+      const currentlyAssignedGroupIds = currentlyAssignedGroups.map(
+        (item) => item.toJSON().teamGroupId
+      );
+
+      const newlyAssignedGroupIds = teamGroupIds.filter(
+        (id) => !currentlyAssignedGroupIds.includes(id)
+      );
+
+      await ChatGroupAssignment.bulkCreate(
+        newlyAssignedGroupIds.map((teamGroupId) => ({ chatId, teamGroupId }))
+      );
+    }
+
+    let chat = await Chat.findOne({
+      where: {
+        id: chatId,
+      },
+      include: [
+        {
+          model: User,
+          attributes: ["id", "name", "profileImageUrl"],
+          as: "users",
+          through: {
+            attributes: [],
+          },
+        },
+        {
+          model: TeamGroup,
+          attributes: ["id", "name"],
+          as: "teamGroups",
+          through: {
+            attributes: [],
+          },
+        },
+      ],
+    });
+
+    chat = chat?.toJSON();
+
+    res.status(200).json({ success: true, data: chat });
+  } catch (error) {
+    console.error("Error getting chatbot agent's response: ", error);
+    res.status(500).json({ success: false, error: "Internal Server Error" });
   }
 });
 

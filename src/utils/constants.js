@@ -18,6 +18,11 @@ const HUBPOST_INTEGRATION_ID = 1;
 const GOOGLE_CALENDAR_INTEGRATION_ID = 2;
 const CALENDLY_INTEGRATION_ID = 3;
 
+// User statuses:
+const ACCEPTING_CHATS = "Accepting chats";
+const NOT_ACCEPTING_CHATS = "Not accepting chats";
+const OFFLINE = "Offline";
+
 module.exports = {
   AUDIO_FILES_BASE_PATH,
   AUDIO_FILES_EXTENSION,
@@ -29,4 +34,7 @@ module.exports = {
   CALENDLY_INTEGRATION_ID,
   GOOGLE_CALENDAR_INTEGRATION_ID,
   CHAT_WIDGET_LOGOS_BASE_URL,
+  ACCEPTING_CHATS,
+  NOT_ACCEPTING_CHATS,
+  OFFLINE,
 };
