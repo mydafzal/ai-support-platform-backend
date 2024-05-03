@@ -15,13 +15,20 @@ module.exports = (sequelize, DataTypes) => {
       });
 
       Chat.belongsTo(models.User, {
-        foreignKey: "teamMemberId",
-        as: "teamMember",
+        foreignKey: "connectedUserId",
+        as: "connectedUser",
       });
 
-      Chat.belongsTo(models.TeamGroup, {
-        foreignKey: "teamGroupId",
-        as: "teamGroup",
+      Chat.belongsToMany(models.User, {
+        through: models.ChatUserAssignment,
+        foreignKey: "chatId",
+        as: "users",
+      });
+
+      Chat.belongsToMany(models.TeamGroup, {
+        through: models.ChatGroupAssignment,
+        foreignKey: "chatId",
+        as: "teamGroups",
       });
     }
   }
