@@ -1,30 +1,41 @@
 const router = require("express").Router();
-const Assistant = require("../../models");
+const {
+  Chat,
+  Business,
+  Assistant,
+  BusinessIntegration,
+  ChatWidget,
+} = require("../../models");
 
 const {
   generateChatbotAgentResponse,
 } = require("../controllers/chatbotAgent.controller");
-const Business = require("../../models");
 
 const { z } = require("zod");
 const { redisClient } = require("../integrations/redis");
-const { generateChatTitle } = require("../utils/helpers");
-const Chat = require("../../models");
+const { Op } = require("sequelize");
+const {
+  CALENDLY_INTEGRATION_ID,
+  GOOGLE_CALENDAR_INTEGRATION_ID,
+  HUBPOST_INTEGRATION_ID,
+} = require("../utils/constants");
+const { formatObjectToString } = require("../utils/formatters");
 
-const chatValidationSchema = z.object({
+const chatMessageValidationSchema = z.object({
   message: z.string(),
-  userId: z.number(),
-  chatId: z.number().optional(),
-  mode: z.enum(["specific", "general"]),
-  messageId: z.number().optional(),
+});
+
+const preChatFormValidationSchema = z.object({
+  businessId: z.number(),
+  name: z.string(),
+  email: z.string().email(),
+  teamGroupName: z.string().optional(),
+  teamGroupId: z.number().optional(),
 });
 
 router.post("/", async (req, res) => {
-  const { message, userId, messageId, mode } = req.body;
-  let { chatId } = req.body;
-
   try {
-    const { success, error } = await chatValidationSchema.safeParseAsync(
+    const { success, error } = await preChatFormValidationSchema.safeParseAsync(
       req.body
     );
 
@@ -34,81 +45,255 @@ router.post("/", async (req, res) => {
         .json({ success: false, message: error.errors[0].message });
     }
 
-    const chatLength = await redisClient.LLEN(`chat-${chatId}`);
-    let chatTitle;
+    const { name, email, teamGroupId, teamGroupName, businessId } = req.body;
 
-    if (chatLength === 0) {
-      chatTitle = await generateChatTitle(message);
-
-      let chat = await Chat.create({
-        title: chatTitle,
-        userId,
-      });
-
-      chat = chat.toJSON();
-      chatId = chat.id;
-    }
-
-    // Edit message
-    else if (messageId) {
-      await redisClient.lTrim(`chat-${chatId}`, messageId - 1, -1); // Remove messages onward the message to be edited.
-    }
-
-    let assistant = await Assistant.findOne({
+    let chatWidget = await ChatWidget.findOne({
       where: {
-        userId,
+        businessId,
       },
     });
 
-    if (!assistant) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid user id." });
+    if (!chatWidget) {
+      return res.status(400).json({ success: true, data: "Invalid request." });
     }
 
-    assistant = assistant.toJSON();
+    chatWidget = chatWidget.toJSON();
 
-    let business = await Business.findOne({
-      where: {
-        userId,
-      },
+    let chat = await Chat.create({
+      title: name,
+      businessId,
+      teamGroupId,
     });
 
-    business = business.toJSON();
+    chat = chat.toJSON();
 
-    const result = await generateChatbotAgentResponse(
-      message,
-      business.businessName,
-      assistant.name,
-      assistant.knowledgeBaseName,
-      `chat-${chatId}`,
-      mode
-    );
-
-    const aiResponse = {
-      type: "ai",
-      content: result,
+    const preChatForm = {
+      type: "pre-chat-form",
+      content: {
+        name,
+        email,
+        teamGroupId,
+        teamGroupName,
+      },
       timestamp: new Date().getTime(),
     };
 
-    res.status(200).json({ success: true, data: { chatTitle, aiResponse } });
+    await redisClient.lPush(`chat-${chat.id}`, JSON.stringify(preChatForm));
+
+    const welcomeMessage = {
+      type: "ai",
+      content: chatWidget.welcomeMessage,
+      timestamp: new Date().getTime(),
+    };
+
+    await redisClient.rPush(`chat-${chat.id}`, JSON.stringify(welcomeMessage));
+
+    const response = {
+      chatId: chat.id,
+      messages: [preChatForm, welcomeMessage],
+    };
+
+    res.status(201).json({ success: true, data: response });
   } catch (error) {
     console.error("Error getting chatbot agent's response: ", error);
     res.status(500).json({ success: false, error: "Internal Server Error" });
   }
 });
 
-router.delete("/:id", async (req, res) => {
+router.put("/:id/pre-chat-form", async (req, res) => {
+  const chatId = req.params.id;
+
   try {
-    await Chat.destroy({
+    const { success, error } = await preChatFormValidationSchema.safeParseAsync(
+      req.body
+    );
+
+    if (!success) {
+      return res
+        .status(400)
+        .json({ success: false, message: error.errors[0].message });
+    }
+
+    const { name, email, teamGroupId, teamGroupName, businessId } = req.body;
+
+    let chatWidget = await ChatWidget.findOne({
+      where: {
+        businessId,
+      },
+    });
+
+    if (!chatWidget) {
+      return res
+        .status(400)
+        .json({ success: true, data: "Invalid chat widget id." });
+    }
+
+    chatWidget = chatWidget.toJSON();
+
+    if (teamGroupId) {
+      await Chat.update(
+        {
+          teamGroupId,
+        },
+        {
+          where: {
+            id: chatId,
+          },
+        }
+      );
+    }
+
+    const preChatForm = {
+      type: "pre-chat-form",
+      content: {
+        email,
+        name,
+        teamGroupId,
+        teamGroupName,
+      },
+      timestamp: new Date().getTime(),
+    };
+
+    await redisClient.rPush(`chat-${chatId}`, JSON.stringify(preChatForm));
+
+    const welcomeMessage = {
+      type: "ai",
+      content: chatWidget.welcomeMessage,
+      timestamp: new Date().getTime(),
+    };
+
+    await redisClient.rPush(`chat-${chatId}`, JSON.stringify(welcomeMessage));
+
+    res
+      .status(200)
+      .json({ success: true, data: [preChatForm, welcomeMessage] });
+  } catch (error) {
+    console.error("Error getting chatbot agent's response: ", error);
+    res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
+});
+
+router.post("/:id/messages", async (req, res) => {
+  const { message } = req.body;
+  const chatId = req.params.id;
+
+  try {
+    const { success, error } = await chatMessageValidationSchema.safeParseAsync(
+      req.body
+    );
+
+    if (!success) {
+      return res
+        .status(400)
+        .json({ success: false, message: error.errors[0].message });
+    }
+
+    let chat = await Chat.findOne({
+      where: {
+        id: chatId,
+      },
+      include: [
+        {
+          model: Business,
+          as: "business",
+          include: [
+            {
+              model: Assistant,
+              as: "assistant",
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!chat) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid chat id." });
+    }
+
+    chat = chat.toJSON();
+
+    const count = await BusinessIntegration.count({
+      where: {
+        businessId: chat.businessId,
+        integrationId: {
+          [Op.in]: [
+            CALENDLY_INTEGRATION_ID,
+            GOOGLE_CALENDAR_INTEGRATION_ID,
+            HUBPOST_INTEGRATION_ID,
+          ],
+        },
+      },
+    });
+
+    // Businesses must connect both Google Calendar and Calendly integrations so that customers can schedule meetings.
+    let canScheduleMeeting = count !== 3 ? false : true;
+
+    let customerDetails = await redisClient.lIndex(`chat-${chat.id}`, 0);
+
+    if (customerDetails) {
+      customerDetails = JSON.parse(customerDetails);
+
+      if (customerDetails?.type === "pre-chat-form") {
+        customerDetails = formatObjectToString(customerDetails?.data?.content);
+      } else {
+        customerDetails = "";
+      }
+    }
+
+    const humanMessage = {
+      type: "human",
+      content: message,
+      timestamp: new Date().getTime(),
+    };
+
+    await redisClient.rPush(`chat-${chatId}`, JSON.stringify(humanMessage));
+
+    const response = await generateChatbotAgentResponse(
+      message,
+      chat.businessId,
+      chat.business.name,
+      chat.business.assistant.name,
+      chat.business.assistant.knowledgeBaseName,
+      customerDetails,
+      chat.id,
+      canScheduleMeeting
+    );
+
+    const aiMessage = {
+      type: "ai",
+      content: response,
+      timestamp: new Date().getTime(),
+    };
+
+    await redisClient.rPush(`chat-${chatId}`, JSON.stringify(aiMessage));
+
+    res.status(200).json({ success: true, data: aiMessage });
+  } catch (error) {
+    console.error("Error getting chatbot agent's response: ", error);
+    res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/messages", async (req, res) => {
+  try {
+    let chat = await Chat.findOne({
       where: { id: req.params.id },
     });
 
-    await redisClient.del(`chat-${req.params.id}`);
+    if (!chat) {
+      return res
+        .status(400)
+        .json({ success: true, message: "Invalid chat id." });
+    }
 
-    res.status(204).json({ success: true });
+    let messages = await redisClient.lRange(`chat-${chat.id}`, 0, -1);
+    messages = messages.map((item) => JSON.parse(item));
+
+    res.status(200).json({ success: true, data: messages });
   } catch (error) {
-    console.error("Error deleting chat:", error);
+    console.error("Error getting chat messages: ", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });

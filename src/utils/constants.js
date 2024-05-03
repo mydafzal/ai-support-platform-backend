@@ -12,6 +12,7 @@ const CALL_RECORDINGS_BASE_PATH = path.join(
 );
 const AUDIO_FILES_EXTENSION = "mp3";
 const AUDIO_FILES_BASE_URL = `${process.env.BASE_URL}/data/ai-generated-speeches`;
+const CHAT_WIDGET_LOGOS_BASE_URL = `${process.env.BASE_URL}/data/chat-widget-logos`;
 
 const HUBPOST_INTEGRATION_ID = 1;
 const GOOGLE_CALENDAR_INTEGRATION_ID = 2;
@@ -27,4 +28,5 @@ module.exports = {
   HUBPOST_INTEGRATION_ID,
   CALENDLY_INTEGRATION_ID,
   GOOGLE_CALENDAR_INTEGRATION_ID,
+  CHAT_WIDGET_LOGOS_BASE_URL,
 };

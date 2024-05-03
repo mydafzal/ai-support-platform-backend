@@ -17,6 +17,8 @@ const {
   CallTag,
   Integration,
   BusinessIntegration,
+  Chat,
+  ChatWidget,
 } = require("../../models");
 
 const { convertTextToSpeech } = require("../integrations/textToSpeech");
@@ -301,45 +303,25 @@ router.get("/:id/train-chat-messages", async (req, res) => {
   }
 });
 
-// router.get("/:id/chats", async (req, res) => {
-//   try {
-//     let chats = await Chat.findAll({
-//       where: { userId: req.params.id },
-//     });
+router.get("/:id/chats", async (req, res) => {
+  try {
+    let chats = await Chat.findAll({
+      where: { businessId: req.params.id },
+      include: [
+        {
+          model: User,
+          as: "teamMember",
+          attributes: ["name", "profileImageUrl"],
+        },
+      ],
+    });
 
-//     if (chats.length === 0) {
-//       return res.status(200).json({ success: true, data: [] });
-//     }
-
-//     chats = await Promise.all(
-//       chats.map(async (chat) => {
-//         chat = chat.toJSON();
-
-//         let messages = await redisClient.lRange(`chat-${chat.id}`, 0, -1);
-
-//         messages = messages.map((item) => {
-//           item = JSON.parse(item);
-
-//           return {
-//             type: item.type,
-//             content: item.data.content,
-//             timestamp: item.data?.additional_kwargs?.timestamp,
-//           };
-//         });
-
-//         return {
-//           title: chat.title,
-//           messages,
-//         };
-//       })
-//     );
-
-//     res.status(200).json({ success: true, data: chats });
-//   } catch (error) {
-//     console.error("Error getting chats:", error);
-//     res.status(500).json({ success: false, message: "Internal Server Error" });
-//   }
-// });
+    res.status(200).json({ success: true, data: chats });
+  } catch (error) {
+    console.error("Error getting chats:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
 
 // router.delete("/:id/chats", async (req, res) => {
 //   const userId = req.params.id;
@@ -607,6 +589,29 @@ router.get("/:id/team", async (req, res) => {
 
     const teamMembers = [...users, ...invitations];
     res.status(200).json({ success: true, data: teamMembers });
+  } catch (error) {
+    console.error("Error getting connected integrations:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/chat-widgets", async (req, res) => {
+  const businessId = req.params.id;
+
+  try {
+    let chatWidget = await ChatWidget.findOne({
+      where: {
+        businessId,
+      },
+    });
+
+    if (!chatWidget) {
+      return res
+        .status(400)
+        .json({ success: true, message: "Invalid chat widget id." });
+    }
+
+    res.status(200).json({ success: true, data: chatWidget });
   } catch (error) {
     console.error("Error getting connected integrations:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });

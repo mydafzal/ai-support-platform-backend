@@ -9,7 +9,6 @@ module.exports = {
      * Example:
      * await queryInterface.createTable('users', { id: Sequelize.INTEGER });
      */
-
     await queryInterface.addColumn("Businesses", "adminUserId", {
       type: Sequelize.INTEGER,
       references: {
@@ -175,6 +174,46 @@ module.exports = {
     });
 
     await queryInterface.addColumn("FormLinks", "businessId", {
+      type: Sequelize.INTEGER,
+      references: {
+        model: "Businesses",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "CASCADE",
+    });
+
+    await queryInterface.addColumn("Chats", "businessId", {
+      type: Sequelize.INTEGER,
+      references: {
+        model: "Businesses",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "CASCADE",
+    });
+
+    await queryInterface.addColumn("Chats", "teamGroupId", {
+      type: Sequelize.INTEGER,
+      references: {
+        model: "TeamGroups",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "SET NULL",
+    });
+
+    await queryInterface.addColumn("Chats", "teamMemberId", {
+      type: Sequelize.INTEGER,
+      references: {
+        model: "Users",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "SET NULL",
+    });
+
+    await queryInterface.addColumn("ChatWidgets", "businessId", {
       type: Sequelize.INTEGER,
       references: {
         model: "Businesses",
