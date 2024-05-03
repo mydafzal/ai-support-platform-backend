@@ -310,8 +310,19 @@ router.get("/:id/chats", async (req, res) => {
       include: [
         {
           model: User,
-          as: "teamMember",
-          attributes: ["name", "profileImageUrl"],
+          attributes: ["id", "name", "profileImageUrl"],
+          as: "users",
+          through: {
+            attributes: [],
+          },
+        },
+        {
+          model: TeamGroup,
+          attributes: ["id", "name"],
+          as: "teamGroups",
+          through: {
+            attributes: [],
+          },
         },
       ],
     });
