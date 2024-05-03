@@ -11,7 +11,7 @@ const {
 
 const jwt = require("jsonwebtoken");
 
-const { FormLink } = require("../../../models");
+const { FormLink, User, Chat } = require("../../../models");
 
 const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
@@ -19,7 +19,10 @@ const twilio = require("twilio");
 const {
   getCallData,
   updateCallConversation,
+  redisClient,
 } = require("../../integrations/redis");
+const { ACCEPTING_CHATS } = require("../../utils/constants");
+const { Op, Sequelize } = require("sequelize");
 const client = twilio(ACCOUNT_SID, AUTH_TOKEN);
 const MESSAGING_SERVICE_SID = process.env.TWILIO_MESSAGING_SERVICE_SID;
 
@@ -244,7 +247,7 @@ function createSmsSenderTool(businessId) {
   });
 }
 
-async function createGroupSaverTool() {
+function createGroupSaverTool() {
   return new DynamicStructuredTool({
     name: "group-saver",
     description: "Save the group to which the customer's calls belongs.",
@@ -271,7 +274,7 @@ async function createGroupSaverTool() {
   });
 }
 
-async function createUpdateCallDataTool() {
+function createUpdateCallDataTool() {
   return new DynamicStructuredTool({
     name: "update-call-data",
     description:
@@ -291,6 +294,74 @@ async function createUpdateCallDataTool() {
   });
 }
 
+function createAgentAvailabilityCheckerTool() {
+  return new DynamicStructuredTool({
+    name: "check-agent-availability",
+    description: "Check if an agent is available to take over the chat.",
+    schema: z.object({
+      chatId: z.number().describe("The id of the current chat."),
+    }),
+    func: async ({ chatId }) => {
+      const chatMessages = await redisClient.lRange(`chat-${chatId}`, 0, -1);
+
+      let teamGroupId;
+
+      for (let i = chatMessages.length - 1; i >= 0; i--) {
+        const item = JSON.parse(chatMessages[i]);
+
+        if (item["type"] === "pre-chat-form") {
+          teamGroupId = item.content.teamGroupId;
+          break;
+        }
+      }
+
+      let chats = await Chat.findAll({
+        where: {
+          connectedUserId: {
+            [Op.not]: null,
+          },
+        },
+      });
+
+      const connectedUserIds = chats.map(
+        (item) => item.toJSON().connectedUserId
+      );
+
+      let whereCondition = {
+        id: {
+          [Op.notIn]: connectedUserIds,
+        },
+        status: ACCEPTING_CHATS,
+      };
+
+      if (teamGroupId) {
+        whereCondition.teamGroupId = teamGroupId;
+      }
+
+      let user = await User.findOne({
+        where: whereCondition,
+      });
+
+      if (user) {
+        await Chat.update(
+          {
+            connectedUserId: user.id,
+          },
+          {
+            where: {
+              id: chatId,
+            },
+          }
+        );
+
+        return "An agent is available to take over the chat.";
+      }
+
+      return "No agent is currently available.";
+    },
+  });
+}
+
 module.exports = {
   createSlotAvailaibilityCheckerTool,
   createNextSlotsGetterTool,
@@ -300,4 +371,5 @@ module.exports = {
   createSmsSenderTool,
   createGroupSaverTool,
   createUpdateCallDataTool,
+  createAgentAvailabilityCheckerTool,
 };
