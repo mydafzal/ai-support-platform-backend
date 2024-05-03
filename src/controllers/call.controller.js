@@ -34,6 +34,7 @@ const {
   formatHubSpotContactDetails,
   formatTeamGroups,
 } = require("../utils/formatters");
+
 const {
   Business,
   Assistant,
@@ -50,11 +51,12 @@ const {
   AUDIO_FILES_EXTENSION,
   AUDIO_FILES_BASE_URL,
   CALL_RECORDINGS_BASE_PATH,
-  CALENDLY_INTEGRATION_ID,
-  GOOGLE_CALENDAR_INTEGRATION_ID,
   HUBPOST_INTEGRATION_ID,
 } = require("../utils/constants");
-const { generateFilename } = require("../utils/helpers");
+const {
+  generateFilename,
+  hasConnectedRequiredIntegrations,
+} = require("../utils/helpers");
 const { sendEmail } = require("../integrations/nodemailer");
 const { Op } = require("sequelize");
 
@@ -142,21 +144,7 @@ async function handleIncomingCall(request) {
     }
   }
 
-  const count = await BusinessIntegration.count({
-    where: {
-      businessId: business.id,
-      integrationId: {
-        [Op.in]: [
-          CALENDLY_INTEGRATION_ID,
-          GOOGLE_CALENDAR_INTEGRATION_ID,
-          HUBPOST_INTEGRATION_ID,
-        ],
-      },
-    },
-  });
-
-  // Businesses must connect both Google Calendar and Calendly integrations so that customers can schedule meetings.
-  let canScheduleMeeting = count !== 3 ? false : true;
+  let canScheduleMeeting = await hasConnectedRequiredIntegrations(business.id);
 
   let teamGroups = await TeamGroup.findAll({
     where: {
@@ -167,10 +155,6 @@ async function handleIncomingCall(request) {
 
   teamGroups = teamGroups.map((member) => member.toJSON());
   teamGroups = formatTeamGroups(teamGroups);
-
-  console.log("teamGroups - ", teamGroups);
-
-  // Get all groups here and add to call data...
 
   let callDetails = {
     businessId: business.id,
