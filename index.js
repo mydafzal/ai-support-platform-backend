@@ -11,7 +11,17 @@ connectRedis();
 const { initializeBrowser } = require("./src/integrations/urlScreenshot.js");
 initializeBrowser();
 
+const { createServer } = require("node:http");
+const { Server } = require("socket.io");
+const { registerUserHandlers } = require("./src/eventHandlers/index.js");
+
 const app = express();
+const server = createServer(app);
+const io = new Server(server);
+
+io.on("connection", (socket) => {
+  registerUserHandlers(io, socket);
+});
 
 app.use(
   "/data",
@@ -49,6 +59,6 @@ app.post("/test", async (req, res) => {
   res.status(200).json({ response: "Test" });
 });
 
-app.listen(process.env.PORT, () => {
+server.listen(process.env.PORT, () => {
   console.log(`Server is running at http://localhost:${process.env.PORT}`);
 });
