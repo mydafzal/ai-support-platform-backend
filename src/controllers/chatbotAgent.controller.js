@@ -111,9 +111,11 @@ async function initializeMultiAgentWorkflow(
   // Retrieve existing messages of the current conversation.
   let messages = await redisClient.lRange(`chat-${chatId}`, 0, -1);
 
-  messages = messages.filter(
-    (item) => JSON.parse(item)?.type !== "pre-chat-form"
-  );
+  messages = messages.filter((item) => {
+    item = JSON.parse(item);
+
+    return (item?.type === "ai" || item?.type === "human") && !item?.senderId;
+  });
 
   messages = messages.map((item) => {
     item = JSON.parse(item);
