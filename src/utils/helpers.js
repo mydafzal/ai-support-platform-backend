@@ -114,6 +114,11 @@ async function hasConnectedRequiredIntegrations(businessId) {
   return count !== 3 ? false : true;
 }
 
+function isValidInteger(str) {
+  const integerRegex = /^-?\d+$/;
+  return integerRegex.test(str);
+}
+
 module.exports = {
   generateFilename,
   ExtendedRedisChatMemory,
@@ -123,4 +128,5 @@ module.exports = {
   generateJWT,
   generateEmailLink,
   hasConnectedRequiredIntegrations,
+  isValidInteger,
 };
