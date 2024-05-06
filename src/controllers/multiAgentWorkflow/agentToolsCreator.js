@@ -11,7 +11,7 @@ const {
 
 const jwt = require("jsonwebtoken");
 
-const { FormLink, User, Chat } = require("../../../models");
+const { FormLink, User, Chat, ChatUserAssignment } = require("../../../models");
 
 const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
@@ -353,6 +353,11 @@ function createAgentAvailabilityCheckerTool() {
             },
           }
         );
+
+        await ChatUserAssignment.create({
+          chatId,
+          userId: user.id,
+        });
 
         return "An agent is available to take over the chat.";
       }
