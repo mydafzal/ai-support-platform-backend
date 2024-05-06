@@ -20,6 +20,29 @@ const { formatObjectToString } = require("../utils/formatters");
 const { hasConnectedRequiredIntegrations } = require("../utils/helpers");
 const { Op } = require("sequelize");
 
+const { v4: uuidv4 } = require("uuid");
+
+const multer = require("multer");
+
+const path = require("path");
+const fs = require("fs/promises");
+
+const { getSocketIOInstance } = require("../loaders/socket-io");
+const {
+  STORAGE_BASE_PATH,
+  CHAT_UPLOADS_BASE_URL,
+} = require("../utils/constants");
+
+const storage = multer.diskStorage({
+  destination: path.join(STORAGE_BASE_PATH, `chat-uploads`),
+  filename: (req, file, cb) => {
+    const uniqueFilename = uuidv4() + "-" + file.originalname;
+    cb(null, uniqueFilename);
+  },
+});
+
+const upload = multer({ storage });
+
 const chatMessageValidationSchema = z.object({
   message: z.string(),
 });
@@ -230,6 +253,14 @@ router.post("/:id/messages", async (req, res) => {
 
     chat = chat.toJSON();
 
+    if (chat.connectedUserId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "A human agent has been connected, can't continue chat with the ai agent.",
+      });
+    }
+
     let canScheduleMeeting = await hasConnectedRequiredIntegrations(
       chat.businessId
     );
@@ -247,6 +278,7 @@ router.post("/:id/messages", async (req, res) => {
     }
 
     const humanMessage = {
+      messageId: uuidv4(),
       type: "human",
       senderId: null,
       content: message,
@@ -267,6 +299,7 @@ router.post("/:id/messages", async (req, res) => {
     );
 
     const aiMessage = {
+      messageId: uuidv4(),
       type: "ai",
       content: response.content,
       timestamp: new Date().getTime(),
@@ -284,13 +317,46 @@ router.post("/:id/messages", async (req, res) => {
           as: "connectedUser",
           attributes: ["id", "name", "profileImageUrl"],
         },
+        {
+          model: User,
+          attributes: ["id", "name", "profileImageUrl"],
+          as: "users",
+          through: {
+            attributes: [],
+          },
+        },
+        {
+          model: TeamGroup,
+          attributes: ["id", "name"],
+          as: "teamGroups",
+          through: {
+            attributes: [],
+          },
+        },
       ],
     });
 
     chat = chat.toJSON();
 
+    let statusUpdate;
+
     if (response?.name === "HumanConnector" && chat.connectedUser) {
-      // Trigger notification to the connected agent.
+      // Trigger chat transfer notification to the human agent.
+
+      statusUpdate = {
+        messageId: uuidv4(),
+        type: "status-update",
+        content: {
+          connectedUserId: chat.connectedUser.id,
+          connectedUserName: chat.connectedUser.name,
+        },
+        timestamp: new Date().getTime(),
+      };
+
+      await redisClient.rPush(`chat-${chatId}`, JSON.stringify(statusUpdate));
+
+      const io = getSocketIOInstance();
+      io.to(`${chat.connectedUser.id}`).emit("chat:incoming-chat", { chat });
     }
 
     // Finally, re-open the chat.
@@ -307,10 +373,16 @@ router.post("/:id/messages", async (req, res) => {
       );
     }
 
+    delete chat.users;
+    delete chat.teamGroups;
+
     res.status(200).json({
       success: true,
-      data: aiMessage,
-      connectedUser: chat.connectedUser,
+      data: {
+        aiMessage,
+        statusUpdate,
+        connectedUser: chat.connectedUser,
+      },
     });
   } catch (error) {
     console.error("Error getting chatbot agent's response: ", error);
@@ -461,6 +533,75 @@ router.patch("/:id", async (req, res) => {
     res.status(200).json({ success: true, data: chat });
   } catch (error) {
     console.error("Error getting chatbot agent's response: ", error);
+    res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
+});
+
+router.post("/:id/upload", upload.array("files"), async (req, res) => {
+  const { userId } = req.body;
+
+  if (!req.files || req.files.length < 1) {
+    return res.status(400).json({
+      success: false,
+      message: "Please provide one or more files to upload.",
+    });
+  }
+
+  const chatId = req.params.id;
+
+  try {
+    let chat = await Chat.findOne({
+      where: {
+        id: chatId,
+      },
+    });
+
+    if (!chat) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid chat id.",
+      });
+    }
+
+    chat = chat.toJSON();
+
+    const messages = await Promise.all(
+      req.files.map(async (file) => {
+        const resourceUrl = `${CHAT_UPLOADS_BASE_URL}/${file.filename}`;
+
+        const resourceType = file.mimetype?.startsWith("image/")
+          ? "image"
+          : "document";
+
+        const message = {
+          type: resourceType,
+          senderId: userId || null,
+          content: {
+            url: resourceUrl,
+            name: file.originalname,
+            size: file.size,
+          },
+          timestamp: new Date().getTime(),
+        };
+
+        await redisClient.rPush(`chat-${chatId}`, JSON.stringify(message));
+
+        return message;
+      })
+    );
+
+    res.status(200).json({ success: true, data: messages });
+
+    const io = getSocketIOInstance();
+
+    let receiverId;
+
+    if (userId) receiverId = `chat-${chatId}`;
+    else receiverId = `${chat.connectedUserId}`;
+
+    io.to(receiverId).emit("chat:new-message", { messages });
+  } catch (error) {
+    console.error("Error uploading files: ", error);
     res.status(500).json({ success: false, error: "Internal Server Error" });
   }
 });
