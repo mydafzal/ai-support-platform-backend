@@ -33,12 +33,11 @@ const createWidgetValidationSchema = z.object({
 });
 
 const updateWidgetValidationSchema = z.object({
-  name: z.string().optional(),
-  welcomeMessage: z.string().optional(),
+  name: z.string(),
+  welcomeMessage: z.string(),
   colorHexCode: z
     .string()
-    .regex(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/, "Invalid color code.")
-    .optional(),
+    .regex(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/, "Invalid color code."),
 });
 
 router.post("/", upload.single("file"), async (req, res) => {

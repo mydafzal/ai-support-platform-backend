@@ -8,13 +8,14 @@ const {
   createNextDateSlotsGetterTool,
   createNextSlotsGetterTool,
   createSlotAvailaibilityCheckerTool,
-  createUpdateCallDataTool,
+  createAgentAvailabilityCheckerTool,
 } = require("./multiAgentWorkflow/agentToolsCreator");
 
 const { HumanMessage, AIMessage } = require("@langchain/core/messages");
 const {
   createSupervisorChain,
 } = require("./multiAgentWorkflow/supervisorAgent");
+
 const { redisClient } = require("../integrations/redis");
 
 async function initializeMultiAgentWorkflow(
@@ -39,7 +40,7 @@ async function initializeMultiAgentWorkflow(
     collectionName
   );
 
-  const updateCallDataTool = await createUpdateCallDataTool();
+  const agentAvailabilityCheckerTool = createAgentAvailabilityCheckerTool();
 
   // Create different agents for handling the conversation.
   const anweringAgent = await createAgent({
@@ -63,9 +64,14 @@ async function initializeMultiAgentWorkflow(
 
   const humanConnectorAgent = await createAgent({
     llm,
-    tools: [updateCallDataTool],
+    tools: [agentAvailabilityCheckerTool],
     systemPrompt: systemPrompts.humanConnectorAgentPrompt,
   });
+
+  const supervisorChain = await createSupervisorChain(
+    members,
+    systemPrompts.supervisorAgentPromt
+  );
 
   // Represent each agent as node in the graph.
   async function answeringNode(state, config) {
@@ -128,11 +134,6 @@ async function initializeMultiAgentWorkflow(
   const workflow = new StateGraph({
     channels: agentStateChannels,
   });
-
-  const supervisorChain = await createSupervisorChain(
-    members,
-    systemPrompts.supervisorAgentPromt
-  );
 
   workflow.addNode("Answerer", answeringNode);
   workflow.addNode("MeetingScheduler", meetingSchedulerNode);
@@ -201,8 +202,10 @@ async function generateChatbotAgentResponse(
 
   const supervisorAgentPromt = createSupervisorAgentPrompt(businessName);
 
-  const humanConnectorAgentPrompt =
-    createHumanConnectorAgentPrompt(businessName);
+  const humanConnectorAgentPrompt = createHumanConnectorAgentPrompt(
+    businessName,
+    chatId
+  );
 
   const systemPrompts = {
     answeringAgentPrompt,
@@ -230,7 +233,10 @@ async function generateChatbotAgentResponse(
   });
 
   let aiMessage = response.messages[response.messages.length - 1];
-  return aiMessage.content;
+
+  console.log("aiMessage - ", aiMessage);
+
+  return aiMessage;
 }
 
 function createAgentPrompt(businessName, assistantName, customerDetails) {
@@ -323,31 +329,32 @@ function createSupervisorAgentPrompt(businessName) {
 
   1. Answerer: Responsible for addressing general queries about ${businessName}, providing information about the business, and guiding customers with initial inquiries.
   2. MeetingScheduler: Assists customers in scheduling meetings with the support staff of ${businessName}.
-  3. HummanAgentConnector: Transfers on-going chat conversations to a member of the support staff of ${businessName}. 
+  3. HumanConnector: Transfers on-going chat conversations to a member of the support staff of ${businessName}. 
 
   NOTE: Meeting Scheduling and connecting human agent (means tranferring chats to human agents) are two separate things. We must seek clarficiation from the customer whether they want to schedule a meeting or get their call redirected to a human agent.
 
-  A KEY NOTE: Customers must not aware of these different assisants such as MeetingScheduler, HummanAgentConnector or Answerer.
+  A KEY NOTE: Customers must not aware of these different assisants such as MeetingScheduler, HumanConnector or Answerer.
   
   Your instructions are straightforward:
   
   1. If the customer explicitly asks or clearly indicates to schedule a meeting or appointment, output "MeetingScheduler" because "MeetingScheduler" is responsible for handling this process.
-  2. If the customer explicitly asks or clearly indicates to connect to a human, output "HummanAgentConnector" because "HummanAgentConnector" is responsible for handling this process.
+  2. If the customer explicitly asks or clearly indicates to connect to a human, output "HumanConnector" because "HumanConnector" is responsible for handling this process.
   3. Direct every other query to the Answerer. Simply output Answerer.
   4. Upon receiving answer from any of the {members}, respond with FINISH to indicate the end of the interaction.
   
   Your objective is to ensure seamless communication flow and efficient problem resolution within the team. Provide clear and concise instructions to agents while remaining responsive to customer needs`;
 }
 
-function createHumanConnectorAgentPrompt(businessName) {
+function createHumanConnectorAgentPrompt(businessName, chatId) {
   return `You are one of ${businessName}'s AI assistants collaborating with other assistants. You talk to customers through chats. Your role as the Human Connector is crucial in connecting, or more specifically transferring customer chats to staff of ${businessName}. Your specific role is only to facilitate the process of connecting customer chats to human agents or support staff.
 
-    Following the following instructions to excel in your role:
-    
-    - First, ask the customer to provide some information about the purpose of their call. You MUST require this information from the customer.
-    - Based on the information provided by the customer, and the context of the conversation, decide which of the above given groups the customer's call shall be re-directed to.
-    - Call the 'group-saver' tool to save the group to which the call shall be re-directed. You MUST call this tool.
-    - Output some message to tell the customer that they are being connected to a human.
+  NOTE: Here is the id of the current chat that you would need to utilize the tools: ${chatId}
+
+    Follow the given instructions to excel in your role:
+
+    - Call the 'check-agent-availability' tool to check if a member of the staff is available to take over the chat.
+    - If the result of 'check-agent-availability' tool indicates that no agents are available, communicate to the customer that our agents are not available at the moment and please try after some time.
+    - On the other hand, if the result of 'check-agent-availability' tool indicates availability of an agent who can take over the chat, simply communicate to the customer that they are being connected to a human agent.
    `;
 }
 

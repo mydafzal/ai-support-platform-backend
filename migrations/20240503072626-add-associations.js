@@ -9,6 +9,7 @@ module.exports = {
      * Example:
      * await queryInterface.createTable('users', { id: Sequelize.INTEGER });
      */
+
     await queryInterface.addColumn("Businesses", "adminUserId", {
       type: Sequelize.INTEGER,
       references: {
@@ -193,30 +194,60 @@ module.exports = {
       onDelete: "CASCADE",
     });
 
-    await queryInterface.addColumn("Chats", "teamGroupId", {
-      type: Sequelize.INTEGER,
-      references: {
-        model: "TeamGroups",
-        key: "id",
-      },
-      onUpdate: "CASCADE",
-      onDelete: "SET NULL",
-    });
-
-    await queryInterface.addColumn("Chats", "teamMemberId", {
+    await queryInterface.addColumn("Chats", "connectedUserId", {
       type: Sequelize.INTEGER,
       references: {
         model: "Users",
         key: "id",
       },
       onUpdate: "CASCADE",
-      onDelete: "SET NULL",
+      onDelete: "CASCADE",
     });
 
     await queryInterface.addColumn("ChatWidgets", "businessId", {
       type: Sequelize.INTEGER,
       references: {
         model: "Businesses",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "CASCADE",
+    });
+
+    await queryInterface.addColumn("ChatUserAssignments", "userId", {
+      type: Sequelize.INTEGER,
+      references: {
+        model: "Users",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "CASCADE",
+    });
+
+    await queryInterface.addColumn("ChatUserAssignments", "chatId", {
+      type: Sequelize.INTEGER,
+      references: {
+        model: "Chats",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "CASCADE",
+    });
+
+    await queryInterface.addColumn("ChatGroupAssignments", "teamGroupId", {
+      type: Sequelize.INTEGER,
+      references: {
+        model: "TeamGroups",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "CASCADE",
+    });
+
+    await queryInterface.addColumn("ChatGroupAssignments", "chatId", {
+      type: Sequelize.INTEGER,
+      references: {
+        model: "Chats",
         key: "id",
       },
       onUpdate: "CASCADE",

@@ -25,9 +25,9 @@ module.exports = (sequelize, DataTypes) => {
         as: "invitations",
       });
 
-      TeamGroup.hasMany(models.Chat, {
+      TeamGroup.belongsToMany(models.Chat, {
+        through: models.ChatGroupAssignment,
         foreignKey: "teamGroupId",
-        as: "chats",
       });
     }
   }

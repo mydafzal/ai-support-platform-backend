@@ -1,6 +1,7 @@
 const { getUnixTime } = require("date-fns");
 const { v4: uuidv4 } = require("uuid");
-const crypto = require("crypto");
+
+const { BusinessIntegration } = require("../../models");
 
 const { RedisChatMessageHistory } = require("langchain/stores/message/redis");
 const { StringOutputParser } = require("@langchain/core/output_parsers");
@@ -11,6 +12,12 @@ const pdf = require("pdf-thumbnail");
 const fs = require("fs/promises");
 
 const jwt = require("jsonwebtoken");
+const { Op } = require("sequelize");
+const {
+  CALENDLY_INTEGRATION_ID,
+  GOOGLE_CALENDAR_INTEGRATION_ID,
+  HUBPOST_INTEGRATION_ID,
+} = require("./constants");
 
 function generateFilename(fileExtension) {
   const uniqueId = uuidv4();
@@ -89,6 +96,24 @@ function generateEmailLink(request, path, queryParams) {
   return `${process.env.CLIENT_BASE_URL}/${path}?${queryParams}`;
 }
 
+async function hasConnectedRequiredIntegrations(businessId) {
+  const count = await BusinessIntegration.count({
+    where: {
+      businessId,
+      integrationId: {
+        [Op.in]: [
+          CALENDLY_INTEGRATION_ID,
+          GOOGLE_CALENDAR_INTEGRATION_ID,
+          HUBPOST_INTEGRATION_ID,
+        ],
+      },
+    },
+  });
+
+  // Businesses must connect both Google Calendar and Calendly integrations so that customers can schedule meetings.
+  return count !== 3 ? false : true;
+}
+
 module.exports = {
   generateFilename,
   ExtendedRedisChatMemory,
@@ -97,4 +122,5 @@ module.exports = {
   generateEmailVerificationToken,
   generateJWT,
   generateEmailLink,
+  hasConnectedRequiredIntegrations,
 };

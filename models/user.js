@@ -1,5 +1,10 @@
 "use strict";
 const { Model } = require("sequelize");
+const {
+  ACCEPTING_CHATS,
+  NOT_ACCEPTING_CHATS,
+  OFFLINE,
+} = require("../src/utils/constants");
 module.exports = (sequelize, DataTypes) => {
   class User extends Model {
     /**
@@ -24,9 +29,9 @@ module.exports = (sequelize, DataTypes) => {
         as: "adminUser",
       });
 
-      User.hasMany(models.Chat, {
-        foreignKey: "teamMemberId",
-        as: "teamMember",
+      User.belongsToMany(models.Chat, {
+        through: models.ChatUserAssignment,
+        foreignKey: "userId",
       });
     }
   }
@@ -56,6 +61,10 @@ module.exports = (sequelize, DataTypes) => {
       profileImageUrl: { type: DataTypes.STRING },
       role: {
         type: DataTypes.STRING,
+      },
+      status: {
+        type: DataTypes.ENUM(ACCEPTING_CHATS, NOT_ACCEPTING_CHATS, OFFLINE),
+        defaultValue: ACCEPTING_CHATS,
       },
       createdAt: {
         allowNull: false,

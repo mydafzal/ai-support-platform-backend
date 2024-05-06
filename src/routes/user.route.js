@@ -13,6 +13,11 @@ const {
   generateJWT,
 } = require("../utils/helpers");
 const { createVerification } = require("../controllers/call.controller");
+const {
+  ACCEPTING_CHATS,
+  NOT_ACCEPTING_CHATS,
+  OFFLINE,
+} = require("../utils/constants");
 
 const userValidationSchema = z.object({
   email: z.string().email(),
@@ -23,6 +28,7 @@ const userValidationSchema = z.object({
 const updateUserValidationSchema = z.object({
   name: z.string().optional(),
   phone: z.string().optional(),
+  status: z.enum([ACCEPTING_CHATS, NOT_ACCEPTING_CHATS, OFFLINE]),
 });
 
 router.post("/", async (req, res) => {
@@ -105,46 +111,41 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.patch("/:id", async (req, res) => {
+router.delete("/:id", async (req, res) => {
   const userId = req.params.id;
-  const { businessId } = req.body;
 
   try {
-    if (!businessId) {
-      let user = await User.findByPk(userId);
+    let user = await User.findByPk(userId);
 
-      if (user) {
-        user = user.toJSON();
+    if (user) {
+      user = user.toJSON();
 
-        await Invitation.destroy({
+      await Invitation.destroy({
+        where: {
+          email: user.email,
+        },
+      });
+
+      let business = await Business.findByPk(user.businessId);
+      const { name } = business.toJSON();
+
+      let adminUser = await User.findByPk(business.toJSON().adminUserId);
+      adminUser = adminUser.toJSON();
+
+      let emailTemplate = `${adminUser.email} removed you from organization ${name}.`;
+
+      await sendEmail(user.email, emailTemplate);
+
+      await User.update(
+        {
+          businessId: null,
+        },
+        {
           where: {
-            email: user.email,
+            id: userId,
           },
-        });
-
-        console.log(" user - ", user);
-
-        let business = await Business.findByPk(user.businessId);
-        const { name } = business.toJSON();
-
-        let adminUser = await User.findByPk(business.toJSON().adminUserId);
-        adminUser = adminUser.toJSON();
-
-        let emailTemplate = `${adminUser.email} removed you from organization ${name}.`;
-
-        await sendEmail(user.email, emailTemplate);
-
-        await User.update(
-          {
-            businessId,
-          },
-          {
-            where: {
-              id: userId,
-            },
-          }
-        );
-      }
+        }
+      );
     }
 
     res.status(204).send();

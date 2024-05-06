@@ -46,8 +46,8 @@ async function initializeMultiAgentWorkflow(
     collectionName
   );
 
-  const groupSaverTool = await createGroupSaverTool();
-  const updateCallDataTool = await createUpdateCallDataTool();
+  const groupSaverTool = createGroupSaverTool();
+  const updateCallDataTool = createUpdateCallDataTool();
 
   const anweringAgent = await createAgent({
     llm,
