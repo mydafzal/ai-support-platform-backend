@@ -410,6 +410,7 @@ router.get("/:id/team-groups", async (req, res) => {
           )`),
           "invitationCount",
         ],
+        [sequelize.fn("COUNT", sequelize.col("chats.id")), "chatCount"],
       ],
       include: [
         {
@@ -421,6 +422,14 @@ router.get("/:id/team-groups", async (req, res) => {
           model: Invitation,
           as: "invitations",
           attributes: [],
+        },
+        {
+          model: Chat,
+          attributes: [],
+          as: "chats",
+          through: {
+            attributes: [],
+          },
         },
       ],
       group: ["TeamGroup.id"],
