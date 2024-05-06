@@ -12,16 +12,12 @@ const { initializeBrowser } = require("./src/integrations/urlScreenshot.js");
 initializeBrowser();
 
 const { createServer } = require("node:http");
-const { Server } = require("socket.io");
-const { registerUserHandlers } = require("./src/eventHandlers/index.js");
 
 const app = express();
 const server = createServer(app);
-const io = new Server(server);
 
-io.on("connection", (socket) => {
-  registerUserHandlers(io, socket);
-});
+const { initializeSocketIO } = require("./src/loaders/socket-io.js");
+initializeSocketIO(server);
 
 app.use(
   "/data",
@@ -62,3 +58,5 @@ app.post("/test", async (req, res) => {
 server.listen(process.env.PORT, () => {
   console.log(`Server is running at http://localhost:${process.env.PORT}`);
 });
+
+
