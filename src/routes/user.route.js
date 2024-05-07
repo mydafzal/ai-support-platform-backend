@@ -174,7 +174,7 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-router.patch("/:id", upload.array("file"), async (req, res) => {
+router.patch("/:id", upload.single("file"), async (req, res) => {
   const userId = req.params.id;
 
   try {
@@ -210,14 +210,21 @@ router.patch("/:id", upload.array("file"), async (req, res) => {
         .json({ success: false, message: "Invalid user id." });
     }
 
-    if (req.body.phone) {
-      user.phone = req.body.phone;
+    const { name, email, phone, status } = req.body;
+
+    if (phone) {
+      user.phone = phone;
     }
-    if (req.body.name) {
-      user.name = req.body.name;
+    if (name) {
+      user.name = name;
     }
     if (req.file) {
+      console.log("file - ", req.file);
+
       const profileImageUrl = `${PROFILE_IMAGES_BASE_URL}/${req.file.filename}`;
+
+      console.log("profileImageUrl - ", profileImageUrl);
+
       user.profileImageUrl = profileImageUrl;
     }
 
@@ -225,20 +232,18 @@ router.patch("/:id", upload.array("file"), async (req, res) => {
 
     user = user.toJSON();
 
-    if (req.body.phone?.length > 0) {
-      await createVerification(
-        req.body.phone,
-        process.env.TWIML_VERIFY_SERVICE_ID
-      );
+    if (phone?.length > 0) {
+      await createVerification(phone, process.env.TWIML_VERIFY_SERVICE_ID);
     }
 
-    if (req.body.email?.length > 0) {
+    if (email?.length > 0) {
       const emailVerificationToken = generateEmailVerificationToken(user.id);
 
       await User.update(
         {
           emailVerificationToken,
           emailVerified: false,
+          email,
         },
         {
           where: {
