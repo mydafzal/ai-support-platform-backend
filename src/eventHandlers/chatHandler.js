@@ -6,15 +6,29 @@ const { v4: uuidv4 } = require("uuid");
 module.exports = (io, socket) => {
   const userId = socket.request._query.userId;
 
-  const sendMessage = async (payload) => {
+  const sendMessage = async (payload, callback) => {
     const { chatId, message } = payload;
 
     const senderId = isValidInteger(userId) ? parseInt(userId) : null;
 
+    let chat = await Chat.findOne({
+      where: {
+        id: chatId,
+      },
+    });
+
+    if (!chat) {
+      console.log("invalid chat id received.");
+      return;
+    }
+
+    chat = chat.toJSON();
+
     const humanMessage = {
-      messageId: uuidv4(),
+      id: uuidv4(),
       type: "human",
       senderId,
+      recevierId: chat.connectedUserId,
       content: message,
       status: "Delivered",
       timestamp: new Date().getTime(),
@@ -32,18 +46,9 @@ module.exports = (io, socket) => {
 
     socket.to(recevierId).emit("chat:new-message", { message: humanMessage });
 
-    let chat = await Chat.findOne({
-      where: {
-        id: chatId,
-      },
-    });
-
-    if (!chat) {
-      console.log("invalid chat id received.");
-      return;
+    if (typeof callback === "function") {
+      callback(humanMessage);
     }
-
-    chat = chat.toJSON();
 
     const roomName = `team-${chat.businessId}`;
     socket.to(roomName).emit("chat:new-message", { message: humanMessage });
@@ -82,7 +87,18 @@ module.exports = (io, socket) => {
   };
 
   const updateMessageStatus = async (payload) => {
-    const { chatId, messageId, status } = payload;
+    const { chatId, messageIds, status } = payload;
+
+    let messages = await redisClient.lRange(`chat-${chatId}`, 0, -1);
+
+    for (let i = 0; i < messages.length; i++) {
+      const message = JSON.parse(messages[i]);
+
+      if (messageIds.includes(message.messageId)) {
+        message.status = "Read";
+        await redisClient.lSet(`chat-${chatId}`, i, JSON.stringify(message));
+      }
+    }
 
     const senderId = isValidInteger(userId) ? parseInt(userId) : null;
 
@@ -96,23 +112,7 @@ module.exports = (io, socket) => {
 
     socket
       .to(recevierId)
-      .emit("chat:update-message-status", { chatId, messageId, status });
-
-    let chat = await Chat.findOne({
-      where: {
-        id: chatId,
-      },
-    });
-
-    if (!chat) {
-      console.log("invalid chat id received.");
-      return;
-    }
-
-    chat = chat.toJSON();
-
-    const roomName = `team-${chat.businessId}`;
-    socket.to(roomName).emit("chat:typing", { chatId, isTyping });
+      .emit("chat:update-message-status", { chatId, messageIds, status });
   };
 
   socket.on("chat:send-message", sendMessage);
