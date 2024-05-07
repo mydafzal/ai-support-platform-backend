@@ -7,12 +7,12 @@ const fs = require("fs/promises");
 
 const { v4: uuidv4 } = require("uuid");
 
-const multer = require("multer");
 const {
   CHAT_WIDGET_LOGOS_BASE_URL,
   STORAGE_BASE_PATH,
 } = require("../utils/constants");
 
+const multer = require("multer");
 const storage = multer.diskStorage({
   destination: "documents",
   filename: (req, file, cb) => {
