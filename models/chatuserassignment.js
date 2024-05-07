@@ -12,7 +12,12 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   ChatUserAssignment.init(
-    {},
+    {
+      viewed: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+      },
+    },
     {
       sequelize,
       modelName: "ChatUserAssignment",
