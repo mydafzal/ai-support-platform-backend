@@ -17,7 +17,25 @@ const {
   ACCEPTING_CHATS,
   NOT_ACCEPTING_CHATS,
   OFFLINE,
+  STORAGE_BASE_PATH,
+  PROFILE_IMAGES_BASE_URL,
 } = require("../utils/constants");
+
+const path = require("path");
+
+const { v4: uuidv4 } = require("uuid");
+
+const multer = require("multer");
+
+const storage = multer.diskStorage({
+  destination: path.join(STORAGE_BASE_PATH, `profile-images`),
+  filename: (req, file, cb) => {
+    const uniqueFilename = uuidv4() + "-" + file.originalname;
+    cb(null, uniqueFilename);
+  },
+});
+
+const upload = multer({ storage });
 
 const userValidationSchema = z.object({
   email: z.string().email(),
@@ -27,8 +45,9 @@ const userValidationSchema = z.object({
 
 const updateUserValidationSchema = z.object({
   name: z.string().optional(),
+  email: z.string().email().optional(),
   phone: z.string().optional(),
-  status: z.enum([ACCEPTING_CHATS, NOT_ACCEPTING_CHATS, OFFLINE]),
+  status: z.enum([ACCEPTING_CHATS, NOT_ACCEPTING_CHATS, OFFLINE]).optional(),
 });
 
 router.post("/", async (req, res) => {
@@ -155,7 +174,7 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-router.put("/:id", async (req, res) => {
+router.patch("/:id", upload.array("file"), async (req, res) => {
   const userId = req.params.id;
 
   try {
@@ -197,6 +216,10 @@ router.put("/:id", async (req, res) => {
     if (req.body.name) {
       user.name = req.body.name;
     }
+    if (req.file) {
+      const profileImageUrl = `${PROFILE_IMAGES_BASE_URL}/${req.file.filename}`;
+      user.profileImageUrl = profileImageUrl;
+    }
 
     await user.save();
 
@@ -207,6 +230,30 @@ router.put("/:id", async (req, res) => {
         req.body.phone,
         process.env.TWIML_VERIFY_SERVICE_ID
       );
+    }
+
+    if (req.body.email?.length > 0) {
+      const emailVerificationToken = generateEmailVerificationToken(user.id);
+
+      await User.update(
+        {
+          emailVerificationToken,
+          emailVerified: false,
+        },
+        {
+          where: {
+            id: user.id,
+          },
+        }
+      );
+
+      const emailLink = generateEmailLink(
+        req,
+        "email-verification",
+        `token=${emailVerificationToken}`
+      );
+      const emailTemplate = `Please verify your email by clicking <a href="${emailLink}">here</a>`;
+      await sendEmail(user.email, emailTemplate);
     }
 
     delete user.password;
