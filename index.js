@@ -46,6 +46,10 @@ app.use("/integrations", require("./src/routes/integration.route"));
 app.use("/form-links", require("./src/routes/form.route.js"));
 app.use("/chats", require("./src/routes/chat.route.js"));
 app.use("/chat-widgets", require("./src/routes/chatWidget.route.js"));
+app.use(
+  "/chat-assignments",
+  require("./src/routes/chatUserAssignment.route.js")
+);
 
 app.get("/", (req, res) => {
   res.status(200).json({ token: "Server is running..." });
@@ -58,5 +62,3 @@ app.post("/test", async (req, res) => {
 server.listen(process.env.PORT, () => {
   console.log(`Server is running at http://localhost:${process.env.PORT}`);
 });
-
-
