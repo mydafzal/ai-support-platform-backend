@@ -25,6 +25,7 @@ const { convertTextToSpeech } = require("../integrations/textToSpeech");
 
 const router = require("express").Router();
 const fs = require("fs/promises");
+const fsWithoutPromises = require("fs");
 
 const jwt = require("jsonwebtoken");
 
@@ -46,6 +47,15 @@ const businessDetailsValidationSchema = z.object({
   voiceName: z.string(),
   greetingMessage: z.string(),
   farewellMessage: z.string(),
+});
+
+const updateBusinessDetailsValidationSchema = z.object({
+  businessName: z.string().optional(),
+  assistantName: z.string().optional(),
+  voiceId: z.string().optional(),
+  voiceName: z.string().optional(),
+  greetingMessage: z.string().optional(),
+  farewellMessage: z.string().optional(),
 });
 
 router.post("/", async (req, res) => {
@@ -185,6 +195,159 @@ router.post("/", async (req, res) => {
     });
   } catch (error) {
     console.error("Error adding business:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+router.patch("/:id", async (req, res) => {
+  try {
+    const { success, error } =
+      await updateBusinessDetailsValidationSchema.safeParseAsync(req.body);
+
+    if (!success) {
+      return res
+        .status(400)
+        .json({ success: false, message: error.errors[0].message });
+    }
+
+    const businessId = req.params.id;
+
+    let count = await Business.count({
+      where: {
+        id: businessId,
+      },
+    });
+
+    if (count <= 0) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid business id." });
+    }
+
+    let {
+      businessName,
+      assistantName,
+      voiceName,
+      voiceId,
+      greetingMessage,
+      farewellMessage,
+    } = req.body;
+
+    if (businessName) {
+      await Business.update(
+        {
+          name: businessName,
+        },
+        {
+          where: {
+            id: businessId,
+          },
+        }
+      );
+    }
+
+    let assistant = await Assistant.findOne({
+      where: {
+        businessId,
+      },
+    });
+    assistant = assistant.toJSON();
+
+    let greetingMessageUrl = assistant.greetingMessageUrl;
+    let farewellMessageUrl = assistant.farewellMessageUrl;
+    voiceId = voiceId || assistant.voiceId;
+
+    console.log("voice id -", voiceId);
+
+    if (greetingMessage) {
+      let greetingMessageSpeech = await convertTextToSpeech(
+        greetingMessage,
+        voiceId
+      );
+      greetingMessageSpeech = Buffer.from(greetingMessageSpeech);
+
+      console.log("speech - ", greetingMessage);
+
+      const businessDataDirectoryPath = `${AUDIO_FILES_BASE_PATH}/business-${businessId}`;
+
+      const exists = fsWithoutPromises.existsSync(
+        `${businessDataDirectoryPath}/greetingMessage.mp3`
+      );
+
+      if (exists) {
+        await fs.unlink(`${businessDataDirectoryPath}/greetingMessage.mp3`);
+      }
+
+      await fs.writeFile(
+        `${businessDataDirectoryPath}/greetingMessage.mp3`,
+        greetingMessageSpeech
+      );
+
+      greetingMessageUrl = `${AUDIO_FILES_BASE_URL}/business-${businessId}/greetingMessage.mp3`;
+    }
+
+    if (farewellMessage) {
+      let farewellMessageSpeech = await convertTextToSpeech(
+        farewellMessage,
+        voiceId
+      );
+      farewellMessageSpeech = Buffer.from(farewellMessageSpeech);
+
+      console.log("speech - ", farewellMessageSpeech);
+
+      const businessDataDirectoryPath = `${AUDIO_FILES_BASE_PATH}/business-${businessId}`;
+
+      const exists = fsWithoutPromises.existsSync(
+        `${businessDataDirectoryPath}/farewellMessage.mp3`
+      );
+
+      if (exists) {
+        await fs.unlink(`${businessDataDirectoryPath}/farewellMessage.mp3`);
+      }
+
+      await fs.writeFile(
+        `${businessDataDirectoryPath}/farewellMessage.mp3`,
+        farewellMessageSpeech
+      );
+
+      farewellMessageUrl = `${AUDIO_FILES_BASE_URL}/business-${businessId}/farewellMessage.mp3`;
+    }
+
+    assistantName = assistantName || assistant.name;
+    voiceName = voiceName || assistant.voiceName;
+    greetingMessage = greetingMessage || assistant.greetingMessage;
+    farewellMessage = farewellMessage || assistant.farewellMessage;
+
+    await Assistant.update(
+      {
+        name: assistantName,
+        voiceId,
+        voiceName,
+        greetingMessage,
+        farewellMessage,
+      },
+      {
+        where: { businessId },
+      }
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        businessId,
+        businessName,
+        assistantName,
+        voiceName,
+        voiceId,
+        greetingMessage,
+        farewellMessage,
+        greetingMessageUrl,
+        farewellMessageUrl,
+      },
+      message: "Business information updated successfully.",
+    });
+  } catch (error) {
+    console.error("Error updating business information:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
