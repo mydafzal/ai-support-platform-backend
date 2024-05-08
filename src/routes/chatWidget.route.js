@@ -14,7 +14,7 @@ const {
 
 const multer = require("multer");
 const storage = multer.diskStorage({
-  destination: "documents",
+  destination: path.join(STORAGE_BASE_PATH, `chat-widget-logos`),
   filename: (req, file, cb) => {
     const uniqueFilename = uuidv4() + "-" + file.originalname;
     cb(null, uniqueFilename);
@@ -58,12 +58,6 @@ router.post("/", upload.single("file"), async (req, res) => {
     }
 
     const { name, welcomeMessage, colorHexCode, businessId } = req.body;
-
-    const destinationPath = path.join(STORAGE_BASE_PATH, `chat-widget-logos`);
-    await fs.mkdir(destinationPath, { recursive: true });
-
-    const sourcePath = path.join(__dirname, "..", "..", req.file.path);
-    await fs.rename(sourcePath, `${destinationPath}/${req.file.filename}`);
 
     const logoUrl = `${CHAT_WIDGET_LOGOS_BASE_URL}/${req.file.filename}`;
 
@@ -113,12 +107,6 @@ router.put("/:id", upload.single("file"), async (req, res) => {
     chatWidget = chatWidget.toJSON();
 
     if (req.file) {
-      const destinationPath = path.join(STORAGE_BASE_PATH, `chat-widget-logos`);
-      await fs.mkdir(destinationPath, { recursive: true });
-
-      const sourcePath = path.join(__dirname, "..", "..", req.file.path);
-      await fs.rename(sourcePath, `${destinationPath}/${req.file.filename}`);
-
       req.body.logoUrl = `${CHAT_WIDGET_LOGOS_BASE_URL}/${req.file.filename}`;
 
       // Remove existing file by first extracting file name from existing logo url.
@@ -156,7 +144,7 @@ router.put("/:id", upload.single("file"), async (req, res) => {
       data: chatWidget?.toJSON(),
     });
   } catch (error) {
-    console.error("Error creating chat widget: ", error);
+    console.error("Error updating chat widget: ", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });
