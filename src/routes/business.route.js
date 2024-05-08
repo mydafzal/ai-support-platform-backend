@@ -497,58 +497,6 @@ router.get("/:id/chats", async (req, res) => {
   }
 });
 
-// router.delete("/:id/chats", async (req, res) => {
-//   const userId = req.params.id;
-
-//   try {
-//     let chats = await Chat.findAll({
-//       where: {
-//         userId,
-//       },
-//     });
-
-//     await Chat.destroy({
-//       where: { userId },
-//     });
-
-//     const promises = chats.map((chat) => {
-//       chat = chat.toJSON();
-//       return redisClient.del(`chat-${chat.id}`);
-//     });
-
-//     await Promise.all(promises);
-
-//     res.status(204).json({ success: true });
-//   } catch (error) {
-//     console.error("Error deleting chat history:", error);
-//     res.status(500).json({ success: false, message: "Internal Server Error" });
-//   }
-// });
-
-// router.get("/:id/team-members", async (req, res) => {
-//   const userId = req.params.id;
-
-//   try {
-//     let teamMembers = await TeamMember.findAll({
-//       where: {
-//         userId,
-//       },
-//       include: [
-//         {
-//           model: TeamGroup,
-//           attributes: ["name"],
-//         },
-//       ],
-//     });
-
-//     teamMembers = teamMembers.map((item) => item.toJSON());
-//     res.status(200).json({ success: true, data: teamMembers });
-//   } catch (error) {
-//     console.error("Error getting team members:", error);
-//     res.status(500).json({ success: false, message: "Internal Server Error" });
-//   }
-// });
-
 router.get("/:id/team-groups", async (req, res) => {
   const businessId = req.params.id;
 
