@@ -606,4 +606,43 @@ router.post("/:id/upload", upload.array("files"), async (req, res) => {
   }
 });
 
+router.delete("/:id", async (req, res) => {
+  const chatId = req.params.id;
+
+  try {
+    let chat = await Chat.findOne({
+      where: {
+        id: chatId,
+      },
+    });
+
+    if (!chat) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid chat id.",
+      });
+    }
+
+    chat = chat.toJSON();
+
+    if (chat.status === "open") {
+      return res.status(400).json({
+        success: false,
+        message: "Open chats cannot be deleted.",
+      });
+    }
+
+    await Chat.destroy({
+      where: { id: chatId },
+    });
+
+    await redisClient.del(`chat-${chatId}`);
+
+    res.status(204).send();
+  } catch (error) {
+    console.error("Error deleting chat: ", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
 module.exports = router;
