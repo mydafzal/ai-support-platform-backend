@@ -5,11 +5,11 @@ const Integration = require("../../models/integration");
 
 const SCOPES = ["https://www.googleapis.com/auth/calendar.events"];
 
-const { client_secret, client_id, redirect_uris } = oauthCredentials.web;
+const { client_secret, client_id } = oauthCredentials.web;
 const oAuth2Client = new google.auth.OAuth2(
   client_id,
   client_secret,
-  redirect_uris[0]
+  process.env.REDIRECT_URI
 );
 
 function generateGoogleOAuthUrl() {

@@ -32,7 +32,7 @@ router.get("/hubspot-auth-url", (req, res) => {
 
 router.get("/calendly-auth-url", (req, res) => {
   return res.status(200).json({
-    calendlyRedirectUrl: `https://calendly.com/oauth/authorize?client_id=${process.env.CALENDLY_CLIENT_ID}&response_type=code&redirect_uri=http://localhost:3000/connect-integration`,
+    calendlyRedirectUrl: `https://calendly.com/oauth/authorize?client_id=${process.env.CALENDLY_CLIENT_ID}&response_type=code&redirect_uri=${process.env.REDIRECT_URI}`,
   });
 });
 

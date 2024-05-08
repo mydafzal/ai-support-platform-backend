@@ -7,12 +7,12 @@ const { GOOGLE_CALENDAR_INTEGRATION_ID } = require("../utils/constants");
 let auth, calendar;
 
 async function authorize(businessId) {
-  const { client_secret, client_id, redirect_uris } = credentials.web;
+  const { client_secret, client_id } = credentials.web;
 
   const oAuth2Client = new google.auth.OAuth2(
     client_id,
     client_secret,
-    redirect_uris[0]
+    process.env.REDIRECT_URI
   );
 
   try {
