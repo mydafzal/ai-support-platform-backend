@@ -280,8 +280,6 @@ async function handleSpeechInput(request) {
 
   const textToSpeechFileURL = `${AUDIO_FILES_BASE_URL}/${fileName}`;
 
-  twiml.play(textToSpeechFileURL);
-
   const { shouldRedirect, groupToRedirect } = await getCallData(callId);
 
   if (shouldRedirect) {
@@ -310,19 +308,21 @@ async function handleSpeechInput(request) {
       where: whereCondition,
     });
 
-    if (!teamMember) {
-      delete whereCondition.teamGroupId;
-
-      teamMember = await User.findOne({
-        where: whereCondition,
-      });
-    }
-
-    if (!teamMember) {
-      twiml.pay(
+    if (!teamMember || teamMember?.toJSON()?.phone?.length < 1) {
+      twiml.say(
         "We couldn't connect your call to a human agent at the moment."
       );
-    } else {
+
+      twiml.redirect(
+        {
+          method: "POST",
+        },
+        `${BASE_URL}/calls/gather-speech`
+      );
+    }
+
+    //
+    else {
       teamMember = teamMember.toJSON();
 
       await Call.update(
@@ -337,6 +337,8 @@ async function handleSpeechInput(request) {
         }
       );
 
+      twiml.play(textToSpeechFileURL);
+
       twiml
         .dial({
           callerId: businessPhoneNumber,
@@ -348,7 +350,12 @@ async function handleSpeechInput(request) {
           teamMember.phone
         );
     }
-  } else {
+  }
+
+  //
+  else {
+    twiml.play(textToSpeechFileURL);
+
     twiml.redirect(
       {
         method: "POST",

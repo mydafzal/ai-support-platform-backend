@@ -114,7 +114,7 @@ router.post("/disconnect", async (req, res) => {
     handleCallDisconnect(req);
   }
 
-  res.status(200).send();
+  res.status(204).send();
 });
 
 router.post("/redirected-call-disconnect", async (req, res) => {
