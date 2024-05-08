@@ -1,11 +1,5 @@
 const router = require("express").Router();
-const {
-  User,
-  Invitation,
-  Business,
-  Assistant,
-  ChatUserAssignment,
-} = require("../../models");
+const { User, Invitation, Business } = require("../../models");
 
 const bcrypt = require("bcrypt");
 const saltRounds = 10;
@@ -19,11 +13,27 @@ const {
   generateJWT,
 } = require("../utils/helpers");
 const { createVerification } = require("../controllers/call.controller");
+
 const {
-  ACCEPTING_CHATS,
-  NOT_ACCEPTING_CHATS,
-  OFFLINE,
+  STORAGE_BASE_PATH,
+  PROFILE_IMAGES_BASE_URL,
 } = require("../utils/constants");
+
+const path = require("path");
+
+const { v4: uuidv4 } = require("uuid");
+
+const multer = require("multer");
+
+const storage = multer.diskStorage({
+  destination: path.join(STORAGE_BASE_PATH, `profile-images`),
+  filename: (req, file, cb) => {
+    const uniqueFilename = uuidv4() + "-" + file.originalname;
+    cb(null, uniqueFilename);
+  },
+});
+
+const upload = multer({ storage });
 
 const userValidationSchema = z.object({
   email: z.string().email(),
@@ -33,8 +43,8 @@ const userValidationSchema = z.object({
 
 const updateUserValidationSchema = z.object({
   name: z.string().optional(),
+  email: z.string().email().optional(),
   phone: z.string().optional(),
-  status: z.enum([ACCEPTING_CHATS, NOT_ACCEPTING_CHATS, OFFLINE]),
 });
 
 const unviewedChatsValidationSchema = z.object({
@@ -165,7 +175,7 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-router.put("/:id", async (req, res) => {
+router.patch("/:id", upload.single("file"), async (req, res) => {
   const userId = req.params.id;
 
   try {
@@ -180,16 +190,6 @@ router.put("/:id", async (req, res) => {
     }
 
     let user = await User.findByPk(userId, {
-      include: {
-        model: Business,
-        as: "business",
-        include: [
-          {
-            model: Assistant,
-            as: "assistant",
-          },
-        ],
-      },
       attributes: {
         exclude: ["emailVerificationToken", "resetPasswordToken"],
       },
@@ -201,43 +201,69 @@ router.put("/:id", async (req, res) => {
         .json({ success: false, message: "Invalid user id." });
     }
 
-    if (req.body.phone) {
-      user.phone = req.body.phone;
+    const { name, email, phone } = req.body;
+
+    if (phone) {
+      user.phone = phone;
+      user.phoneVerified = false;
     }
-    if (req.body.name) {
-      user.name = req.body.name;
+
+    if (name) {
+      user.name = name;
+    }
+
+    if (req.file) {
+      const profileImageUrl = `${PROFILE_IMAGES_BASE_URL}/${req.file.filename}`;
+      user.profileImageUrl = profileImageUrl;
+    }
+
+    if (phone?.length > 0) {
+      await createVerification(phone, process.env.TWIML_VERIFY_SERVICE_ID);
+    }
+
+    if (email?.length > 0) {
+      const emailVerificationToken = generateEmailVerificationToken(user.id);
+
+      user.emailVerificationToken = emailVerificationToken;
+      user.emailVerified = false;
+      user.email = email;
+
+      await Invitation.update(
+        {
+          email,
+        },
+        {
+          where: {
+            email,
+          },
+        }
+      );
+
+      const emailLink = generateEmailLink(
+        req,
+        "email-verification",
+        `token=${emailVerificationToken}`
+      );
+      const emailTemplate = `Please verify your email by clicking <a href="${emailLink}">here</a>`;
+      await sendEmail(email, emailTemplate);
     }
 
     await user.save();
-
     user = user.toJSON();
 
-    if (req.body.phone?.length > 0) {
-      await createVerification(
-        req.body.phone,
-        process.env.TWIML_VERIFY_SERVICE_ID
-      );
-    }
-
     delete user.password;
-
-    let invitation = await Invitation.findOne({
-      where: {
-        email: user.email,
-      },
-    });
-    invitation = invitation?.toJSON();
-
-    const payload = {
-      ...user,
-      invitation,
-    };
-
-    const token = generateJWT(payload);
+    delete user.emailVerificationToken;
 
     res.status(200).json({
       success: true,
-      data: token,
+      data: {
+        name: user.name,
+        email: user.email,
+        emailVerified: user.emailVerified,
+        phone: user.phone,
+        phoneVerified: user.phoneVerified,
+        profileImageUrl: user.profileImageUrl,
+      },
     });
   } catch (error) {
     console.error("Error updating user: ", error);

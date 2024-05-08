@@ -14,6 +14,7 @@ const AUDIO_FILES_EXTENSION = "mp3";
 const AUDIO_FILES_BASE_URL = `${process.env.BASE_URL}/data/ai-generated-speeches`;
 const CHAT_WIDGET_LOGOS_BASE_URL = `${process.env.BASE_URL}/data/chat-widget-logos`;
 const CHAT_UPLOADS_BASE_URL = `${process.env.BASE_URL}/data/chat-uploads`;
+const PROFILE_IMAGES_BASE_URL = `${process.env.BASE_URL}/data/profile-images`;
 
 const HUBPOST_INTEGRATION_ID = 1;
 const GOOGLE_CALENDAR_INTEGRATION_ID = 2;
@@ -39,4 +40,5 @@ module.exports = {
   ACCEPTING_CHATS,
   NOT_ACCEPTING_CHATS,
   OFFLINE,
+  PROFILE_IMAGES_BASE_URL,
 };
