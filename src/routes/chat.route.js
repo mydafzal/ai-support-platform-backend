@@ -275,10 +275,10 @@ router.post("/:id/messages", async (req, res) => {
     if (customerDetails) {
       customerDetails = JSON.parse(customerDetails);
 
-      if (customerDetails?.type === "pre-chat-form") {
-        customerDetails = formatObjectToString(customerDetails?.data?.content);
-      } else {
+      if (customerDetails?.type !== "pre-chat-form") {
         customerDetails = "";
+      } else {
+        customerDetails = customerDetails.content;
       }
     }
 
