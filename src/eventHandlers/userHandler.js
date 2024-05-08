@@ -1,5 +1,5 @@
 const { User } = require("../../models");
-const { ACCEPTING_CHATS } = require("../utils/constants");
+const { OFFLINE } = require("../utils/constants");
 const { isValidInteger } = require("../utils/helpers");
 
 module.exports = (io, socket) => {
@@ -39,26 +39,39 @@ module.exports = (io, socket) => {
     socket.to(roomName).emit("user:update-availability", { userId, status });
   };
 
-  User.findOne({
-    where: {
-      id: isValidInteger(userId) ? userId : 0,
-    },
-  }).then((user) => {
-    // Each user joins their private room.
-    socket.join(userId);
+  const handleUserDisconnect = async () => {
+    if (!isValidInteger(userId)) return;
 
-    if (!user) return;
+    await User.update(
+      {
+        status: OFFLINE,
+      },
+      {
+        where: {
+          id: userId,
+        },
+      }
+    );
+
+    let user = await User.findOne({
+      where: {
+        id: userId,
+      },
+    });
+
+    if (!user) {
+      console.log("Invalid user id.");
+      return;
+    }
 
     user = user.toJSON();
 
-    // Each user join a team room so that events can be broadcast to all team members.
     const roomName = `team-${user.businessId}`;
-    socket.join(roomName);
-
     socket
       .to(roomName)
-      .emit("user:update-availability", { userId, status: ACCEPTING_CHATS });
-  });
+      .emit("user:update-availability", { userId, status: OFFLINE });
+  };
 
   socket.on("user:update-availability", updateAvailabilityStatus);
+  socket.on("disconnect", handleUserDisconnect);
 };

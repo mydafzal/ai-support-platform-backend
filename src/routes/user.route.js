@@ -47,6 +47,10 @@ const updateUserValidationSchema = z.object({
   phone: z.string().optional(),
 });
 
+const unviewedChatsValidationSchema = z.object({
+  viewed: z.coerce.boolean().optional(),
+});
+
 router.post("/", async (req, res) => {
   const { name, email, password } = req.body;
 
@@ -263,6 +267,37 @@ router.patch("/:id", upload.single("file"), async (req, res) => {
     });
   } catch (error) {
     console.error("Error updating user: ", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/chat-assignments", async (req, res) => {
+  try {
+    const { success } = await unviewedChatsValidationSchema.safeParseAsync(
+      req.query
+    );
+
+    if (!success) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid query parameters." });
+    }
+
+    const { viewed } = req.query;
+
+    let chatAssignmentsCount = await ChatUserAssignment.count({
+      where: {
+        userId: req.params.id,
+        viewed,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      data: chatAssignmentsCount,
+    });
+  } catch (error) {
+    console.error("Error adding user: ", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });

@@ -25,7 +25,6 @@ const { v4: uuidv4 } = require("uuid");
 const multer = require("multer");
 
 const path = require("path");
-const fs = require("fs/promises");
 
 const { getSocketIOInstance } = require("../loaders/socket-io");
 const {
@@ -251,15 +250,21 @@ router.post("/:id/messages", async (req, res) => {
         .json({ success: false, message: "Invalid chat id." });
     }
 
-    chat = chat.toJSON();
-
-    if (chat.connectedUserId) {
+    if (chat.toJSON().connectedUserId) {
       return res.status(400).json({
         success: false,
         message:
-          "A human agent has been connected, can't continue chat with the ai agent.",
+          "A human agent has already been connected, can't continue chat with the ai agent.",
       });
     }
+
+    // Re-open the chat.
+    if (chat.toJSON().status !== "open") {
+      chat.status = "open";
+      await chat.save();
+    }
+
+    chat = chat.toJSON();
 
     let canScheduleMeeting = await hasConnectedRequiredIntegrations(
       chat.businessId
@@ -278,7 +283,7 @@ router.post("/:id/messages", async (req, res) => {
     }
 
     const humanMessage = {
-      messageId: uuidv4(),
+      id: uuidv4(),
       type: "human",
       senderId: null,
       content: message,
@@ -299,7 +304,7 @@ router.post("/:id/messages", async (req, res) => {
     );
 
     const aiMessage = {
-      messageId: uuidv4(),
+      id: uuidv4(),
       type: "ai",
       content: response.content,
       timestamp: new Date().getTime(),
@@ -338,14 +343,20 @@ router.post("/:id/messages", async (req, res) => {
 
     chat = chat.toJSON();
 
-    let statusUpdate;
+    res.status(200).json({
+      success: true,
+      data: {
+        humanMessage,
+        aiMessage,
+      },
+    });
 
     if (response?.name === "HumanConnector" && chat.connectedUser) {
       // Trigger chat transfer notification to the human agent.
 
-      statusUpdate = {
-        messageId: uuidv4(),
-        type: "status-update",
+      const statusUpdateMessage = {
+        id: uuidv4(),
+        type: "chat-transferred",
         content: {
           connectedUserId: chat.connectedUser.id,
           connectedUserName: chat.connectedUser.name,
@@ -353,37 +364,21 @@ router.post("/:id/messages", async (req, res) => {
         timestamp: new Date().getTime(),
       };
 
-      await redisClient.rPush(`chat-${chatId}`, JSON.stringify(statusUpdate));
+      await redisClient.rPush(
+        `chat-${chatId}`,
+        JSON.stringify(statusUpdateMessage)
+      );
 
       const io = getSocketIOInstance();
       io.to(`${chat.connectedUser.id}`).emit("chat:incoming-chat", { chat });
-    }
 
-    // Finally, re-open the chat.
-    if (chat.status !== "open") {
-      await Chat.update(
-        {
-          status: "open",
-        },
-        {
-          where: {
-            id: chatId,
-          },
-        }
-      );
-    }
-
-    delete chat.users;
-    delete chat.teamGroups;
-
-    res.status(200).json({
-      success: true,
-      data: {
-        aiMessage,
-        statusUpdate,
+      // Notify the customer that a human agent has joined the chat.
+      io.to(`chat-${chat.id}`).emit("chat:update-status", {
+        chatId: chat.id,
+        statusUpdateMessage,
         connectedUser: chat.connectedUser,
-      },
-    });
+      });
+    }
   } catch (error) {
     console.error("Error getting chatbot agent's response: ", error);
     res.status(500).json({ success: false, error: "Internal Server Error" });
@@ -461,9 +456,60 @@ router.patch("/:id", async (req, res) => {
 
     let { status, teamGroupIds } = req.body;
 
+    let chat = await Chat.findOne({
+      where: {
+        id: chatId,
+      },
+      include: [
+        {
+          model: User,
+          as: "connectedUser",
+        },
+      ],
+    });
+
+    if (!chat) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid chat id." });
+    }
+
+    chat = chat.toJSON();
+
+    let statusUpdateMessage;
+    if (chat.status === "open" && status === "closed") {
+      statusUpdateMessage = {
+        id: uuidv4(),
+        type: "chat-closed",
+        content: {
+          connectedUserId: chat.connectedUser.id,
+          connectedUserName: chat.connectedUser.name,
+        },
+        timestamp: new Date().getTime(),
+      };
+
+      await redisClient.rPush(
+        `chat-${chatId}`,
+        JSON.stringify(statusUpdateMessage)
+      );
+
+      // Notify the customer that human agent has closed the chat..
+      const io = getSocketIOInstance();
+
+      io.to(`chat-${chat.id}`).emit("chat:update-status", {
+        chatId: chat.id,
+        statusUpdateMessage,
+        connectedUser: null,
+      });
+    }
+
     await Chat.update(
       {
         status,
+        connectedUserId:
+          status === "closed" || status === "archived"
+            ? null
+            : chat.connectedUserId,
       },
       {
         where: {
@@ -504,7 +550,7 @@ router.patch("/:id", async (req, res) => {
       );
     }
 
-    let chat = await Chat.findOne({
+    chat = await Chat.findOne({
       where: {
         id: chatId,
       },
@@ -530,7 +576,9 @@ router.patch("/:id", async (req, res) => {
 
     chat = chat?.toJSON();
 
-    res.status(200).json({ success: true, data: chat });
+    res
+      .status(200)
+      .json({ success: true, data: { chat, statusUpdateMessage } });
   } catch (error) {
     console.error("Error getting chatbot agent's response: ", error);
     res.status(500).json({ success: false, error: "Internal Server Error" });
@@ -576,6 +624,8 @@ router.post("/:id/upload", upload.array("files"), async (req, res) => {
         const message = {
           type: resourceType,
           senderId: userId || null,
+          recevierId: chat.connectedUserId,
+          status: "Delivered",
           content: {
             url: resourceUrl,
             name: file.originalname,
@@ -585,7 +635,6 @@ router.post("/:id/upload", upload.array("files"), async (req, res) => {
         };
 
         await redisClient.rPush(`chat-${chatId}`, JSON.stringify(message));
-
         return message;
       })
     );

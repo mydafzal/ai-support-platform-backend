@@ -354,10 +354,19 @@ function createAgentAvailabilityCheckerTool() {
           }
         );
 
-        await ChatUserAssignment.create({
-          chatId,
-          userId: user.id,
+        const count = await ChatUserAssignment.count({
+          where: {
+            chatId,
+            userId: user.id,
+          },
         });
+
+        if (count <= 0) {
+          await ChatUserAssignment.create({
+            chatId,
+            userId: user.id,
+          });
+        }
 
         return "An agent is available to take over the chat.";
       }
