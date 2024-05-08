@@ -17,6 +17,7 @@ const {
 } = require("./multiAgentWorkflow/supervisorAgent");
 
 const { redisClient } = require("../integrations/redis");
+const { formatObjectToString } = require("../utils/formatters");
 
 async function initializeMultiAgentWorkflow(
   systemPrompts,
@@ -193,7 +194,7 @@ async function generateChatbotAgentResponse(
   const answeringAgentPrompt = createAgentPrompt(
     businessName,
     assistantName,
-    customerDetails
+    formatObjectToString(customerDetails)
   );
 
   const schedulerAgentPrompt = createSchedulerAgentPrompt(
@@ -236,8 +237,6 @@ async function generateChatbotAgentResponse(
 
   let aiMessage = response.messages[response.messages.length - 1];
 
-  console.log("aiMessage - ", aiMessage);
-
   return aiMessage;
 }
 
@@ -268,6 +267,8 @@ function createSchedulerAgentPrompt(
   customerDetails,
   canScheduleMeeting
 ) {
+  const formattedCustomerDetails = formatObjectToString(customerDetails);
+
   if (!canScheduleMeeting) {
     return `Your role as the Meeting Scheduler is crucial in facilitating the scheduling of meetings between users and the support staff of ${businessName}. But right now you can't schedule the customer's meeting due to some unknown reasons. You must inform the customer that meeting can't be scheduled at this time and simply terminate the process.`;
   } else {
@@ -312,14 +313,16 @@ function createSchedulerAgentPrompt(
          - If customer doesn't accept any of the communicated slots, jump to step 4 of the process.
           
       6. Confirmation:
-        - Once the customer confirms a suitable time slot, ask the customer to provide some information about their specific problem or their purpose for scheduling this meeting. Remember, you MUST ask the customer to provide this information.
-        - Finally, call 'schedule-meeting' with the correct details to schedule the meeting.
-        - Inform the customer about the status of the scheduled meeting.
+        - Once the customer confirms a suitable time slot then perform the following steps, one at a time. All steps are mandatory.
+            1. Ask the customer to either confirm their current email, ${customerDetails?.email}, or provide a different email address.
+            2. After the customer has confirmed their email, ask the customer to provide some information about their specific problem or their purpose for scheduling this meeting. Remember
+            3. Finally, call 'schedule-meeting' with the correct details to schedule the meeting.
+            4. Inform the customer about the status of the scheduled meeting.
 
       Your objective is to facilitate seamless communication and coordination between customers and support staff, ensuring efficient scheduling of meetings while prioritizing customer convenience and satisfaction.
       
       Here are the customer's details that you might need during the above mentioned meeting schedule process:
-      ${customerDetails}
+      ${formattedCustomerDetails}
       `;
   }
 
