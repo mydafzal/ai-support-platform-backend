@@ -30,8 +30,6 @@ async function authorize(businessId) {
     businessIntegration = businessIntegration.toJSON();
     let { accessToken, refreshToken, expirationTime } = businessIntegration;
 
-    console.log("businessIntegration - ", businessIntegration);
-
     const differenceInMilliseconds =
       new Date(expirationTime).getTime() - new Date().getTime();
 
@@ -97,7 +95,7 @@ async function addEventToGoogleCalendar(
       {
         model: User,
         as: "adminUser",
-        include: ["email"],
+        attributes: ["email"],
       },
     ],
   });
