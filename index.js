@@ -3,7 +3,21 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const bodyParser = require("body-parser");
 const path = require("path");
-require("dotenv").config();
+const fs = require("fs");
+
+// Load environment variables that are common across all environments
+const dotenv = require("dotenv");
+dotenv.config();
+
+// Load environment-specific variables
+const environmentOverridePath = path.resolve(
+  __dirname,
+  `.env.${process.env.NODE_ENV}`
+);
+
+if (fs.existsSync(environmentOverridePath)) {
+  dotenv.config({ path: environmentOverridePath });
+}
 
 const { connectRedis } = require("./src/integrations/redis");
 connectRedis();
