@@ -373,11 +373,14 @@ router.post("/:id/messages", async (req, res) => {
       io.to(`${chat.connectedUser.id}`).emit("chat:incoming-chat", { chat });
 
       // Notify the customer that a human agent has joined the chat.
-      io.to(`chat-${chat.id}`).emit("chat:update-status", {
-        chatId: chat.id,
-        statusUpdateMessage,
-        connectedUser: chat.connectedUser,
-      });
+
+      setTimeout(() => {
+        io.to(`chat-${chat.id}`).emit("chat:update-status", {
+          chatId: chat.id,
+          statusUpdateMessage,
+          connectedUser: chat.connectedUser,
+        });
+      }, 1000);
     }
   } catch (error) {
     console.error("Error getting chatbot agent's response: ", error);
@@ -588,6 +591,8 @@ router.patch("/:id", async (req, res) => {
 router.post("/:id/upload", upload.array("files"), async (req, res) => {
   const { userId } = req.body;
 
+  console.log("req.files - ", req.files);
+
   if (!req.files || req.files.length < 1) {
     return res.status(400).json({
       success: false,
@@ -613,6 +618,19 @@ router.post("/:id/upload", upload.array("files"), async (req, res) => {
 
     chat = chat.toJSON();
 
+    let user;
+
+    if (userId) {
+      user = await User.findOne({
+        where: {
+          id: userId,
+        },
+        attributes: ["profileImageUrl"],
+      });
+
+      user = user?.toJSON();
+    }
+
     const messages = await Promise.all(
       req.files.map(async (file) => {
         const resourceUrl = `${CHAT_UPLOADS_BASE_URL}/${file.filename}`;
@@ -622,9 +640,11 @@ router.post("/:id/upload", upload.array("files"), async (req, res) => {
           : "document";
 
         const message = {
+          id: uuidv4(),
           type: resourceType,
           senderId: userId || null,
-          recevierId: chat.connectedUserId,
+          senderProfileImageUrl: user ? user.profileImageUrl : null,
+          receiverId: userId ? null : chat.connectedUserId,
           status: "Delivered",
           content: {
             url: resourceUrl,
