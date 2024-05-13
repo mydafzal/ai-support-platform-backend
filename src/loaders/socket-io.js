@@ -12,7 +12,11 @@ let io = null;
 
 module.exports = {
   initializeSocketIO: function (httpServer) {
-    io = new Server(httpServer);
+    io = new Server(httpServer, {
+      cors: {
+        origin: "*",
+      },
+    });
 
     io.on("connection", (socket) => {
       const userId = socket.request._query.userId;
