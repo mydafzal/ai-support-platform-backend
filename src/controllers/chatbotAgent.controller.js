@@ -37,9 +37,8 @@ async function initializeMultiAgentWorkflow(
   const slotAvailaibilityCheckerTool =
     createSlotAvailaibilityCheckerTool(businessId);
 
-  const informationRetrieverTool = await createInformationRetrieverTool(
-    collectionName
-  );
+  const informationRetrieverTool =
+    createInformationRetrieverTool(collectionName);
 
   const agentAvailabilityCheckerTool = createAgentAvailabilityCheckerTool();
 
@@ -79,7 +78,10 @@ async function initializeMultiAgentWorkflow(
     const result = await anweringAgent.invoke(state, config);
     return {
       messages: [
-        new HumanMessage({ content: result.output, name: "Answerer" }),
+        new HumanMessage({
+          content: result.output || result,
+          name: "Answerer",
+        }),
       ],
     };
   }
@@ -114,7 +116,6 @@ async function initializeMultiAgentWorkflow(
 
   messages = messages.filter((item) => {
     item = JSON.parse(item);
-
     return (item?.type === "ai" || item?.type === "human") && !item?.senderId;
   });
 
@@ -236,7 +237,6 @@ async function generateChatbotAgentResponse(
   });
 
   let aiMessage = response.messages[response.messages.length - 1];
-
   return aiMessage;
 }
 
@@ -254,12 +254,11 @@ function createAgentPrompt(businessName, assistantName, customerDetails) {
   2. Information Provision: Offer a comprehensive overview of ${businessName}, highlighting its key services, values, and unique selling points.
   3. Problem Resolution: Address customer queries promptly and effectively, providing relevant information and solutions to their concerns.
   4. Engagement: Maintain a friendly and professional tone throughout the interaction, actively engaging with the customer to keep them interested and satisfied.
-  5. Tool Utilization: Utilize the 'search-business-information' tool to retrieve relevant data for answering inquiries about the business. Ensure that all responses are focused and pertinent to the business and its activities. 
+  5. Tool Utilization: Utilize the 'search-business-information' tool to retrieve relevant data for answering inquiries about the business. Ensure that all responses are focused and pertinent to the business and its activities.
   6. Contextual Querying: When utilizing the 'search-business-information' tool, pass contextual queries based on ${businessName}'s information and the ongoing conversation with the customer to retrieve relevant data.
-  7. Conciseness: Provide EXTREMELY concise responses as if you are on a phone call, ensuring that information is conveyed efficiently.
+  7. Conciseness: Provide EXTREMELY concise responses, ensuring that information is conveyed efficiently.
 
-  REMEMBER: You answers should be no more than 60 words. You must take this word limit into consideration when providing responses.
-
+  REMEMBER: You answers should be no more than 100 words. You must take this word limit into consideration when providing responses.
   `;
 
   return prompt;
@@ -333,24 +332,20 @@ function createSchedulerAgentPrompt(
 }
 
 function createSupervisorAgentPrompt(businessName) {
-  return `As the Supervisor overseeing the interaction, your role is crucial in directing customer queries to the appropriate team member or signaling the end of the interaction. Your responses should be limited to either providing the name of the next agent to handle the query or signaling the completion of the interaction with FINISH. Here's a concise breakdown of each team member's responsibilities:
+  return `You are the Supervisor managing customer interactions. Direct queries to the appropriate team member or signal the end of the interaction. Your responses should only be the agent's name or "FINISH." Here's a summary of team responsibilities:
 
-  1. Answerer: Responsible for addressing general queries about ${businessName}, providing information about the business, and guiding customers with initial inquiries.
-  2. MeetingScheduler: Assists customers in scheduling meetings with the support staff of ${businessName}.
-  3. HumanConnector: Transfers on-going chat conversations to a member of the support staff of ${businessName}. 
-
-  NOTE: Meeting Scheduling and connecting human agent (means tranferring chats to human agents) are two separate things. We must seek clarficiation from the customer whether they want to schedule a meeting or get their call redirected to a human agent.
-
-  A KEY NOTE: Customers must not aware of these different assisants such as MeetingScheduler, HumanConnector or Answerer.
+  Answerer: Handles general queries about ${businessName} and guides customers with initial inquiries.
+  MeetingScheduler: Assists customers in scheduling meetings with the support staff.
+  HumanConnector: Transfers ongoing chats to a support staff member.
   
-  Your instructions are straightforward:
+  Important: Meeting scheduling and connecting to a human agent are distinct tasks. Confirm with the customer if they want to schedule a meeting or be connected to a human agent. Customers should not be aware of the different assistants.
   
-  1. If the customer explicitly asks or clearly indicates to schedule a meeting or appointment, output "MeetingScheduler" because "MeetingScheduler" is responsible for handling this process.
-  2. If the customer explicitly asks or clearly indicates to connect to a human, output "HumanConnector" because "HumanConnector" is responsible for handling this process.
-  3. Direct every other query to the Answerer. Simply output Answerer.
-  4. Upon receiving answer from any of the {members}, respond with FINISH to indicate the end of the interaction.
-  
-  Your objective is to ensure seamless communication flow and efficient problem resolution within the team. Provide clear and concise instructions to agents while remaining responsive to customer needs`;
+  Instructions:
+  - If the customer asks to schedule a meeting, respond with "MeetingScheduler."
+  - If the customer asks to connect to a human, respond with "HumanConnector."
+  - Direct all other queries to "Answerer."
+  - After an agent responds, reply with "FINISH" to end the interaction.
+  `;
 }
 
 function createHumanConnectorAgentPrompt(businessName, chatId) {
