@@ -1,4 +1,3 @@
-const { createRetrieverTool } = require("langchain/tools/retriever");
 const { getVectoreStore } = require("../../integrations/chromaDB");
 const { DynamicStructuredTool } = require("@langchain/core/tools");
 const { z } = require("zod");
@@ -22,9 +21,14 @@ const {
   redisClient,
 } = require("../../integrations/redis");
 const { ACCEPTING_CHATS } = require("../../utils/constants");
-const { Op, Sequelize } = require("sequelize");
+const { Op } = require("sequelize");
+const { StringOutputParser } = require("@langchain/core/output_parsers");
+const { ChatOpenAI } = require("@langchain/openai");
+const { PromptTemplate } = require("@langchain/core/prompts");
 const client = twilio(ACCOUNT_SID, AUTH_TOKEN);
 const MESSAGING_SERVICE_SID = process.env.TWILIO_MESSAGING_SERVICE_SID;
+
+const { v4: uuidv4 } = require("uuid");
 
 const monthsEnum = [
   "January",
@@ -43,14 +47,59 @@ const monthsEnum = [
 const datesEnum = Array.from({ length: 31 }, (_, index) => `${index + 1}`);
 const hoursEnum = Array.from({ length: 23 }, (_, index) => `${index}`);
 
-async function createInformationRetrieverTool(collectionName) {
-  const vectorStore = await getVectoreStore(collectionName);
-  const retriever = vectorStore.asRetriever();
-
-  return createRetrieverTool(retriever, {
+function createInformationRetrieverTool(collectionName) {
+  return new DynamicStructuredTool({
     name: "search-business-information",
     description:
       "Search for any information about the business. For any questions about the business, you must use this tool!",
+    schema: z.object({
+      userQuery: z
+        .string()
+        .describe(
+          "User's original query based on the context of the overall conversation."
+        ),
+    }),
+    func: async ({ userQuery }) => {
+      let finalDocs = [];
+      const store = await getVectoreStore(collectionName);
+      const generatedQueries = await generateQueries(userQuery);
+      const altQueryDocs = {};
+
+      await Promise.all(
+        generatedQueries.map(async (generatedQuery) => {
+          const docsFromAltQuery = await store.similaritySearch(
+            generatedQuery,
+            4
+          );
+
+          docsFromAltQuery.forEach((doc) => {
+            doc.id = uuidv4();
+          });
+
+          finalDocs = finalDocs.concat(docsFromAltQuery);
+          altQueryDocs[generatedQuery] = docsFromAltQuery;
+        })
+      );
+
+      const rankedResults = reciprocalRankFusion(altQueryDocs);
+
+      const finalDocArray = [];
+
+      for (const key in rankedResults) {
+        const matchingDoc = finalDocs.find((doc) => doc.id === key);
+
+        if (matchingDoc) {
+          finalDocArray.push(matchingDoc);
+        }
+      }
+
+      let outputContext = "";
+      for (const doc of finalDocArray) {
+        outputContext += doc.pageContent;
+      }
+
+      return outputContext;
+    },
   });
 }
 
@@ -374,6 +423,53 @@ function createAgentAvailabilityCheckerTool() {
       return "No agent is currently available.";
     },
   });
+}
+
+async function generateQueries(originalQuery) {
+  const model = new ChatOpenAI({ modelName: "gpt-3.5-turbo-1106" });
+  const outputParser = new StringOutputParser();
+
+  const prompt = PromptTemplate.fromTemplate(
+    `You are a helpful assistant that generates alternative queries that could be asked to a large language model related to the users original query: {originalQuery}. OUTPUT A COMMA SEPARATED LIST (CSV) of 4 alternative queries. Don't prefix the queries with numbering. We want queries without any numbering or ordering. Make sure each query starts on a new line. Do not include the original query in the array`
+  );
+
+  const chain = prompt.pipe(model).pipe(outputParser);
+
+  const response = await chain.invoke({
+    originalQuery,
+  });
+
+  const generatedQueries = response.trim().split("\n");
+  return generatedQueries;
+}
+
+function reciprocalRankFusion(altQueryDocs, k = 60) {
+  const fusedScores = {};
+
+  for (const query in altQueryDocs) {
+    if (altQueryDocs.hasOwnProperty(query)) {
+      const docObj = altQueryDocs[query];
+
+      for (let rank = 0; rank < Object.keys(docObj).length; rank++) {
+        const sortedDocs = Object.entries(docObj).sort((a, b) => b[1] - a[1]);
+
+        const [score, doc] = sortedDocs[rank];
+
+        const docID = doc.id;
+
+        const fusedDoc = fusedScores[docID];
+        if (!fusedDoc) {
+          fusedScores[docID] = 0;
+        }
+
+        const previousScore = fusedScores[docID];
+
+        fusedScores[docID] += 1 / (rank + k);
+      }
+    }
+  }
+
+  return fusedScores;
 }
 
 module.exports = {
