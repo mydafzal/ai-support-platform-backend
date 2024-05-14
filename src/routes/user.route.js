@@ -20,6 +20,7 @@ const {
 } = require("../utils/constants");
 
 const path = require("path");
+const fs = require("fs");
 
 const { v4: uuidv4 } = require("uuid");
 
@@ -214,6 +215,22 @@ router.patch("/:id", upload.single("file"), async (req, res) => {
 
     if (req.file) {
       const profileImageUrl = `${PROFILE_IMAGES_BASE_URL}/${req.file.filename}`;
+
+      if (user.profileImageUrl) {
+        const urlChunks = user.profileImageUrl.split("/");
+        const filename = urlChunks[urlChunks.length - 1];
+
+        const filePath = path.join(
+          STORAGE_BASE_PATH,
+          `profile-images`,
+          filename
+        );
+
+        if (fs.existsSync(filePath)) {
+          await fs.promises.rm(filePath);
+        }
+      }
+
       user.profileImageUrl = profileImageUrl;
     }
 

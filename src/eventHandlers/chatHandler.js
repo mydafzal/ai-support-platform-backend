@@ -1,4 +1,4 @@
-const { Chat } = require("../../models");
+const { Chat, User } = require("../../models");
 const { redisClient } = require("../integrations/redis");
 const { isValidInteger } = require("../utils/helpers");
 const { v4: uuidv4 } = require("uuid");
@@ -24,11 +24,25 @@ module.exports = (io, socket) => {
 
     chat = chat.toJSON();
 
+    let user;
+
+    if (senderId) {
+      user = await User.findOne({
+        where: {
+          id: senderId,
+        },
+        attributes: ["profileImageUrl"],
+      });
+
+      user = user?.toJSON();
+    }
+
     const humanMessage = {
       id: uuidv4(),
       type: "human",
       senderId,
-      recevierId: chat.connectedUserId,
+      senderProfileImageUrl: user ? user.profileImageUrl : null,
+      receiverId: senderId ? null : chat.connectedUserId,
       content: message,
       status: "Delivered",
       timestamp: new Date().getTime(),
@@ -36,15 +50,15 @@ module.exports = (io, socket) => {
 
     await redisClient.rPush(`chat-${chatId}`, JSON.stringify(humanMessage));
 
-    let recevierId;
+    let receiverId;
 
     if (senderId) {
-      recevierId = `chat-${chatId}`;
+      receiverId = `chat-${chatId}`;
     } else {
-      recevierId = `${userId}`;
+      receiverId = `${userId}`;
     }
 
-    socket.to(recevierId).emit("chat:new-message", { message: humanMessage });
+    socket.to(receiverId).emit("chat:new-message", { message: humanMessage });
 
     if (typeof callback === "function") {
       callback(humanMessage);
@@ -59,15 +73,15 @@ module.exports = (io, socket) => {
 
     const senderId = isValidInteger(userId) ? parseInt(userId) : null;
 
-    let recevierId;
+    let receiverId;
 
     if (senderId) {
-      recevierId = `chat-${chatId}`;
+      receiverId = `chat-${chatId}`;
     } else {
-      recevierId = `${userId}`;
+      receiverId = `${userId}`;
     }
 
-    socket.to(recevierId).emit("chat:typing", { chatId, isTyping });
+    socket.to(receiverId).emit("chat:typing", { chatId, isTyping });
 
     let chat = await Chat.findOne({
       where: {
@@ -87,32 +101,42 @@ module.exports = (io, socket) => {
   };
 
   const updateMessageStatus = async (payload) => {
-    const { chatId, messageIds, status } = payload;
+    const { chatId, messageId, status } = payload;
 
     let messages = await redisClient.lRange(`chat-${chatId}`, 0, -1);
 
-    for (let i = 0; i < messages.length; i++) {
-      const message = JSON.parse(messages[i]);
+    let message;
 
-      if (messageIds.includes(message.messageId)) {
+    for (let i = 0; i < messages.length; i++) {
+      message = JSON.parse(messages[i]);
+
+      if (messageId === message.id) {
         message.status = "Read";
         await redisClient.lSet(`chat-${chatId}`, i, JSON.stringify(message));
+
+        break;
+      } else {
+        message = null;
       }
     }
 
-    const senderId = isValidInteger(userId) ? parseInt(userId) : null;
+    if (!message) {
+      return;
+    }
 
-    let recevierId;
+    const senderId = message.senderId;
 
-    if (senderId) {
-      recevierId = `chat-${chatId}`;
+    let receiverId;
+
+    if (isValidInteger(userId)) {
+      receiverId = `chat-${chatId}`;
     } else {
-      recevierId = `${userId}`;
+      receiverId = `${senderId}`;
     }
 
     socket
-      .to(recevierId)
-      .emit("chat:update-message-status", { chatId, messageIds, status });
+      .to(receiverId)
+      .emit("chat:update-message-status", { chatId, messageId, status });
   };
 
   socket.on("chat:send-message", sendMessage);

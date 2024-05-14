@@ -28,6 +28,7 @@ module.exports = (sequelize, DataTypes) => {
       TeamGroup.belongsToMany(models.Chat, {
         through: models.ChatGroupAssignment,
         foreignKey: "teamGroupId",
+        as: "chats",
       });
     }
   }
