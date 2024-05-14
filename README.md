@@ -33,19 +33,32 @@ Follow these steps to set up and run the Customer Bot backend on your local mach
    chroma run
    ```
 
-4. **Start Redis::**
+4. **Start Redis:**
    <br />  Open a new terminal and run the following command:
    ```bash
    redis-stack-server
    ```
+4. **Initialize Database:**
+    <br /> First, go to config/config.json file and note the credentials under "development". Create a PostgreSQL database named "customer-bot". You can also create a PostgresSQL database with a different name but then you'll need to replace it under "development" in the config/config.json file.
+ 
+   <br /> After you have created your PostgreSQL database, run the following commands in the terminal within the project's root directory:
 
-5. **Run the Application:**
-    <br /> If you have nodemon installed, run the following command:
+   <br />  Run the following to generate database models in the database:
    ```bash
-   npx nodemon index.js
+   npx sequelize-cli db:migrate
+   ```
+   <br />  Run the following to execute the seeders:
+   ```bash
+   npx sequelize-cli db:seed:all
    ```
 
-   Otherwise, run the following command:
+6. **Run the Application:**
+    <br /> To start the server, run the following command:
    ```bash
-   node index.js
+   npm run start:dev
+   ```
+
+   <br /> If an occurs while running the command, it's probably due to the reason that you don't have nodemon installed on your machine. Run the following command to install nodemon globally:
+   ```bash
+   npm i -g nodemon
    ```
