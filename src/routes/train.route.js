@@ -350,6 +350,7 @@ router.post("/chat", async (req, res) => {
 
     const data = {
       type: "ai",
+      timestamp: new Date().getTime(),
       content: aiResponse,
     };
 
