@@ -39,17 +39,11 @@ router.delete("/:id", async (req, res) => {
   const callTagId = req.params.id;
 
   try {
-    const callsToDelete = await Call.findAll({
-      where: { callTagId },
-    });
-
     await CallTag.destroy({
       where: {
         id: callTagId,
       },
     });
-
-    await Promise.all(callsToDelete.map((call) => call.destroy()));
 
     res.status(204).json({ success: true });
   } catch (error) {
