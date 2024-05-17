@@ -579,7 +579,9 @@ router.get("/:id/calls", async (req, res) => {
       offset: parseInt(offset),
     });
 
-    const totalCount = calls?.length || 0;
+    const totalCount = await Call.Count({
+      where: whereCondition,
+    });
 
     calls = calls.map((item) => item.toJSON());
 
