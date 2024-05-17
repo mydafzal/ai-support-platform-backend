@@ -579,6 +579,8 @@ router.get("/:id/calls", async (req, res) => {
       offset: parseInt(offset),
     });
 
+    const totalCount = calls?.length || 0;
+
     calls = calls.map((item) => item.toJSON());
 
     calls = await Promise.all(
@@ -608,7 +610,11 @@ router.get("/:id/calls", async (req, res) => {
       })
     );
 
-    res.status(200).json({ success: true, data: calls });
+    res.status(200).json({
+      success: true,
+      data: calls,
+      pagination: { page, pageSize, totalCount },
+    });
   } catch (error) {
     console.error("Error getting calls:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
