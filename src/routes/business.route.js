@@ -490,6 +490,19 @@ router.get("/:id/chats", async (req, res) => {
       ],
     });
 
+    chats = await Promise.all(
+      chats.map(async (chat) => {
+        chat = chat.toJSON();
+        const lastMessage = await redisClient.lIndex(`chat-${chat.id}`, -1);
+
+        if (lastMessage) {
+          chat.lastMessage = JSON.parse(lastMessage);
+        }
+
+        return chat;
+      })
+    );
+
     res.status(200).json({ success: true, data: chats });
   } catch (error) {
     console.error("Error getting chats:", error);
