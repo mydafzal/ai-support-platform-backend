@@ -216,6 +216,17 @@ router.patch("/:id", upload.single("file"), async (req, res) => {
 
     if (teamGroupId || teamGroupId == "") {
       user.teamGroupId = teamGroupId === "" ? null : teamGroupId;
+
+      await Invitation.update(
+        {
+          teamGroupId: teamGroupId === "" ? null : teamGroupId,
+        },
+        {
+          where: {
+            email,
+          },
+        }
+      );
     }
 
     if (req.file) {
@@ -249,14 +260,6 @@ router.patch("/:id", upload.single("file"), async (req, res) => {
       user.emailVerificationToken = emailVerificationToken;
       user.emailVerified = false;
       user.email = email;
-
-      const updatedInvitation = {
-        email,
-      };
-
-      if (teamGroupId || teamGroupId == "") {
-        updatedInvitation.teamGroupId = teamGroupId === "" ? null : teamGroupId;
-      }
 
       await Invitation.update(
         {
