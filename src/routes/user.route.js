@@ -46,7 +46,7 @@ const updateUserValidationSchema = z.object({
   name: z.string().optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
-  teamGroupId: z.coerce.number().optional().or(z.null()),
+  teamGroupId: z.coerce.number().optional().or(z.coerce.string()),
 });
 
 const unviewedChatsValidationSchema = z.object({
@@ -203,7 +203,7 @@ router.patch("/:id", upload.single("file"), async (req, res) => {
         .json({ success: false, message: "Invalid user id." });
     }
 
-    const { name, email, phone } = req.body;
+    const { name, email, phone, teamGroupId } = req.body;
 
     if (phone) {
       user.phone = phone;
@@ -214,8 +214,8 @@ router.patch("/:id", upload.single("file"), async (req, res) => {
       user.name = name;
     }
 
-    if (teamGroupId || teamGroupId == null) {
-      user.teamGroupId = teamGroupId;
+    if (teamGroupId || teamGroupId == "") {
+      user.teamGroupId = teamGroupId === "" ? null : teamGroupId;
     }
 
     if (req.file) {
