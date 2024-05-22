@@ -250,6 +250,14 @@ router.patch("/:id", upload.single("file"), async (req, res) => {
       user.emailVerified = false;
       user.email = email;
 
+      const updatedInvitation = {
+        email,
+      };
+
+      if (teamGroupId || teamGroupId == "") {
+        updatedInvitation.teamGroupId = teamGroupId === "" ? null : teamGroupId;
+      }
+
       await Invitation.update(
         {
           email,
