@@ -223,7 +223,7 @@ router.patch("/:id", upload.single("file"), async (req, res) => {
         },
         {
           where: {
-            email,
+            email: user.toJSON().email,
           },
         }
       );
