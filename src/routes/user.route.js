@@ -46,7 +46,7 @@ const updateUserValidationSchema = z.object({
   name: z.string().optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
-  teamGroupId: z.coerce.number().optional(),
+  teamGroupId: z.coerce.number().optional().or(z.null()),
 });
 
 const unviewedChatsValidationSchema = z.object({
@@ -214,7 +214,7 @@ router.patch("/:id", upload.single("file"), async (req, res) => {
       user.name = name;
     }
 
-    if (teamGroupId) {
+    if (teamGroupId || teamGroupId == null) {
       user.teamGroupId = teamGroupId;
     }
 
