@@ -521,7 +521,13 @@ router.patch("/:id", async (req, res) => {
       }
     );
 
-    if (teamGroupIds?.length > 0) {
+    if (teamGroupIds?.length === 0) {
+      await ChatGroupAssignment.destroy({
+        where: {
+          chatId,
+        },
+      });
+    } else if (teamGroupIds?.length > 0) {
       await ChatGroupAssignment.destroy({
         where: {
           chatId,
