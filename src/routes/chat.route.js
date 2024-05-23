@@ -485,8 +485,8 @@ router.patch("/:id", async (req, res) => {
         id: uuidv4(),
         type: "chat-closed",
         content: {
-          connectedUserId: chat.connectedUser.id,
-          connectedUserName: chat.connectedUser.name,
+          connectedUserId: chat?.connectedUser?.id,
+          connectedUserName: chat?.connectedUser?.name,
         },
         timestamp: new Date().getTime(),
       };
