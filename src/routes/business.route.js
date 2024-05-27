@@ -19,6 +19,8 @@ const {
   BusinessIntegration,
   Chat,
   ChatWidget,
+  ChatGroupAssignment,
+  ChatUserAssignment,
 } = require("../../models");
 
 const { convertTextToSpeech } = require("../integrations/textToSpeech");
@@ -764,6 +766,35 @@ router.get("/:id/chat-widgets", async (req, res) => {
     }
 
     res.status(200).json({ success: true, data: chatWidget });
+  } catch (error) {
+    console.error("Error getting connected integrations:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/chats", async (req, res) => {
+  const businessId = req.params.id;
+
+  try {
+    let business = await Business.findOne({
+      where: {
+        id: businessId,
+      },
+    });
+
+    if (!business) {
+      return res
+        .status(400)
+        .json({ success: true, message: "Invalid business id." });
+    }
+
+    await Chat.destroy({
+      where: {
+        businessId,
+      },
+    });
+
+    res.status(204).send();
   } catch (error) {
     console.error("Error getting connected integrations:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
