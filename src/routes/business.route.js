@@ -501,11 +501,7 @@ router.get("/:id/chats", async (req, res) => {
           chat.lastMessage = JSON.parse(lastMessage);
         }
 
-        let messages = await redisClient.lRange(
-          `transcription-${callId}`,
-          0,
-          -1
-        );
+        let messages = await redisClient.lRange(`chat-${chat.id}`, 0, -1);
 
         const unreadMessages = messages.filter((message) => {
           message = JSON.parse(message);
