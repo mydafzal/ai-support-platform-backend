@@ -1,5 +1,10 @@
 const router = require("express").Router();
-const { User, Invitation, Business } = require("../../models");
+const {
+  User,
+  Invitation,
+  Business,
+  ChatUserAssignment,
+} = require("../../models");
 
 const bcrypt = require("bcrypt");
 const saltRounds = 10;
