@@ -772,7 +772,7 @@ router.get("/:id/chat-widgets", async (req, res) => {
   }
 });
 
-router.get("/:id/chats", async (req, res) => {
+router.delete("/:id/chats", async (req, res) => {
   const businessId = req.params.id;
 
   try {
