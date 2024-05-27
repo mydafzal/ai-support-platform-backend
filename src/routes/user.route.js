@@ -205,9 +205,9 @@ router.patch("/:id", upload.single("file"), async (req, res) => {
 
     const { name, email, phone, teamGroupId } = req.body;
 
-    if (phone) {
+    if (phone != undefined) {
       user.phone = phone;
-      user.phoneVerified = false;
+      user.phoneVerified = phone?.length > 0 ? false : true;
     }
 
     if (name) {
