@@ -255,16 +255,9 @@ router.patch("/:id", upload.single("file"), async (req, res) => {
       user.profileImageUrl = profileImageUrl;
     }
 
-    if (phone?.length > 0) {
-      await createVerification(phone, process.env.TWIML_VERIFY_SERVICE_ID);
-    }
-
     if (email?.length > 0) {
-      const emailVerificationToken = generateEmailVerificationToken(user.id);
-
-      user.emailVerificationToken = emailVerificationToken;
-      user.emailVerified = false;
       user.email = email;
+      user.emailVerified = false;
 
       await Invitation.update(
         {
@@ -276,14 +269,6 @@ router.patch("/:id", upload.single("file"), async (req, res) => {
           },
         }
       );
-
-      const emailLink = generateEmailLink(
-        req,
-        "email-verification",
-        `token=${emailVerificationToken}`
-      );
-      const emailTemplate = `Please verify your email by clicking <a href="${emailLink}">here</a>`;
-      await sendEmail(email, emailTemplate);
     }
 
     await user.save();
