@@ -38,6 +38,9 @@ app.use(
   express.static(path.join(__dirname, "data"), {
     maxAge: 0,
     etag: false,
+    setHeaders: (res) => {
+      res.setHeader("Cache-Control", "no-store");
+    },
   })
 );
 app.use(bodyParser.urlencoded({ extended: false }));
