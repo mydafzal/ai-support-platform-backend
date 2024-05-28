@@ -11,7 +11,7 @@ const {
   handleCompletedRecording,
 } = require("../controllers/call.controller");
 
-const { Business, User } = require("../../models");
+const { User } = require("../../models");
 
 const router = Router();
 
@@ -23,22 +23,57 @@ const verficationCheckValidationSchema = z.object({
   userId: z.number(),
 });
 
+const phoneVerficationValidationSchema = z.object({
+  phone: z.string(),
+});
+
 router.get("/access-token/:id?", (req, res) => {
   const result = getTwilioAccessToken(req.params.id);
   res.status(200).json(result);
 });
 
-router.post("/verification", async (req, res) => {
-  const { phoneNumber, customerId } = req.body;
+router.post("/phone-verification", async (req, res) => {
+  try {
+    const { success, error } =
+      await phoneVerficationValidationSchema.safeParseAsync(req.body);
 
-  let customer = await Business.findByPk(customerId);
-  customer = customer.toJSON();
+    if (!success) {
+      return res
+        .status(400)
+        .json({ success: false, message: error.errors[0].message });
+    }
 
-  const result = await createVerification(
-    phoneNumber,
-    customer.verifyServiceId
-  );
-  res.status(200).send(result);
+    const { phone } = req.body;
+
+    let user = await User.findOne({
+      where: {
+        phone,
+      },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "User with the given phone number does not exist.",
+      });
+    }
+
+    user = user.toJSON();
+
+    await createVerification(phone, process.env.TWIML_VERIFY_SERVICE_ID);
+
+    res.status(200).json({
+      success: true,
+      message: "SMS verification code sent.",
+    });
+  } catch (error) {
+    console.log("/phone-verification error - ", error);
+
+    res.status(500).json({
+      success: fakse,
+      message: "Internal Server Error",
+    });
+  }
 });
 
 router.post("/verification-check", async (req, res) => {
