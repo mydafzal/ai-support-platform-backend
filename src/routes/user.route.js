@@ -17,7 +17,6 @@ const {
   generateEmailLink,
   generateJWT,
 } = require("../utils/helpers");
-const { createVerification } = require("../controllers/call.controller");
 
 const {
   STORAGE_BASE_PATH,
@@ -35,6 +34,9 @@ const storage = multer.diskStorage({
   destination: path.join(STORAGE_BASE_PATH, `profile-images`),
   filename: (req, file, cb) => {
     const uniqueFilename = uuidv4() + "-" + file.originalname;
+
+    console.log("uniqueFilename - ", uniqueFilename);
+
     cb(null, uniqueFilename);
   },
 });
@@ -235,21 +237,33 @@ router.patch("/:id", upload.single("file"), async (req, res) => {
     }
 
     if (req.file) {
-      const profileImageUrl = `${PROFILE_IMAGES_BASE_URL}/${req.file.filename}`;
+      let profileImageUrl;
 
       if (user.profileImageUrl) {
         const urlChunks = user.profileImageUrl.split("/");
         const filename = urlChunks[urlChunks.length - 1];
 
-        const filePath = path.join(
+        const existingFilePath = path.join(
           STORAGE_BASE_PATH,
           `profile-images`,
           filename
         );
 
-        if (fs.existsSync(filePath)) {
-          await fs.promises.rm(filePath);
+        const newFilePath = path.join(
+          STORAGE_BASE_PATH,
+          `profile-images`,
+          req.file.filename
+        );
+
+        if (fs.existsSync(existingFilePath)) {
+          await fs.promises.rm(existingFilePath);
         }
+
+        await fs.promises.rename(newFilePath, existingFilePath);
+
+        profileImageUrl = `${PROFILE_IMAGES_BASE_URL}/${filename}`;
+      } else {
+        profileImageUrl = `${PROFILE_IMAGES_BASE_URL}/${req.file.filename}`;
       }
 
       user.profileImageUrl = profileImageUrl;
