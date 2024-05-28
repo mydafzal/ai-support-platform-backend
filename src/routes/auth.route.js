@@ -377,8 +377,16 @@ router.get("/verify-email", async (req, res) => {
 });
 
 router.post("/resend-verification-email", async (req, res) => {
+  const { email, redirectUri } = req.body;
+
   try {
-    const { email } = req.body;
+    const { success, error } = await emailValidationSchema.safeParseAsync(
+      email
+    );
+
+    if (!success) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
 
     let user = await User.findOne({
       where: {
@@ -408,10 +416,10 @@ router.post("/resend-verification-email", async (req, res) => {
     const emailLink = generateEmailLink(
       req,
       "email-verification",
-      `token=${emailVerificationToken}`
+      `token=${emailVerificationToken}&redirectUri=${redirectUri}`
     );
-    const emailTemplate = `Please verify your email by clicking <a href=${emailLink}>here</a>`;
 
+    const emailTemplate = `Please verify your email by clicking <a href=${emailLink}>here</a>`;
     await sendEmail(email, emailTemplate);
 
     res
