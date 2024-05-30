@@ -216,12 +216,45 @@ router.patch("/:id", upload.single("file"), async (req, res) => {
     if (businessId || businessId == "") {
       user.businessId = businessId === "" ? null : businessId;
 
+      const currentBusinessId = user.toJSON().businessId;
+
+      // IF the user is to removed from the organization, then also delete the user's invitation and trigger email to the removed user.
       if (businessId === "") {
-        await Invitation.destroy({
+        const invitation = await Invitation.findOne({
           where: {
             email: user.toJSON().email,
           },
         });
+
+        if (invitation) {
+          await Invitation.destroy({
+            where: {
+              email: user.toJSON().email,
+            },
+          });
+
+          const business = await Business.findOne({
+            where: {
+              id: currentBusinessId,
+            },
+          });
+
+          let adminUser = await User.findByPk(business.toJSON().adminUserId);
+
+          if (adminUser) {
+            adminUser = adminUser.toJSON();
+
+            let emailTemplate;
+
+            if (invitation.toJSON().status === "Pending") {
+              emailTemplate = `Your invitation for organization ${name} has been cancelled.`;
+            } else {
+              emailTemplate = `${adminUser.email} removed you from organization ${name}.`;
+            }
+
+            await sendEmail(invitation.email, emailTemplate);
+          }
+        }
       }
     }
 
