@@ -291,7 +291,6 @@ router.post("/reset-password/:token", async (req, res) => {
 router.get("/verify-email", async (req, res) => {
   try {
     const { token } = req.query;
-    console.log("token ", token);
 
     if (!token) {
       return res
