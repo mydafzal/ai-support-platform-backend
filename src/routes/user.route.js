@@ -215,6 +215,14 @@ router.patch("/:id", upload.single("file"), async (req, res) => {
 
     if (businessId || businessId == "") {
       user.businessId = businessId === "" ? null : businessId;
+
+      if (businessId === "") {
+        await Invitation.destroy({
+          where: {
+            email: user.toJSON().email,
+          },
+        });
+      }
     }
 
     if (phone != undefined) {
