@@ -176,6 +176,10 @@ router.delete("/:id", async (req, res) => {
   try {
     let invitation = await Invitation.findByPk(req.params.id);
 
+    if (!invitation) {
+      return res.status(204).send();
+    }
+
     await Invitation.destroy({
       where: {
         id: req.params.id,
@@ -184,6 +188,17 @@ router.delete("/:id", async (req, res) => {
 
     if (invitation) {
       invitation = invitation.toJSON();
+
+      await User.update(
+        {
+          businessId: null,
+        },
+        {
+          where: {
+            email: invitation.email,
+          },
+        }
+      );
 
       let business = await Business.findByPk(invitation.businessId);
       const { name } = business.toJSON();
