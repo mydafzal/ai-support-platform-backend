@@ -339,4 +339,26 @@ router.get("/:id/chat-assignments", async (req, res) => {
   }
 });
 
+router.post("/check-email", async (req, res) => {
+  const { email = "" } = req.body;
+
+  try {
+    const count = await User.count({
+      where: {
+        email,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        available: count <= 0,
+      },
+    });
+  } catch (error) {
+    console.error("Error checking email availability - ", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
 module.exports = router;
