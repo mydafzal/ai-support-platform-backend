@@ -8,7 +8,7 @@ const {
 
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
-  async up(queryInterface, Sequelize) {
+  async up(queryInterface) {
     return queryInterface.bulkInsert("Integrations", [
       {
         id: HUBPOST_INTEGRATION_ID,
@@ -19,8 +19,7 @@ module.exports = {
         createdAt: new Date(),
         updatedAt: new Date(),
         recommended: true,
-        authUrl:
-          "https://app.hubspot.com/oauth/authorize?client_id=c168eab0-d901-49a0-9137-e6cd0212e043&redirect_uri=https://customer-bot-psi.vercel.app/connect-integration&scope=crm.lists.read%20crm.objects.contacts.read%20crm.objects.contacts.write%20crm.objects.companies.write%20crm.lists.write%20crm.objects.companies.read",
+        authUrl: process.env.HUBSPOT_AUTH_URL,
       },
       {
         id: GOOGLE_CALENDAR_INTEGRATION_ID,
@@ -31,8 +30,7 @@ module.exports = {
         createdAt: new Date(),
         updatedAt: new Date(),
         recommended: true,
-        authUrl:
-          "https://accounts.google.com/o/oauth2/v2/auth?access_type=offline&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcalendar.events&response_type=code&client_id=466285189832-jjbp5nnv6ag0244sc9mn05eufi6flbmq.apps.googleusercontent.com&redirect_uri=https://customer-bot-psi.vercel.app/connect-integration",
+        authUrl: process.env.GOOGLE_AUTH_URL,
       },
       {
         id: CALENDLY_INTEGRATION_ID,
@@ -43,8 +41,7 @@ module.exports = {
         createdAt: new Date(),
         updatedAt: new Date(),
         recommended: true,
-        authUrl:
-          "https://calendly.com/oauth/authorize?client_id=Gnz8k2nodDXDvPh1TgktTPeXHrGDLZcC1URnTbmkZs0&response_type=code&redirect_uri=https://customer-bot-psi.vercel.app/connect-integration",
+        authUrl: process.env.CALENDLY_AUTH_URL,
       },
     ]);
   },
