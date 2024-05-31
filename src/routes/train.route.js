@@ -339,6 +339,12 @@ router.post("/chat", async (req, res) => {
       include: [{ model: Assistant, as: "assistant" }],
     });
 
+    if (!business) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid business id." });
+    }
+
     business = business.toJSON();
 
     const aiResponse = await generateTrainingAgentResponse(
