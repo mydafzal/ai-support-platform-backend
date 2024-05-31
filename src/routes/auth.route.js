@@ -314,9 +314,9 @@ router.get("/verify-email", async (req, res) => {
       email: user.toJSON().email,
     });
 
-    invitation = invitation?.toJSON();
-
     if (invitation) {
+      invitation = invitation.toJSON();
+
       await Invitation.update(
         {
           status: "Accepted",
@@ -340,22 +340,20 @@ router.get("/verify-email", async (req, res) => {
     user = user.toJSON();
     delete user.emailVerificationToken;
 
-    if (invitation) {
-      let business = await Business.findOne({
-        where: {
-          id: invitation.businessId,
+    let business = await Business.findOne({
+      where: {
+        id: user.businessId,
+      },
+      include: [
+        {
+          model: Assistant,
+          as: "assistant",
         },
-        include: [
-          {
-            model: Assistant,
-            as: "assistant",
-          },
-        ],
-      });
+      ],
+    });
 
-      business = business?.toJSON();
-      user.business = business;
-    }
+    business = business?.toJSON();
+    user.business = business;
 
     const payload = {
       ...user,
