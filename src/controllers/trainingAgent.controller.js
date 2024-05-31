@@ -14,14 +14,10 @@ const { z } = require("zod");
 const { RunnableWithMessageHistory } = require("@langchain/core/runnables");
 const { ChatOpenAI } = require("@langchain/openai");
 const { DynamicStructuredTool } = require("@langchain/community/tools/dynamic");
-const {
-  addTextToVectoreStore,
-  getVectoreStore,
-} = require("../integrations/chromaDB");
+const { getVectoreStore } = require("../integrations/chromaDB");
 
-const { createClient } = require("redis");
 const { ExtendedRedisChatMemory } = require("../utils/helpers");
-const redisClient = createClient();
+const { redisClient } = require("../integrations/redis");
 
 let agent;
 
