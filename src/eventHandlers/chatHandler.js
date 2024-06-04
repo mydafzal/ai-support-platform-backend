@@ -58,14 +58,18 @@ module.exports = (io, socket) => {
       receiverId = `${userId}`;
     }
 
-    socket.to(receiverId).emit("chat:new-message", { message: humanMessage });
+    socket
+      .to(receiverId)
+      .emit("chat:new-message", { chatId, message: humanMessage });
 
     if (typeof callback === "function") {
       callback(humanMessage);
     }
 
     const roomName = `team-${chat.businessId}`;
-    socket.to(roomName).emit("chat:new-message", { message: humanMessage });
+    socket
+      .to(roomName)
+      .emit("chat:new-message", { chatId, message: humanMessage });
   };
 
   const handleTyping = async (payload) => {

@@ -674,7 +674,7 @@ router.post("/:id/upload", upload.array("files"), async (req, res) => {
     if (userId) receiverId = `chat-${chatId}`;
     else receiverId = `${chat.connectedUserId}`;
 
-    io.to(receiverId).emit("chat:new-message", { messages });
+    io.to(receiverId).emit("chat:new-message", { chatId, messages });
   } catch (error) {
     console.error("Error uploading files: ", error);
     res.status(500).json({ success: false, error: "Internal Server Error" });
