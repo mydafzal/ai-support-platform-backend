@@ -490,6 +490,7 @@ router.get("/:id/chats", async (req, res) => {
           },
         },
       ],
+      order: [["createdAt", "DESC"]],
     });
 
     chats = await Promise.all(
@@ -600,6 +601,7 @@ router.get("/:id/calls", async (req, res) => {
       where: whereCondition,
       limit: parseInt(pageSize),
       offset: parseInt(offset),
+      order: [["createdAt", "DESC"]],
     });
 
     const totalCount = await Call.count({
