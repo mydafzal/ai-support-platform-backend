@@ -32,7 +32,7 @@ module.exports = {
         updatedAt: new Date(),
         recommended: true,
         authUrl:
-          "https://accounts.google.com/o/oauth2/v2/auth?access_type=offline&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcalendar.events&response_type=code&client_id=466285189832-jjbp5nnv6ag0244sc9mn05eufi6flbmq.apps.googleusercontent.com&redirect_uri=https://customer-bot-git-staging-cheetah-agency.vercel.app/connect-integration",
+          "https://accounts.google.com/o/oauth2/v2/auth?access_type=offline&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcalendar.events&response_type=code&client_id=466285189832-2hh7mgkft8n2pgc9u5v52r43grfcc1ip.apps.googleusercontent.com&redirect_uri=https%3A%2F%2Fcustomer-bot-git-staging-cheetah-agency.vercel.app%2Fconnect-integration",
       },
       {
         id: CALENDLY_INTEGRATION_ID,
