@@ -364,11 +364,20 @@ function createAgentAvailabilityCheckerTool() {
         }
       }
 
+      let chat = await Chat.findOne({
+        where: {
+          id: chatId,
+        },
+      });
+
+      chat = chat.toJSON();
+
       let chats = await Chat.findAll({
         where: {
           connectedUserId: {
             [Op.not]: null,
           },
+          businessId: chat.businessId,
         },
       });
 
@@ -381,6 +390,7 @@ function createAgentAvailabilityCheckerTool() {
           [Op.notIn]: connectedUserIds,
         },
         status: ACCEPTING_CHATS,
+        businessId: chat.businessId,
       };
 
       if (teamGroupId) {
