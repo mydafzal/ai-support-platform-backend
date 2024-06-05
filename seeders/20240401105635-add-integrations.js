@@ -44,7 +44,7 @@ module.exports = {
         updatedAt: new Date(),
         recommended: true,
         authUrl:
-          "https://calendly.com/oauth/authorize?client_id=Gnz8k2nodDXDvPh1TgktTPeXHrGDLZcC1URnTbmkZs0&response_type=code&redirect_uri=https://customer-bot-git-staging-cheetah-agency.vercel.app/connect-integration",
+          "https://calendly.com/oauth/authorize?client_id=Qc2fFz6pvoMkf3JImirNt9gVnGrK8fOizc2S-RVyIYo&response_type=code&redirect_uri=https://customer-bot-git-staging-cheetah-agency.vercel.app/connect-integration",
       },
     ]);
   },
