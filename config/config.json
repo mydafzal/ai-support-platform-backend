@@ -13,6 +13,13 @@
     "host": "127.0.0.1",
     "dialect": "postgres"
   },
+  "staging": {
+    "username": "cheetahagency",
+    "password": "cheetah",
+    "database": "customer-bot",
+    "host": "127.0.0.1",
+    "dialect": "postgres"
+  },
   "production": {
     "username": "cheetahagency",
     "password": "cheetah",
