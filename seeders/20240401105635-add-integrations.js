@@ -19,8 +19,7 @@ module.exports = {
         createdAt: new Date(),
         updatedAt: new Date(),
         recommended: true,
-        authUrl:
-          "https://app.hubspot.com/oauth/authorize?client_id=c168eab0-d901-49a0-9137-e6cd0212e043&redirect_uri=http://localhost:3000/connect-integration&scope=crm.lists.read%20crm.objects.contacts.read%20crm.objects.contacts.write%20crm.objects.companies.write%20crm.lists.write%20crm.objects.companies.read",
+        authUrl: process.env.HUBSPOT_AUTH_URL,
       },
       {
         id: GOOGLE_CALENDAR_INTEGRATION_ID,
@@ -31,8 +30,7 @@ module.exports = {
         createdAt: new Date(),
         updatedAt: new Date(),
         recommended: true,
-        authUrl:
-          "https://accounts.google.com/o/oauth2/v2/auth?access_type=offline&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcalendar.events&response_type=code&client_id=466285189832-2hh7mgkft8n2pgc9u5v52r43grfcc1ip.apps.googleusercontent.com&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fconnect-integration",
+        authUrl: process.env.GOOGLE_AUTH_URL,
       },
       {
         id: CALENDLY_INTEGRATION_ID,
@@ -43,8 +41,7 @@ module.exports = {
         createdAt: new Date(),
         updatedAt: new Date(),
         recommended: true,
-        authUrl:
-          "https://calendly.com/oauth/authorize?client_id=INsyFpdPu317GYIwvuL0IkWMroNOyp91wS9wVhDsUEc&response_type=code&redirect_uri=http://localhost:3000/connect-integration",
+        authUrl: process.env.CALENDLY_AUTH_URL,
       },
     ]);
   },
