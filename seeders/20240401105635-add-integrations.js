@@ -20,7 +20,7 @@ module.exports = {
         updatedAt: new Date(),
         recommended: true,
         authUrl:
-          "https://app.hubspot.com/oauth/authorize?client_id=c168eab0-d901-49a0-9137-e6cd0212e043&redirect_uri=https://customer-bot-git-staging-cheetah-agency.vercel.app/connect-integration&scope=crm.lists.read%20crm.objects.contacts.read%20crm.objects.contacts.write%20crm.objects.companies.write%20crm.lists.write%20crm.objects.companies.read",
+          "https://app.hubspot.com/oauth/authorize?client_id=c168eab0-d901-49a0-9137-e6cd0212e043&redirect_uri=http://localhost:3000/connect-integration&scope=crm.lists.read%20crm.objects.contacts.read%20crm.objects.contacts.write%20crm.objects.companies.write%20crm.lists.write%20crm.objects.companies.read",
       },
       {
         id: GOOGLE_CALENDAR_INTEGRATION_ID,
@@ -32,7 +32,7 @@ module.exports = {
         updatedAt: new Date(),
         recommended: true,
         authUrl:
-          "https://accounts.google.com/o/oauth2/v2/auth?access_type=offline&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcalendar.events&response_type=code&client_id=466285189832-2hh7mgkft8n2pgc9u5v52r43grfcc1ip.apps.googleusercontent.com&redirect_uri=https%3A%2F%2Fcustomer-bot-git-staging-cheetah-agency.vercel.app%2Fconnect-integration",
+          "https://accounts.google.com/o/oauth2/v2/auth?access_type=offline&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcalendar.events&response_type=code&client_id=466285189832-2hh7mgkft8n2pgc9u5v52r43grfcc1ip.apps.googleusercontent.com&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fconnect-integration",
       },
       {
         id: CALENDLY_INTEGRATION_ID,
@@ -44,7 +44,7 @@ module.exports = {
         updatedAt: new Date(),
         recommended: true,
         authUrl:
-          "https://calendly.com/oauth/authorize?client_id=Qc2fFz6pvoMkf3JImirNt9gVnGrK8fOizc2S-RVyIYo&response_type=code&redirect_uri=https://customer-bot-git-staging-cheetah-agency.vercel.app/connect-integration",
+          "https://calendly.com/oauth/authorize?client_id=INsyFpdPu317GYIwvuL0IkWMroNOyp91wS9wVhDsUEc&response_type=code&redirect_uri=http://localhost:3000/connect-integration",
       },
     ]);
   },
