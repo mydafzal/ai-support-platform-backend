@@ -377,12 +377,15 @@ router.post("/:id/messages", async (req, res) => {
         JSON.stringify(statusUpdateMessage)
       );
 
+      let messages = await redisClient.lRange(`chat-${chatId}`, 0, -1);
+
       const io = getSocketIOInstance();
       io.to(`${chat.connectedUser.id}`).emit("chat:incoming-chat", {
         chat: {
           ...chat,
           lastMessage: statusUpdateMessage,
         },
+        messages,
       });
 
       // Notify the customer that a human agent has joined the chat.
