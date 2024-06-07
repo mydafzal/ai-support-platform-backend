@@ -7,7 +7,7 @@ const {
   ChatGroupAssignment,
   User,
   TeamGroup,
-  BusinessIntegration
+  BusinessIntegration,
 } = require("../../models");
 
 const {
@@ -378,7 +378,12 @@ router.post("/:id/messages", async (req, res) => {
       );
 
       const io = getSocketIOInstance();
-      io.to(`${chat.connectedUser.id}`).emit("chat:incoming-chat", { chat });
+      io.to(`${chat.connectedUser.id}`).emit("chat:incoming-chat", {
+        chat: {
+          ...chat,
+          lastMessage: statusUpdateMessage,
+        },
+      });
 
       // Notify the customer that a human agent has joined the chat.
 
