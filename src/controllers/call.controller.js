@@ -55,7 +55,7 @@ const {
 } = require("../utils/constants");
 const {
   generateFilename,
-  hasConnectedRequiredIntegrations,
+  getConnectedIntegrationsCount,
 } = require("../utils/helpers");
 const { sendEmail } = require("../integrations/nodemailer");
 const { Op } = require("sequelize");
@@ -144,7 +144,10 @@ async function handleIncomingCall(request) {
     }
   }
 
-  let canScheduleMeeting = await hasConnectedRequiredIntegrations(business.id);
+  const count = await getConnectedIntegrationsCount(business.id);
+
+  // Businesses must connect both Google Calendar and Calendly integrations so that customers can schedule meetings on phone call.
+  let canScheduleMeeting = count !== 3 ? false : true;
 
   let teamGroups = await TeamGroup.findAll({
     where: {

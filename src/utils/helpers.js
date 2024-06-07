@@ -89,7 +89,7 @@ function generateEmailLink(request, path, queryParams) {
   return `${process.env.CLIENT_BASE_URL}/${path}?${queryParams}`;
 }
 
-async function hasConnectedRequiredIntegrations(businessId) {
+async function getConnectedIntegrationsCount(businessId) {
   const count = await BusinessIntegration.count({
     where: {
       businessId,
@@ -103,8 +103,7 @@ async function hasConnectedRequiredIntegrations(businessId) {
     },
   });
 
-  // Businesses must connect both Google Calendar and Calendly integrations so that customers can schedule meetings.
-  return count !== 3 ? false : true;
+  return count;
 }
 
 function isValidInteger(str) {
@@ -120,6 +119,6 @@ module.exports = {
   generateEmailVerificationToken,
   generateJWT,
   generateEmailLink,
-  hasConnectedRequiredIntegrations,
+  getConnectedIntegrationsCount,
   isValidInteger,
 };

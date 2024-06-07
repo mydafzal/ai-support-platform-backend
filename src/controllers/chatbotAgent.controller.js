@@ -327,8 +327,6 @@ function createSchedulerAgentPrompt(
       ${formattedCustomerDetails}
       `;
   }
-
-  return prompt;
 }
 
 function createSupervisorAgentPrompt(businessName) {

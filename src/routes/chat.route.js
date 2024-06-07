@@ -7,6 +7,7 @@ const {
   ChatGroupAssignment,
   User,
   TeamGroup,
+  BusinessIntegration
 } = require("../../models");
 
 const {
@@ -16,8 +17,6 @@ const {
 const { z } = require("zod");
 const { redisClient } = require("../integrations/redis");
 
-const { formatObjectToString } = require("../utils/formatters");
-const { hasConnectedRequiredIntegrations } = require("../utils/helpers");
 const { Op } = require("sequelize");
 
 const { v4: uuidv4 } = require("uuid");
@@ -30,6 +29,8 @@ const { getSocketIOInstance } = require("../loaders/socket-io");
 const {
   STORAGE_BASE_PATH,
   CHAT_UPLOADS_BASE_URL,
+  CALENDLY_INTEGRATION_ID,
+  GOOGLE_CALENDAR_INTEGRATION_ID,
 } = require("../utils/constants");
 
 const storage = multer.diskStorage({
@@ -266,9 +267,16 @@ router.post("/:id/messages", async (req, res) => {
 
     chat = chat.toJSON();
 
-    let canScheduleMeeting = await hasConnectedRequiredIntegrations(
-      chat.businessId
-    );
+    const count = await BusinessIntegration.count({
+      where: {
+        businessId: chat.businessId,
+        integrationId: {
+          [Op.in]: [CALENDLY_INTEGRATION_ID, GOOGLE_CALENDAR_INTEGRATION_ID],
+        },
+      },
+    });
+
+    let canScheduleMeeting = count !== 2 ? false : true;
 
     let customerDetails = await redisClient.lIndex(`chat-${chat.id}`, 0);
 
