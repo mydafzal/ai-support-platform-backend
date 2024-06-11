@@ -42,9 +42,8 @@ async function initializeMultiAgentWorkflow(
 
   const smsSenderTool = createSmsSenderTool(businessId);
 
-  const informationRetrieverTool = await createInformationRetrieverTool(
-    collectionName
-  );
+  const informationRetrieverTool =
+    createInformationRetrieverTool(collectionName);
 
   const groupSaverTool = createGroupSaverTool();
   const updateCallDataTool = createUpdateCallDataTool();
@@ -287,7 +286,7 @@ function createAnsweringAgentPrompt(
     3. Problem Resolution: Address customer queries promptly and effectively, providing relevant information and solutions to their concerns.
     4. Engagement: Maintain a friendly and professional tone throughout the interaction, actively engaging with the customer to keep them interested and satisfied.
     5. Tool Utilization: Utilize the 'search-business-information' tool to retrieve relevant data for answering inquiries about the business. Ensure that all responses are focused and pertinent to the business and its activities. 
-    6. Contextual Querying: When utilizing the 'search-business-information' tool, pass contextual queries based on ${businessName}'s information and the ongoing conversation with ${customerName} to retrieve relevant data.
+    6. Contextual Querying: When utilizing the 'search-business-information' tool, pass contextual queries based on ${businessName}'s information and the ongoing conversation with ${customerName} to retrieve relevant data. If the user's actual query is not sufficient, make sure to tune the query to make it somewhat detailed so that relevant information can be retrieved from the 'search-business-information' tool
     7. Conciseness: Provide extremely concise responses as if you are on a phone call, ensuring that information is conveyed efficiently.
 
 
