@@ -236,15 +236,28 @@ async function generateCallAnsweringAgentResponse(
     ],
   });
 
+  const humanInput = {
+    type: "human",
+    content: userQuery,
+    timestamp: new Date().getTime(),
+  };
+
   await redisClient.rPush(
     `transcription-${callId}`,
-    JSON.stringify(response.messages[response.messages.length - 2])
+    JSON.stringify(humanInput)
   );
 
   const lastMessage = response.messages[response.messages.length - 1];
+
+  const aiResponse = {
+    type: "ai",
+    content: lastMessage.content,
+    timestamp: new Date().getTime(),
+  };
+
   await redisClient.rPush(
     `transcription-${callId}`,
-    JSON.stringify(lastMessage)
+    JSON.stringify(aiResponse)
   );
 
   return lastMessage.content;
@@ -408,7 +421,7 @@ function createSupervisorAgentPrompt(businessName) {
 
 function createCallRedirectionAgentPrompt(businessName, callId, teamGroups) {
   if (teamGroups?.length > 0) {
-    return `You are one of ${businessName}'s AI assistants collaborating with other assistants. You talk to customers on phone calls. Your role as the Call Redirector is crucial in connecting, or more specifically redirecting customer calls to staff of ${businessName}. Your specific role is only to facilitate the process of re-directing customers calls to human agents or support staff.
+    return `You are one of ${businessName}'s AI assistants collaborating with other assistants. You talk to customers on phone calls and you are currently talking to one of our valued customers. Your role as the Call Redirector is crucial in connecting, or more specifically redirecting customer calls to staff of ${businessName}. Your specific role is only to facilitate the process of re-directing customers calls to human agents or support staff.
 
     Here is the identifier of the current call that you might need to use when calling the tools: ${callId}
 
@@ -425,7 +438,7 @@ function createCallRedirectionAgentPrompt(businessName, callId, teamGroups) {
     - Output some message to tell the customer that they are being connected to a human.
    `;
   } else {
-    return `You are one of ${businessName}'s AI assistants collaborating with other assistants. You talk to customers on phone calls. Your role as the Call Redirector is crucial in connecting, or more specifically redirecting customer calls to staff of ${businessName}. Your specific role is only to facilitate the process of re-directing customers calls to human agents or support staff.
+    return `You are one of ${businessName}'s AI assistants collaborating with other assistants. You talk to customers on phone calls and you are currently talking to one of our valued customers. Your role as the Call Redirector is crucial in connecting, or more specifically redirecting customer calls to staff of ${businessName}. Your specific role is only to facilitate the process of re-directing customers calls to human agents or support staff.
 
     Here is the identifier of the current call that you might need to use when calling the tools: ${callId}
     
