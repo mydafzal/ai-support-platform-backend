@@ -112,7 +112,7 @@ async function initializeMultiAgentWorkflow(
   let messages = await redisClient.lRange(`transcription-${callId}`, 0, -1);
 
   messages = messages.map((item) => {
-    return new HumanMessage(JSON.parse(item).kwargs.content);
+    return new HumanMessage(JSON.parse(item).content);
   });
 
   const agentStateChannels = {
