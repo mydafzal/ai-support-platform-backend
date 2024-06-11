@@ -622,9 +622,9 @@ router.get("/:id/calls", async (req, res) => {
           console.log("item - ", item);
 
           return {
-            type: item.type === "ai" ? item.type : "human",
-            content: item?.data?.content || item.kwargs.content,
-            timestamp: item.data?.additional_kwargs?.timestamp,
+            type: item?.type,
+            content: item?.content,
+            timestamp: item?.timestamp,
           };
         });
 
