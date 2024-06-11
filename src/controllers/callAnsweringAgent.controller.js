@@ -42,8 +42,10 @@ async function initializeMultiAgentWorkflow(
 
   const smsSenderTool = createSmsSenderTool(businessId);
 
-  const informationRetrieverTool =
-    createInformationRetrieverTool(collectionName);
+  const informationRetrieverTool = createInformationRetrieverTool(
+    collectionName,
+    true
+  );
 
   const groupSaverTool = createGroupSaverTool();
   const updateCallDataTool = createUpdateCallDataTool();

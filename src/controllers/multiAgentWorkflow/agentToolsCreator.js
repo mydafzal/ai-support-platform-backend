@@ -47,7 +47,10 @@ const monthsEnum = [
 const datesEnum = Array.from({ length: 31 }, (_, index) => `${index + 1}`);
 const hoursEnum = Array.from({ length: 23 }, (_, index) => `${index}`);
 
-function createInformationRetrieverTool(collectionName) {
+function createInformationRetrieverTool(
+  collectionName,
+  shouldGenerateShortResponses = false
+) {
   return new DynamicStructuredTool({
     name: "search-business-information",
     description:
@@ -65,11 +68,13 @@ function createInformationRetrieverTool(collectionName) {
       const generatedQueries = await generateQueries(userQuery);
       const altQueryDocs = {};
 
+      const alternateQueriesToGenerate = shouldGenerateShortResponses ? 2 : 4;
+
       await Promise.all(
         generatedQueries.map(async (generatedQuery) => {
           const docsFromAltQuery = await store.similaritySearch(
             generatedQuery,
-            4
+            alternateQueriesToGenerate
           );
 
           docsFromAltQuery.forEach((doc) => {
