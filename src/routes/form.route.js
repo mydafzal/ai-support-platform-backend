@@ -26,6 +26,8 @@ router.post("/", async (req, res) => {
 
     const { token } = req.query;
 
+    console.log("form link - token - ", token);
+
     let formLink = await FormLink.findOne({
       where: {
         token,
@@ -38,11 +40,13 @@ router.post("/", async (req, res) => {
           include: {
             model: BusinessIntegration,
             as: "businessIntegrations",
-            where: { id: HUBPOST_INTEGRATION_ID },
+            where: { integrationId: HUBPOST_INTEGRATION_ID },
           },
         },
       ],
     });
+
+    console.log("form link - query result - ", formLink);
 
     if (!formLink) {
       return res
