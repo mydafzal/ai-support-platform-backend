@@ -43,6 +43,8 @@ async function authorize(businessId) {
     if (oAuth2Client.isTokenExpiring()) {
       const newToken = await refreshAccessToken(oAuth2Client);
 
+      console.log("\nnewToken - \n", newToken);
+
       oAuth2Client.setCredentials({
         access_token: newToken.token,
         refresh_token: oAuth2Client.credentials.refresh_token,
@@ -69,6 +71,8 @@ async function authorize(businessId) {
 }
 
 async function refreshAccessToken(oAuth2Client) {
+  console.log("\nrefreshAccessToken called.\n");
+
   try {
     const newToken = await oAuth2Client.getAccessToken();
     console.log("Access token refreshed.");
