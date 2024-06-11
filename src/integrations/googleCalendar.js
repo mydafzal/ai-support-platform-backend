@@ -4,8 +4,6 @@ const credentials = require("../../credentials.json");
 const { BusinessIntegration, Business, User } = require("../../models");
 const { GOOGLE_CALENDAR_INTEGRATION_ID } = require("../utils/constants");
 
-let auth, calendar;
-
 async function authorize(businessId) {
   const { client_secret, client_id } = credentials.web;
 
@@ -90,9 +88,9 @@ async function addEventToGoogleCalendar(
   start,
   end
 ) {
-  if (!auth) {
-    auth = await authorize(businessId);
-  }
+  const auth = await authorize(businessId);
+
+  console.log("\n - auth- ", auth.credentials);
 
   let business = await Business.findByPk(businessId, {
     include: [
@@ -106,9 +104,9 @@ async function addEventToGoogleCalendar(
 
   business = business.toJSON();
 
-  if (!calendar) {
-    calendar = google.calendar({ version: "v3", auth });
-  }
+  console.log("\n - business - ", business, "\n");
+
+  const calendar = google.calendar({ version: "v3", auth });
 
   const event = {
     summary: "Customer Bot Meeting",
