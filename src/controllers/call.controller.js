@@ -550,10 +550,7 @@ async function handleCallDisconnect(request) {
 
     const greetingMessage = {
       type: "ai",
-      data: {
-        content: assistant.toJSON().greetingMessage,
-        additional_kwargs: { timestamp: "" },
-      },
+      content: assistant.toJSON().greetingMessage,
     };
 
     await redisClient.lPush(
@@ -564,10 +561,7 @@ async function handleCallDisconnect(request) {
     if (callData.shouldAddFarewellMessageToTranscription) {
       const farewellMessage = {
         type: "ai",
-        data: {
-          content: assistant.toJSON().farewellMessage,
-          additional_kwargs: { timestamp: "" },
-        },
+        content: assistant.toJSON().farewellMessage,
       };
 
       await redisClient.rPush(
