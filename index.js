@@ -33,16 +33,44 @@ const server = createServer(app);
 const { initializeSocketIO } = require("./src/loaders/socket-io.js");
 initializeSocketIO(server);
 
+// app.use(
+//   "/data",
+//   express.static(path.join(__dirname, "data"), {
+//     maxAge: 0,
+//     etag: false,
+//     setHeaders: (res) => {
+//       res.setHeader("Cache-Control", "no-store");
+//     },
+//   })
+// );
+
 app.use(
   "/data",
   express.static(path.join(__dirname, "data"), {
-    maxAge: 0,
-    etag: false,
-    setHeaders: (res) => {
-      res.setHeader("Cache-Control", "no-store");
+    maxAge: "1d", // Default caching policy
+    etag: true, // Default ETag behavior
+    setHeaders: (res, filePath) => {
+      const disableCachePaths = ["profile-images", "ai-generated-speeches"];
+
+      const relativePath = path.relative(
+        path.join(__dirname, "data"),
+        filePath
+      );
+
+      if (
+        disableCachePaths.some((disablePath) =>
+          relativePath.startsWith(disablePath)
+        )
+      ) {
+        res.setHeader("Cache-Control", "no-store");
+        res.removeHeader("ETag"); // Remove ETag header if not needed
+      } else {
+        res.setHeader("Cache-Control", "public, max-age=86400"); // Equivalent to 1 day
+      }
     },
   })
 );
+
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 app.use(cookieParser());
