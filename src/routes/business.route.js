@@ -1,5 +1,5 @@
 const {
-  // buyPhoneNumber,
+  buyPhoneNumber,
   createVerifyService,
 } = require("../controllers/call.controller");
 
@@ -94,13 +94,13 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // const twilioNumber = await buyPhoneNumber();
+    const twilioNumber = await buyPhoneNumber();
     const verifyServiceId = await createVerifyService(businessName);
 
     let business = await Business.create({
       name: businessName,
-      twilioNumber: "+14697074725",
-      // twilioNumber: twilioNumber || "+14697074725",
+      // twilioNumber: "+14697074725",
+      twilioNumber: twilioNumber || "+14697074725",
       verifyServiceId,
       adminUserId: userId,
     });
