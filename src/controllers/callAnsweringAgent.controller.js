@@ -278,6 +278,9 @@ function createAnsweringAgentPrompt(
     1. The Meeting Scheduler, who specifically handles scheduling meetings with the support staff. 
     2. The Call Redirector, who specifically re-directs customer calls to the support staff.
 
+    The reason for telling you about the assistants in your team is this:
+    If at any point during the conversation, you are unable to answer the customer's queries correctly or something like that, you can give the customer a hint that you can connect the call to a human agent (an employee or member of the team) or schedule an appointment or meeting for the customer with the team (or staff). The actual process for connecting the call to a human or scheduling the meeting will be handled by other assistants.
+
     Here is the customer's information:
     ${customerDetails}
     
