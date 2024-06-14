@@ -335,7 +335,7 @@ router.post("/:id/messages", async (req, res) => {
           attributes: ["id", "name", "profileImageUrl"],
           as: "users",
           through: {
-            attributes: [],
+            // attributes: [],
           },
         },
         {

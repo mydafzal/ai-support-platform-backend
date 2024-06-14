@@ -430,6 +430,18 @@ function createAgentAvailabilityCheckerTool() {
             chatId,
             userId: user.id,
           });
+        } else {
+          await ChatUserAssignment.update(
+            {
+              viewed: false,
+            },
+            {
+              where: {
+                chatId,
+                userId: user.id,
+              },
+            }
+          );
         }
 
         return "An agent is available to take over the chat.";
