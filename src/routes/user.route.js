@@ -214,9 +214,9 @@ router.patch("/:id", upload.single("file"), async (req, res) => {
     const { name, email, phone, teamGroupId, businessId } = req.body;
 
     if (businessId || businessId == "") {
-      user.businessId = businessId === "" ? null : businessId;
-
       const currentBusinessId = user.toJSON().businessId;
+
+      user.businessId = businessId === "" ? null : businessId;
 
       // IF the user is to removed from the organization, then also delete the user's invitation and trigger email to the removed user.
       if (businessId === "") {
