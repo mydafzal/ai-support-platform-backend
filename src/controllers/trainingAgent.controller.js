@@ -14,7 +14,7 @@ const { z } = require("zod");
 const { RunnableWithMessageHistory } = require("@langchain/core/runnables");
 const { ChatOpenAI } = require("@langchain/openai");
 const { DynamicStructuredTool } = require("@langchain/community/tools/dynamic");
-const { getVectoreStore } = require("../integrations/chromaDB");
+const { getVectoreStore, addTextToVectoreStore } = require("../integrations/chromaDB");
 
 const { ExtendedRedisChatMemory } = require("../utils/helpers");
 const { redisClient } = require("../integrations/redis");
@@ -40,7 +40,7 @@ async function initializeAgent() {
       console.log("new info", newInformation);
       console.log("collectionName", collectionName);
 
-      // await addTextToVectoreStore(newInformation, collectionName);
+      await addTextToVectoreStore(newInformation, collectionName);
       return "";
     },
   });
