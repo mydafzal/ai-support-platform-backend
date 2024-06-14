@@ -13,6 +13,7 @@ const {
   Url,
   Document,
   TeamGroup,
+  ChatUserAssignment,
   Call,
   CallTag,
   Integration,
@@ -476,7 +477,7 @@ router.get("/:id/chats", async (req, res) => {
           attributes: ["id", "name", "profileImageUrl"],
           as: "users",
           through: {
-            attributes: [],
+            // attributes: [],
           },
         },
         {
