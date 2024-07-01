@@ -3,13 +3,6 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    /**
-     * Add altering commands here.
-     *
-     * Example:
-     * await queryInterface.createTable('users', { id: Sequelize.INTEGER });
-     */
-
     await queryInterface.addColumn("Businesses", "adminUserId", {
       type: Sequelize.INTEGER,
       references: {
@@ -248,6 +241,76 @@ module.exports = {
       type: Sequelize.INTEGER,
       references: {
         model: "Chats",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "CASCADE",
+    });
+
+    await queryInterface.addColumn("PricingPlans", "basePlanId", {
+      type: Sequelize.INTEGER,
+      references: {
+        model: "PricingPlans",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "CASCADE",
+    });
+
+    await queryInterface.addColumn("PlanFeatures", "planId", {
+      type: Sequelize.INTEGER,
+      references: {
+        model: "PricingPlans",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "CASCADE",
+    });
+
+    await queryInterface.addColumn("PlanFeatures", "featureId", {
+      type: Sequelize.INTEGER,
+      references: {
+        model: "Features",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "CASCADE",
+    });
+
+    await queryInterface.addColumn("Subscriptions", "businessId", {
+      type: Sequelize.INTEGER,
+      references: {
+        model: "Businesses",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "CASCADE",
+    });
+
+    await queryInterface.addColumn("Subscriptions", "planId", {
+      type: Sequelize.INTEGER,
+      references: {
+        model: "PricingPlans",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "CASCADE",
+    });
+
+    await queryInterface.addColumn("SubscriptionFeatures", "subscriptionId", {
+      type: Sequelize.INTEGER,
+      references: {
+        model: "Subscriptions",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "CASCADE",
+    });
+
+    await queryInterface.addColumn("SubscriptionFeatures", "featureId", {
+      type: Sequelize.INTEGER,
+      references: {
+        model: "Features",
         key: "id",
       },
       onUpdate: "CASCADE",
