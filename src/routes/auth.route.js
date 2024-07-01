@@ -328,14 +328,8 @@ router.get("/verify-email", async (req, res) => {
         }
       );
 
-      console.log("----------------------------||||||||||||||||||||\n");
-
-      console.log("invitation - ", invitation);
-
       user.role = "TeamMember";
       user.businessId = invitation.businessId;
-
-      console.log("user - ", user);
     }
 
     user.emailVerified = true;
