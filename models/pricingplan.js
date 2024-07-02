@@ -38,6 +38,9 @@ module.exports = (sequelize, DataTypes) => {
       yearlyDiscountPercentage: {
         type: DataTypes.DECIMAL,
       },
+      stripeProductId: {
+        type: DataTypes.STRING,
+      },
     },
     {
       sequelize,

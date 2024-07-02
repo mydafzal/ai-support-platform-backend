@@ -5,6 +5,8 @@ const {
 
 const sequelize = require("sequelize");
 
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
 const {
   Assistant,
   Business,
@@ -95,14 +97,14 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const twilioNumber = await buyPhoneNumber();
-    const verifyServiceId = await createVerifyService(businessName);
+    // const twilioNumber = await buyPhoneNumber();
+    // const verifyServiceId = await createVerifyService(businessName);
 
     let business = await Business.create({
       name: businessName,
-      // twilioNumber: "+14697074725",
-      twilioNumber: twilioNumber || "+14697074725",
-      verifyServiceId,
+      twilioNumber: "+14697074725",
+      // twilioNumber: twilioNumber || "+14697074725",
+      verifyServiceId: "",
       adminUserId: userId,
     });
 
@@ -802,6 +804,168 @@ router.delete("/:id/chats", async (req, res) => {
         businessId,
       },
     });
+
+    res.status(204).send();
+  } catch (error) {
+    console.error("Error getting connected integrations:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.post("/:id/payment-methods", async (req, res) => {
+  const businessId = req.params.id;
+
+  try {
+    let business = await Business.findOne({
+      where: {
+        id: businessId,
+      },
+      include: [
+        {
+          model: User,
+          as: "adminUser",
+          attributes: ["email"],
+        },
+      ],
+    });
+
+    if (!business) {
+      return res
+        .status(400)
+        .json({ success: true, message: "Invalid business id." });
+    }
+
+    business = business.toJSON();
+
+    if (!business.stripeCustomerId) {
+      const customer = await stripe.customers.create({
+        email: business.adminUser.email,
+      });
+
+      await Business.update(
+        {
+          stripeCustomerId: customer.id,
+        },
+        {
+          where: {
+            id: businessId,
+          },
+        }
+      );
+
+      business.stripeCustomerId = customer.id;
+    }
+
+    const intent = await stripe.setupIntents.create({
+      customer: business.stripeCustomerId,
+      automatic_payment_methods: { enabled: true },
+    });
+
+    res.status(200).json({ clientSecret: intent.client_secret });
+  } catch (error) {
+    console.error("Error getting connected integrations:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/payment-methods", async (req, res) => {
+  const businessId = req.params.id;
+
+  try {
+    let business = await Business.findOne({
+      where: {
+        id: businessId,
+      },
+    });
+
+    if (!business) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid business id." });
+    }
+
+    business = business.toJSON();
+
+    if (!business.stripeCustomerId) {
+      return res
+        .status(400)
+        .json({ status: false, message: "No payment method added yet." });
+    }
+
+    const allMethods = await stripe.customers.listPaymentMethods(
+      business.stripeCustomerId,
+      {
+        limit: 1,
+      }
+    );
+
+    const paymentMethod = allMethods.data[0];
+
+    if (!paymentMethod) {
+      return res
+        .status(400)
+        .json({ status: false, message: "No payment method added yet." });
+    }
+
+    const paymentMethodDetails = {
+      brand: paymentMethod.card.brand,
+      country: paymentMethod.card.country,
+      expiryMonth: paymentMethod.card.exp_month,
+      expiryYear: paymentMethod.card.exp_year,
+      last4: paymentMethod.card.last4,
+      createdAt: paymentMethod.created,
+    };
+
+    res.status(200).json({ status: true, data: paymentMethodDetails });
+  } catch (error) {
+    console.error("Error getting connected integrations:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.delete("/:id/payment-methods/:methodId", async (req, res) => {
+  const businessId = req.params.id;
+  const paymentMethodId = req.params.methodId;
+
+  try {
+    let business = await Business.findOne({
+      where: {
+        id: businessId,
+      },
+    });
+
+    if (!business) {
+      return res
+        .status(400)
+        .json({ success: true, message: "Invalid business id." });
+    }
+
+    business = business.toJSON();
+
+    const paymentMethod = await stripe.paymentMethods.detach(paymentMethodId);
+
+    if (!paymentMethod) {
+      return res
+        .status(400)
+        .json({ status: false, message: "Invalid payment method id" });
+    }
+
+    const allMethods = await stripe.customers.listPaymentMethods(
+      business.stripeCustomerId,
+      {
+        limit: 1,
+      }
+    );
+
+    const newPaymentMethod = allMethods.data[0];
+
+    if (newPaymentMethod) {
+      await stripe.customers.update(business.stripeCustomerId, {
+        invoice_settings: {
+          default_payment_method: newPaymentMethod.id,
+        },
+      });
+    }
 
     res.status(204).send();
   } catch (error) {

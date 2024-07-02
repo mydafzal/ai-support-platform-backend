@@ -18,6 +18,7 @@ module.exports = {
       verifyServiceId: {
         type: Sequelize.STRING,
       },
+      stripeCustomerId: Sequelize.STRING,
       createdAt: {
         allowNull: false,
         type: Sequelize.DATE,

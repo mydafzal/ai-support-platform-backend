@@ -66,6 +66,7 @@ module.exports = (sequelize, DataTypes) => {
       name: { type: DataTypes.STRING, allowNull: false },
       twilioNumber: { type: DataTypes.STRING, allowNull: false },
       verifyServiceId: DataTypes.STRING,
+      stripeCustomerId: DataTypes.STRING,
     },
     {
       sequelize,
