@@ -111,6 +111,16 @@ function isValidInteger(str) {
   return integerRegex.test(str);
 }
 
+function calculateYearlyPrice(baseMonthlyPrice, yearlyDiscountPercentage) {
+  const baseYearlyPrice = parseFloat(baseMonthlyPrice) * 12;
+
+  const discountAmount = (yearlyDiscountPercentage / 100) * baseYearlyPrice;
+
+  const finalYearlyPrice = baseYearlyPrice - discountAmount;
+
+  return finalYearlyPrice.toFixed(2);
+}
+
 module.exports = {
   generateFilename,
   ExtendedRedisChatMemory,
@@ -121,4 +131,5 @@ module.exports = {
   generateEmailLink,
   getConnectedIntegrationsCount,
   isValidInteger,
+  calculateYearlyPrice,
 };

@@ -15,13 +15,16 @@ const {
   Url,
   Document,
   TeamGroup,
-  ChatUserAssignment,
   Call,
   CallTag,
   Integration,
   BusinessIntegration,
   Chat,
   ChatWidget,
+  PricingPlan,
+  Feature,
+  Subscription,
+  SubscriptionFeature,
 } = require("../../models");
 
 const { convertTextToSpeech } = require("../integrations/textToSpeech");
@@ -859,7 +862,7 @@ router.post("/:id/payment-methods", async (req, res) => {
 
     const intent = await stripe.setupIntents.create({
       customer: business.stripeCustomerId,
-      automatic_payment_methods: { enabled: true },
+      // automatic_payment_methods: { enabled: true },
     });
 
     res.status(200).json({ clientSecret: intent.client_secret });
@@ -975,6 +978,110 @@ router.delete("/:id/payment-methods/:methodId", async (req, res) => {
   } catch (error) {
     console.error("Error getting connected integrations:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.get("/:id/pricing-plans", async (req, res) => {
+  try {
+    let pricingPlans = await PricingPlan.findAll({
+      include: [
+        {
+          model: PricingPlan,
+          as: "basePlan",
+          attributes: ["id", "name"],
+        },
+        {
+          model: Feature,
+          as: "features",
+          through: {
+            attributes: [],
+          },
+        },
+        {
+          model: Subscription,
+          as: "subscriptions",
+          where: {
+            businessId: req.params.id,
+          },
+          required: false,
+          include: [
+            {
+              model: SubscriptionFeature,
+              as: "subscriptionFeatures",
+              attributes: ["featureId", "quantity"],
+            },
+          ],
+          attributes: ["id", "planId"],
+        },
+      ],
+      attributes: {
+        include: [
+          [
+            Sequelize.literal(
+              `CASE WHEN "subscriptions"."planId" IS NOT NULL THEN true ELSE false END`
+            ),
+            "isCurrentPlan",
+          ],
+          [
+            Sequelize.col("features.PlanFeature.baseQuantity"),
+            "features.baseQuantity",
+          ],
+          [Sequelize.col("features.id"), "features.id"],
+          [Sequelize.col("features.nameSingular"), "features.nameSingular"],
+          [Sequelize.col("features.namePlural"), "features.namePlural"],
+          [Sequelize.col("features.unitPrice"), "features.unitPrice"],
+          [Sequelize.col("features.createdAt"), "features.createdAt"],
+          [Sequelize.col("features.updatedAt"), "features.updatedAt"],
+        ],
+        exclude: ["basePlanId"],
+      },
+    });
+
+    pricingPlans = pricingPlans.map((plan) => {
+      const planData = plan.toJSON();
+
+      planData.features = planData.features.map((feature) => {
+        // Get the business's current subscription
+        const subscription = planData.subscriptions?.[0];
+
+        // Get features customized by the business in the subscription.
+        const customizedFeatures = subscription?.subscriptionFeatures;
+
+        const subscriptionFeature = customizedFeatures?.find(
+          (sf) => sf.featureId === feature.id
+        );
+
+        return {
+          ...feature,
+          baseQuantity: subscriptionFeature
+            ? subscriptionFeature.quantity
+            : feature.baseQuantity,
+        };
+      });
+
+      delete planData.subscriptions;
+      return planData;
+    });
+
+    return res.status(200).json({ success: true, data: pricingPlans });
+  } catch (error) {
+    console.error("Error getting pricing plans - ", error);
+    res.status(500).json({ success: false, message: "Internal Server Error." });
+  }
+});
+
+router.get("/:id/subscriptions", async (req, res) => {
+  try {
+    const subscription = await Subscription.findOne({
+      where: {
+        businessId: req.params.id,
+      },
+    });
+
+    res.status(200).json({ success: true, data: subscription.toJSON() });
+  } catch (error) {
+    console.log("error - ", error);
+    res.status(400).send({ error: { message: error.message } });
   }
 });
 

@@ -9,6 +9,9 @@ module.exports = {
         primaryKey: true,
         type: Sequelize.INTEGER,
       },
+      stripeSubscriptionId: {
+        type: Sequelize.STRING,
+      },
       billingCycle: {
         type: Sequelize.ENUM("monthly", "yearly"),
       },
@@ -21,6 +24,10 @@ module.exports = {
       },
       endDate: {
         type: Sequelize.DATE,
+      },
+      price: {
+        type: Sequelize.DECIMAL,
+        allowNull: false,
       },
       createdAt: {
         allowNull: false,

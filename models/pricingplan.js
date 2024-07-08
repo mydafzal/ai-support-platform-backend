@@ -20,6 +20,11 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "planId",
         as: "features",
       });
+
+      PricingPlan.hasMany(models.Subscription, {
+        foreignKey: "planId",
+        as: "subscriptions",
+      });
     }
   }
   PricingPlan.init(

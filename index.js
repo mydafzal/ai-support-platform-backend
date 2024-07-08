@@ -95,7 +95,7 @@ app.use(
   "/chat-assignments",
   require("./src/routes/chatUserAssignment.route.js")
 );
-app.use("/pricing-plans", require("./src/routes/pricingPlan.route.js"));
+app.use("/subscriptions", require("./src/routes/subscription.route.js"));
 
 app.get("/", (req, res) => {
   res.status(200).json({ token: "Server is running..." });

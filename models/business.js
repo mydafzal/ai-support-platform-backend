@@ -18,15 +18,19 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "businessId",
         as: "users",
       });
+
       Business.hasOne(models.Assistant, {
         foreignKey: "businessId",
         as: "assistant",
       });
+
       Business.hasOne(models.ChatWidget, {
         foreignKey: "businessId",
         as: "chatWidget",
       });
+
       Business.hasMany(models.Url, { foreignKey: "businessId", as: "urls" });
+
       Business.hasMany(models.Document, {
         foreignKey: "businessId",
         as: "documents",
@@ -35,6 +39,7 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "businessId",
         as: "calls",
       });
+
       Business.hasMany(models.CallTag, {
         foreignKey: "businessId",
         as: "callTags",
@@ -58,6 +63,11 @@ module.exports = (sequelize, DataTypes) => {
       Business.hasMany(models.Chat, {
         foreignKey: "businessId",
         as: "chats",
+      });
+
+      Business.hasOne(models.Subscription, {
+        foreignKey: "businessId",
+        as: "subscription",
       });
     }
   }

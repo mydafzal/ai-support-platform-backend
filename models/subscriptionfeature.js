@@ -9,6 +9,16 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       // define association here
+
+      SubscriptionFeature.belongsTo(models.Subscription, {
+        foreignKey: "subscriptionId",
+        as: "subscription",
+      });
+
+      SubscriptionFeature.belongsTo(models.Feature, {
+        foreignKey: "featureId",
+        as: "feature",
+      });
     }
   }
   SubscriptionFeature.init(

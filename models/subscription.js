@@ -9,20 +9,45 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       // define association here
+      Subscription.belongsTo(models.Business, {
+        foreignKey: "businessId",
+        as: "business",
+      });
+
+      Subscription.belongsTo(models.PricingPlan, {
+        foreignKey: "planId",
+        as: "plan",
+      });
+
+      Subscription.hasMany(models.SubscriptionFeature, {
+        foreignKey: "subscriptionId",
+        as: "subscriptionFeatures",
+      });
     }
   }
   Subscription.init(
     {
+      stripeSubscriptionId: {
+        type: DataTypes.STRING,
+      },
       billingCycle: {
         type: DataTypes.ENUM("monthly", "yearly"),
         allowNull: false,
       },
-      status: { type: DataTypes.ENUM("active", "cancelled"), allowNull: false },
+      status: {
+        type: DataTypes.ENUM("active", "cancelled"),
+        allowNull: false,
+        defaultValue: "active",
+      },
       startDate: {
         type: DataTypes.DATE,
       },
       endDate: {
         type: DataTypes.DATE,
+      },
+      price: {
+        type: DataTypes.DECIMAL,
+        allowNull: false,
       },
     },
     {
