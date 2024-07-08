@@ -37,6 +37,7 @@ const { z } = require("zod");
 const {
   AUDIO_FILES_BASE_PATH,
   AUDIO_FILES_BASE_URL,
+  CARD_BRAND_LOGOS,
 } = require("../utils/constants");
 const { Sequelize } = require("sequelize");
 
@@ -914,7 +915,10 @@ router.get("/:id/payment-methods", async (req, res) => {
       expiryYear: paymentMethod.card.exp_year,
       last4: paymentMethod.card.last4,
       createdAt: paymentMethod.created,
+      cardBrandLogoUrl: CARD_BRAND_LOGOS[paymentMethod.card.brand],
     };
+
+    // Visa, American Express, MasterCard, Discover
 
     res.status(200).json({ status: true, data: paymentMethodDetails });
   } catch (error) {

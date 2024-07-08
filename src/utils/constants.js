@@ -39,6 +39,16 @@ const ACCEPTING_CHATS = "Accepting chats";
 const NOT_ACCEPTING_CHATS = "Not accepting chats";
 const OFFLINE = "Offline";
 
+const CARD_BRAND_LOGOS = {
+  visa: "https://res.cloudinary.com/dydgf5aoh/image/upload/v1720189530/customer-bot-images/stn8n14fri1ikmmr47py.png",
+  "American Express":
+    "https://res.cloudinary.com/dydgf5aoh/image/upload/v1720189530/customer-bot-images/tmew6l5nplo7ncpgsw5n.png",
+  masterCard:
+    "https://res.cloudinary.com/dydgf5aoh/image/upload/v1720189530/customer-bot-images/w5mk5dqlkanh1kkq7fay.png",
+  discover:
+    "https://res.cloudinary.com/dydgf5aoh/image/upload/v1720189530/customer-bot-images/jlgmik5jbrgbsgdo0se2.png",
+};
+
 module.exports = {
   AUDIO_FILES_BASE_PATH,
   AUDIO_FILES_EXTENSION,
@@ -65,4 +75,5 @@ module.exports = {
   TEAM_MEMBERS_FEATURE_ID,
   CHATS_FEATURE_ID,
   POWERED_BY_FEATURE_ID,
+  CARD_BRAND_LOGOS,
 };
