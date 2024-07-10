@@ -37,8 +37,8 @@ module.exports = {
       },
       {
         id: TEAM_MEMBERS_FEATURE_ID,
-        nameSingular: "team member/month",
-        namePlural: "team members/month",
+        nameSingular: "team member",
+        namePlural: "team members",
         unitPrice: 0.5,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -58,8 +58,8 @@ module.exports = {
       },
       {
         id: COMPANIES_FEATURE_ID,
-        nameSingular: "company/month",
-        namePlural: "companies/month",
+        nameSingular: "company",
+        namePlural: "companies",
         unitPrice: 25,
         createdAt: new Date(),
         updatedAt: new Date(),
