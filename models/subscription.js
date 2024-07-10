@@ -30,25 +30,6 @@ module.exports = (sequelize, DataTypes) => {
       stripeSubscriptionId: {
         type: DataTypes.STRING,
       },
-      billingCycle: {
-        type: DataTypes.ENUM("monthly", "yearly"),
-        allowNull: false,
-      },
-      status: {
-        type: DataTypes.ENUM("active", "cancelled"),
-        allowNull: false,
-        defaultValue: "active",
-      },
-      startDate: {
-        type: DataTypes.DATE,
-      },
-      endDate: {
-        type: DataTypes.DATE,
-      },
-      price: {
-        type: DataTypes.DECIMAL,
-        allowNull: false,
-      },
     },
     {
       sequelize,
