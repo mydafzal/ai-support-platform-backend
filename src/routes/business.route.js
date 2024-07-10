@@ -45,7 +45,10 @@ const {
 const { Sequelize } = require("sequelize");
 
 const { redisClient } = require("../integrations/redis");
-const { capitalizeFirstLetterOfEachWord } = require("../utils/helpers");
+const {
+  capitalizeFirstLetterOfEachWord,
+  getNextMonthlyResetDate,
+} = require("../utils/helpers");
 
 const businessDetailsValidationSchema = z.object({
   userId: z.number(),
@@ -1081,6 +1084,9 @@ router.get("/:id/subscriptions", async (req, res) => {
         {
           model: PricingPlan,
           as: "plan",
+          attributes: {
+            exclude: ["stripeProductId", "basePlanId"],
+          },
         },
         {
           model: SubscriptionFeature,
@@ -1092,9 +1098,6 @@ router.get("/:id/subscriptions", async (req, res) => {
             {
               model: Feature,
               as: "feature",
-              attributes: {
-                exclude: ["id"],
-              },
             },
           ],
         },
@@ -1109,7 +1112,7 @@ router.get("/:id/subscriptions", async (req, res) => {
     subscription.subscriptionFeatures = subscription.subscriptionFeatures.map(
       (item) => {
         if (item.feature.namePlural.includes("month")) {
-          const featureName = item.feature.namePlural.split("/")[0];
+          const featureName = item.feature.namePlural;
           item.featureName = capitalizeFirstLetterOfEachWord(featureName);
         }
 
@@ -1117,6 +1120,26 @@ router.get("/:id/subscriptions", async (req, res) => {
         return item;
       }
     );
+
+    const stripeSubscription = await stripe.subscriptions.retrieve(
+      subscription.stripeSubscriptionId
+    );
+
+    const formattedDate = getNextMonthlyResetDate(
+      stripeSubscription.start_date
+    );
+
+    subscription = {
+      ...subscription,
+      usageResetDate: formattedDate,
+      status: stripeSubscription.status,
+      startDate: stripeSubscription.start_date,
+      price: stripeSubscription.items.data[0].price.unit_amount / 100, // convert from cents to dollars
+      billingCycle:
+        stripeSubscription.items.data[0].price.recurring.interval === "month"
+          ? "monthly"
+          : "yearly",
+    };
 
     res.status(200).json({ success: true, data: subscription });
   } catch (error) {
