@@ -15,6 +15,11 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "featureId",
         as: "plans",
       });
+
+      Feature.hasMany(models.SubscriptionFeature, {
+        foreignKey: "featureId",
+        as: "subscriptionFeatures",
+      });
     }
   }
   Feature.init(
