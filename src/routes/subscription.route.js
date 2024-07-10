@@ -45,7 +45,12 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const { businessId, planId, billingCycle, customizedFeatures } = req.body;
+    const {
+      businessId,
+      planId,
+      billingCycle,
+      customizedFeatures = [],
+    } = req.body;
 
     let business = await Business.findByPk(businessId);
 
@@ -66,21 +71,6 @@ router.post("/", async (req, res) => {
 
     business = business.toJSON();
     pricingPlan = pricingPlan.toJSON();
-
-    // There is no stripe subscription or billing involved for Free plan.
-    if (pricingPlan.name.toLowerCase() === "free") {
-      await Subscription.create({
-        planId: pricingPlan.id,
-        businessId: business.id,
-        billingCycle,
-        startDate: Date.now(),
-        price: 0,
-      });
-
-      return res
-        .status(200)
-        .json({ success: true, message: "Subscription created succesfully." });
-    }
 
     if (!business.stripeCustomerId) {
       return res.status(400).json({
@@ -105,13 +95,20 @@ router.post("/", async (req, res) => {
 
     // Determine actual price for the subscription based on billing cycle and customization of plan's features (if any)
 
-    const basePrice =
-      billingCycle === "monthly"
-        ? pricingPlan.monthlyBasePrice
-        : calculateYearlyPrice(
-            pricingPlan.monthlyBasePrice,
-            pricingPlan.yearlyDiscountPercentage
-          );
+    let basePrice;
+
+    if (pricingPlan.name.toLowerCase() === "free") {
+      basePrice = 0;
+    } else {
+      if (billingCycle === "monthly") {
+        basePrice = pricingPlan.monthlyBasePrice;
+      } else {
+        basePrice = calculateYearlyPrice(
+          pricingPlan.monthlyBasePrice,
+          pricingPlan.yearlyDiscountPercentage
+        );
+      }
+    }
 
     let totalCost = parseFloat(basePrice);
 
@@ -185,36 +182,45 @@ router.post("/", async (req, res) => {
       expand: ["latest_invoice.payment_intent"],
     });
 
-    await stripe.paymentIntents.confirm(
-      subscription.latest_invoice.payment_intent.id,
-      {
-        payment_method: paymentMethods.data[0].id,
-      }
-    );
+    // Free plans don't have payment intent. Checking if selected plan is not the FREE Plan:
+    if (subscription.latest_invoice.payment_intent) {
+      await stripe.paymentIntents.confirm(
+        subscription.latest_invoice.payment_intent.id,
+        {
+          payment_method: paymentMethods.data[0].id,
+        }
+      );
+    }
 
     subscription = await Subscription.create({
       stripeSubscriptionId: subscription.id,
       planId: pricingPlan.id,
       businessId: business.id,
-      billingCycle,
-      startDate: Date.now(),
-      price: totalCost,
     });
 
     subscription = subscription.toJSON();
 
-    const customizedFeatureIds = customizedFeatures.map(
-      (feature) => feature.featureId
-    );
+    let featuresWithBaseQuantity;
+    if (customizedFeatures.length > 0) {
+      const customizedFeatureIds = customizedFeatures.map(
+        (feature) => feature.featureId
+      );
 
-    let featuresWithBaseQuantity = await PlanFeature.findAll({
-      where: {
-        planId,
-        featureId: {
-          [Op.notIn]: customizedFeatureIds,
+      featuresWithBaseQuantity = await PlanFeature.findAll({
+        where: {
+          planId,
+          featureId: {
+            [Op.notIn]: customizedFeatureIds,
+          },
         },
-      },
-    });
+      });
+    } else {
+      featuresWithBaseQuantity = await PlanFeature.findAll({
+        where: {
+          planId,
+        },
+      });
+    }
 
     featuresWithBaseQuantity = featuresWithBaseQuantity.map((item) =>
       item.toJSON()
