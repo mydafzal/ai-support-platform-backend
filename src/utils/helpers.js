@@ -112,12 +112,13 @@ function isValidInteger(str) {
 }
 
 function calculateYearlyPrice(baseMonthlyPrice, yearlyDiscountPercentage) {
-  const baseYearlyPrice = parseFloat(baseMonthlyPrice) * 12;
+  const baseMonthly = parseFloat(baseMonthlyPrice);
+  const discountPercentage = parseFloat(yearlyDiscountPercentage);
 
-  const discountAmount = (yearlyDiscountPercentage / 100) * baseYearlyPrice;
+  const baseYearlyPrice = baseMonthly * 12;
+  const discountAmount = (discountPercentage / 100) * baseYearlyPrice;
 
   const finalYearlyPrice = baseYearlyPrice - discountAmount;
-
   return finalYearlyPrice.toFixed(2);
 }
 
@@ -126,6 +127,31 @@ function capitalizeFirstLetterOfEachWord(str) {
     .split(" ")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+}
+
+function getNextMonthlyResetDate(startDate) {
+  const start = new Date(startDate * 1000);
+  const now = new Date();
+
+  // Calculate next reset date
+  let nextReset = new Date(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    start.getDate()
+  );
+
+  // Adjust for month overflow (e.g., starting on Jan 31 -> Feb 28/29 or Mar 1)
+  if (nextReset.getDate() < start.getDate()) {
+    nextReset.setDate(0); // Set to the last day of the previous month
+  }
+
+  const formattedDate = nextReset.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  return formattedDate;
 }
 
 module.exports = {
@@ -140,4 +166,5 @@ module.exports = {
   isValidInteger,
   calculateYearlyPrice,
   capitalizeFirstLetterOfEachWord,
+  getNextMonthlyResetDate,
 };
