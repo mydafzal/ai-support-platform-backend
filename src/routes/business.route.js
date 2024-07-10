@@ -45,6 +45,7 @@ const {
 const { Sequelize } = require("sequelize");
 
 const { redisClient } = require("../integrations/redis");
+const { capitalizeFirstLetterOfEachWord } = require("../utils/helpers");
 
 const businessDetailsValidationSchema = z.object({
   userId: z.number(),
@@ -94,7 +95,7 @@ router.post("/", async (req, res) => {
 
     user = user?.toJSON();
 
-    if (!user.email) {
+    if (!user) {
       return res.status(404).json({
         succcess: false,
         message: "User with the given id does not exist.",
@@ -1072,13 +1073,52 @@ router.get("/:id/pricing-plans", async (req, res) => {
 
 router.get("/:id/subscriptions", async (req, res) => {
   try {
-    const subscription = await Subscription.findOne({
+    let subscription = await Subscription.findOne({
       where: {
         businessId: req.params.id,
       },
+      include: [
+        {
+          model: PricingPlan,
+          as: "plan",
+        },
+        {
+          model: SubscriptionFeature,
+          as: "subscriptionFeatures",
+          attributes: {
+            exclude: ["subscriptionId"],
+          },
+          include: [
+            {
+              model: Feature,
+              as: "feature",
+              attributes: {
+                exclude: ["id"],
+              },
+            },
+          ],
+        },
+      ],
+      attributes: {
+        exclude: ["planId"],
+      },
     });
 
-    res.status(200).json({ success: true, data: subscription.toJSON() });
+    subscription = subscription.toJSON();
+
+    subscription.subscriptionFeatures = subscription.subscriptionFeatures.map(
+      (item) => {
+        if (item.feature.namePlural.includes("month")) {
+          const featureName = item.feature.namePlural.split("/")[0];
+          item.featureName = capitalizeFirstLetterOfEachWord(featureName);
+        }
+
+        delete item.feature;
+        return item;
+      }
+    );
+
+    res.status(200).json({ success: true, data: subscription });
   } catch (error) {
     console.log("error - ", error);
     res.status(400).send({ error: { message: error.message } });
