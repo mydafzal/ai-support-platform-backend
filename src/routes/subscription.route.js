@@ -3,20 +3,50 @@ const router = Router();
 
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
+const { z } = require("zod");
+
+const customizedFeatureSchema = z.object({
+  featureId: z.number(),
+  quantity: z.number(),
+});
+
+const createSubscriptionValidationSchema = z.object({
+  businessId: z.number(),
+  planId: z.number(),
+  name: z.string().optional(),
+  password: z
+    .string()
+    .min(4, "Password must contain at least 4 characters.")
+    .optional(),
+  billingCycle: z.enum(["monthly", "yearly"]),
+  customizedFeatures: z.array(customizedFeatureSchema).optional(),
+});
+
 const { Op, Sequelize } = require("sequelize");
 const {
   Business,
   PricingPlan,
   Subscription,
   SubscriptionFeature,
+  PlanFeature,
   Feature,
 } = require("../../models");
 const { calculateYearlyPrice } = require("../utils/helpers");
 
 router.post("/", async (req, res) => {
-  const { businessId, planId, billingCycle, customizedFeatures } = req.body;
-
   try {
+    const { success, error } =
+      await createSubscriptionValidationSchema.safeParseAsync(req.body);
+
+    if (!success) {
+      return res.status(400).json({
+        success: false,
+        message: error.errors[0].message,
+      });
+    }
+
+    const { businessId, planId, billingCycle, customizedFeatures } = req.body;
+
     let business = await Business.findByPk(businessId);
 
     if (!business) {
@@ -37,6 +67,7 @@ router.post("/", async (req, res) => {
     business = business.toJSON();
     pricingPlan = pricingPlan.toJSON();
 
+    // There is no stripe subscription or billing involved for Free plan.
     if (pricingPlan.name.toLowerCase() === "free") {
       await Subscription.create({
         planId: pricingPlan.id,
@@ -71,6 +102,8 @@ router.post("/", async (req, res) => {
         message: "Please add a payment method first.",
       });
     }
+
+    // Determine actual price for the subscription based on billing cycle and customization of plan's features (if any)
 
     const basePrice =
       billingCycle === "monthly"
@@ -170,19 +203,55 @@ router.post("/", async (req, res) => {
 
     subscription = subscription.toJSON();
 
-    let subscriptionFeatures = customizedFeatures.map((feature) => ({
+    const customizedFeatureIds = customizedFeatures.map(
+      (feature) => feature.featureId
+    );
+
+    let featuresWithBaseQuantity = await PlanFeature.findAll({
+      where: {
+        planId,
+        featureId: {
+          [Op.notIn]: customizedFeatureIds,
+        },
+      },
+    });
+
+    featuresWithBaseQuantity = featuresWithBaseQuantity.map((item) =>
+      item.toJSON()
+    );
+
+    featuresWithBaseQuantity = featuresWithBaseQuantity.filter(
+      (item) => item.baseQuantity && item.baseQuantity > 0
+    );
+
+    featuresWithBaseQuantity = featuresWithBaseQuantity.map((item) => {
+      return {
+        subscriptionId: subscription.id,
+        featureId: item.featureId,
+        quantity: item.baseQuantity,
+        usedQuantity: 0,
+      };
+    });
+
+    let featuresWithCustomQuantity = customizedFeatures.map((feature) => ({
       subscriptionId: subscription.id,
       featureId: feature.featureId,
       quantity: feature.quantity,
+      usedQuantity: 0,
     }));
 
-    await SubscriptionFeature.bulkCreate(subscriptionFeatures);
+    const customizableFeatures = [
+      ...featuresWithBaseQuantity,
+      ...featuresWithCustomQuantity,
+    ];
+
+    await SubscriptionFeature.bulkCreate(customizableFeatures);
 
     res
       .status(200)
       .json({ success: true, message: "Subscription created succesfully." });
   } catch (error) {
-    console.log("error - ", error);
+    console.log("create subscription error - ", error);
     res.status(400).send({ error: { message: error.message } });
   }
 });
