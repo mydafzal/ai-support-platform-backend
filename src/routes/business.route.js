@@ -1113,8 +1113,6 @@ router.get("/:id/subscriptions", async (req, res) => {
         const featureName = item.feature.namePlural;
         item.featureName = capitalizeFirstLetterOfEachWord(featureName);
 
-        console.log("featureName - ", item.featureName);
-
         delete item.feature;
         return item;
       }
