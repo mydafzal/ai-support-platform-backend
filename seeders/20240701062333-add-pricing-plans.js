@@ -14,6 +14,8 @@ module.exports = {
         id: FREE_PLAN_ID,
         name: "FREE",
         tagline: "Get Started with Essential Features at No Cost",
+        monthlyBasePrice: 0,
+        yearlyDiscountPercentage: 10,
         stripeProductId: "prod_QOoCVqTZPmS5qw",
         createdAt: new Date(),
         updatedAt: new Date(),
