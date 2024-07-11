@@ -923,9 +923,8 @@ router.get("/:id/payment-methods", async (req, res) => {
       last4: paymentMethod.card.last4,
       createdAt: paymentMethod.created,
       cardBrandLogoUrl: CARD_BRAND_LOGOS[paymentMethod.card.brand],
+      stripePaymentMethodId: paymentMethod.id,
     };
-
-    // Visa, American Express, MasterCard, Discover
 
     res.status(200).json({ status: true, data: paymentMethodDetails });
   } catch (error) {
@@ -1111,10 +1110,10 @@ router.get("/:id/subscriptions", async (req, res) => {
 
     subscription.subscriptionFeatures = subscription.subscriptionFeatures.map(
       (item) => {
-        if (item.feature.namePlural.includes("month")) {
-          const featureName = item.feature.namePlural;
-          item.featureName = capitalizeFirstLetterOfEachWord(featureName);
-        }
+        const featureName = item.feature.namePlural;
+        item.featureName = capitalizeFirstLetterOfEachWord(featureName);
+
+        console.log("featureName - ", item.featureName);
 
         delete item.feature;
         return item;
@@ -1135,6 +1134,8 @@ router.get("/:id/subscriptions", async (req, res) => {
       status: stripeSubscription.status,
       startDate: stripeSubscription.start_date,
       price: stripeSubscription.items.data[0].price.unit_amount / 100, // convert from cents to dollars
+      isScheduledForCancellation: stripeSubscription.cancel_at_period_end,
+      currentPeriodEnd: stripeSubscription.current_period_end,
       billingCycle:
         stripeSubscription.items.data[0].price.recurring.interval === "month"
           ? "monthly"
