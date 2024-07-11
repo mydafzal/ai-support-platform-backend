@@ -43,7 +43,7 @@ const CARD_BRAND_LOGOS = {
   visa: "https://res.cloudinary.com/dydgf5aoh/image/upload/v1720189530/customer-bot-images/stn8n14fri1ikmmr47py.png",
   "American Express":
     "https://res.cloudinary.com/dydgf5aoh/image/upload/v1720189530/customer-bot-images/tmew6l5nplo7ncpgsw5n.png",
-  masterCard:
+  mastercard:
     "https://res.cloudinary.com/dydgf5aoh/image/upload/v1720189530/customer-bot-images/w5mk5dqlkanh1kkq7fay.png",
   discover:
     "https://res.cloudinary.com/dydgf5aoh/image/upload/v1720189530/customer-bot-images/jlgmik5jbrgbsgdo0se2.png",
