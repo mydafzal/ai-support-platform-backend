@@ -31,18 +31,8 @@ const app = express();
 const server = createServer(app);
 
 const { initializeSocketIO } = require("./src/loaders/socket-io.js");
+const errorHandler = require("./src/middleware/errorHandler.middleware.js");
 initializeSocketIO(server);
-
-// app.use(
-//   "/data",
-//   express.static(path.join(__dirname, "data"), {
-//     maxAge: 0,
-//     etag: false,
-//     setHeaders: (res) => {
-//       res.setHeader("Cache-Control", "no-store");
-//     },
-//   })
-// );
 
 app.use(
   "/data",
@@ -104,6 +94,8 @@ app.get("/", (req, res) => {
 app.post("/test", async (req, res) => {
   res.status(200).json({ response: "Test" });
 });
+
+app.use(errorHandler);
 
 server.listen(process.env.PORT, () => {
   console.log(`Server is running at http://localhost:${process.env.PORT}`);
