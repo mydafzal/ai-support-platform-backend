@@ -1038,31 +1038,48 @@ router.get("/:id/pricing-plans", async (req, res) => {
         ],
         exclude: ["basePlanId"],
       },
+      order: [
+        ["id", "ASC"],
+        ["features.id", "ASC"],
+      ],
     });
 
     pricingPlans = pricingPlans.map((plan) => {
       const planData = plan.toJSON();
 
-      planData.features = planData.features.map((feature) => {
-        // Get the business's current subscription
+      if (planData.isCurrentPlan) {
         const subscription = planData.subscriptions?.[0];
 
-        // Get features customized by the business in the subscription.
-        const customizedFeatures = subscription?.subscriptionFeatures;
+        planData.features.forEach((feature) => {
+          const subscriptionFeature = subscription?.subscriptionFeatures.find(
+            (sf) => sf.featureId === feature.id
+          );
 
-        const subscriptionFeature = customizedFeatures?.find(
-          (sf) => sf.featureId === feature.id
-        );
-
-        return {
-          ...feature,
-          baseQuantity: subscriptionFeature
-            ? subscriptionFeature.quantity
-            : feature.baseQuantity,
-        };
-      });
+          feature.baseQuantity = subscriptionFeature.quantity;
+        });
+      }
 
       delete planData.subscriptions;
+
+      if (planData.basePlan) {
+        let basePlanFeatures = pricingPlans.find(
+          (plan) => plan.id == planData.basePlan.id
+        ).features;
+
+        basePlanFeatures = basePlanFeatures.map((item) => item.toJSON());
+
+        // Remove features from this plan that are also included in its base plan.
+        planData.features = planData.features.filter((feature) => {
+          const existsInBasePlan = basePlanFeatures.some(
+            (item) =>
+              item.id === feature.id &&
+              item.baseQuantity === feature.baseQuantity
+          );
+
+          return !existsInBasePlan;
+        });
+      }
+
       return planData;
     });
 
@@ -1110,7 +1127,8 @@ router.get("/:id/subscriptions", async (req, res) => {
 
     subscription.subscriptionFeatures = subscription.subscriptionFeatures.map(
       (item) => {
-        const featureName = item.feature.namePlural;
+        const featureName =
+          item.feature.namePlural || item.feature.nameSingular;
         item.featureName = capitalizeFirstLetterOfEachWord(featureName);
 
         delete item.feature;
