@@ -21,6 +21,7 @@ const {
 const {
   STORAGE_BASE_PATH,
   PROFILE_IMAGES_BASE_URL,
+  TEAM_MEMBERS_FEATURE_ID,
 } = require("../utils/constants");
 
 const path = require("path");
@@ -29,6 +30,7 @@ const fs = require("fs");
 const { v4: uuidv4 } = require("uuid");
 
 const multer = require("multer");
+const SubscriptionService = require("../services/subscription.service");
 
 const storage = multer.diskStorage({
   destination: path.join(STORAGE_BASE_PATH, `profile-images`),
@@ -145,25 +147,22 @@ router.delete("/:id", async (req, res) => {
   const userId = req.params.id;
 
   try {
-    let user = await User.findByPk(userId);
+    let user = await User.findByPk(userId, { raw: true });
 
     if (user) {
-      user = user.toJSON();
-
       await Invitation.destroy({
         where: {
           email: user.email,
         },
       });
 
-      let business = await Business.findByPk(user.businessId);
-      const { name } = business.toJSON();
+      let business = await Business.findByPk(user.businessId, {
+        raw: true,
+      });
 
-      let adminUser = await User.findByPk(business.toJSON().adminUserId);
-      adminUser = adminUser.toJSON();
+      let adminUser = await User.findByPk(business.adminUserId, { raw: true });
 
-      let emailTemplate = `${adminUser.email} removed you from organization ${name}.`;
-
+      let emailTemplate = `${adminUser.email} removed you from organization ${business.name}.`;
       await sendEmail(user.email, emailTemplate);
 
       await User.update(
@@ -175,6 +174,12 @@ router.delete("/:id", async (req, res) => {
             id: userId,
           },
         }
+      );
+
+      await SubscriptionService.updateFeatureUsage(
+        TEAM_MEMBERS_FEATURE_ID,
+        business.id,
+        -1
       );
     }
 

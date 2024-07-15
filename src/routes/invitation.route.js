@@ -8,6 +8,8 @@ const { z } = require("zod");
 const { sendEmail } = require("../integrations/nodemailer");
 const { generateEmailLink } = require("../utils/helpers");
 const { Op } = require("sequelize");
+const SubscriptionService = require("../services/subscription.service");
+const { TEAM_MEMBERS_FEATURE_ID } = require("../utils/constants");
 
 const invitationValidationSchema = z.object({
   email: z.string().email(),
@@ -54,6 +56,18 @@ router.post("/", async (req, res) => {
       });
     }
 
+    const hasReachedLimit = await SubscriptionService.hasReachedFeatureLimit(
+      TEAM_MEMBERS_FEATURE_ID,
+      businessId
+    );
+
+    if (hasReachedLimit) {
+      return res.status(400).json({
+        success: false,
+        message: "Operation denied: Feature limit has been exceeded.",
+      });
+    }
+
     let invitation = await Invitation.create({
       email,
       businessId,
@@ -95,6 +109,12 @@ router.post("/", async (req, res) => {
     );
     const emailTemplate = `${business.adminUser.email} invited you to ${business.name}. Click <a href="${emailLink}">here</a> to accept the invitation.`;
     await sendEmail(email, emailTemplate);
+
+    await SubscriptionService.updateFeatureUsage(
+      TEAM_MEMBERS_FEATURE_ID,
+      businessId,
+      1
+    );
 
     res.status(201).json({
       success: true,
@@ -174,7 +194,7 @@ router.put("/", async (req, res) => {
 
 router.delete("/:id", async (req, res) => {
   try {
-    let invitation = await Invitation.findByPk(req.params.id);
+    let invitation = await Invitation.findByPk(req.params.id, { raw: true });
 
     if (!invitation) {
       return res.status(204).send();
@@ -187,8 +207,6 @@ router.delete("/:id", async (req, res) => {
     });
 
     if (invitation) {
-      invitation = invitation.toJSON();
-
       await User.update(
         {
           businessId: null,
@@ -200,21 +218,29 @@ router.delete("/:id", async (req, res) => {
         }
       );
 
-      let business = await Business.findByPk(invitation.businessId);
-      const { name } = business.toJSON();
+      let business = await Business.findByPk(invitation.businessId, {
+        raw: true,
+      });
 
-      let user = await User.findByPk(business.toJSON().adminUserId);
-      user = user.toJSON();
+      let user = await User.findByPk(business.adminUserId, {
+        raw: true,
+      });
 
       let emailTemplate;
 
       if (invitation.status === "Pending") {
-        emailTemplate = `Your invitation for organization ${name} has been cancelled.`;
+        emailTemplate = `Your invitation for organization ${business.name} has been cancelled.`;
       } else {
-        emailTemplate = `${user.email} removed you from organization ${name}.`;
+        emailTemplate = `${user.email} removed you from organization ${business.name}.`;
       }
 
       await sendEmail(invitation.email, emailTemplate);
+
+      await SubscriptionService.updateFeatureUsage(
+        TEAM_MEMBERS_FEATURE_ID,
+        business.id,
+        -1
+      );
     }
 
     res.status(204).send();

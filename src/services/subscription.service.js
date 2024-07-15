@@ -7,7 +7,7 @@ const {
   PlanFeature,
 } = require("../../models");
 
-const { FREE_PLAN_ID } = require("../utils/constants");
+const { FREE_PLAN_ID, TEAM_MEMBERS_FEATURE_ID } = require("../utils/constants");
 const { calculateYearlyPrice } = require("../utils/helpers");
 
 const StripeService = require("./stripe.service");
@@ -114,7 +114,7 @@ async function createSubscription(data) {
         subscriptionId: subscription.id,
         featureId: item.featureId,
         quantity: customFeature ? customFeature.quantity : item.baseQuantity,
-        usedQuantity: 0,
+        usedQuantity: item.featureId == TEAM_MEMBERS_FEATURE_ID ? 1 : 0,
       };
     });
 
@@ -465,12 +465,80 @@ function calculateExtraCostBasedOnCustomizedFeatures(
   return totalExtraCost;
 }
 
+async function updateFeatureUsage(featureId, businessId, additionalUsage) {
+  const subscription = await Subscription.findOne({
+    where: {
+      businessId,
+    },
+    raw: true,
+  });
+
+  const subscriptionFeature = await SubscriptionFeature.findOne({
+    where: {
+      featureId,
+      subscriptionId: subscription.id,
+    },
+  });
+
+  if (additionalUsage >= 0) {
+    // Increase usage
+    subscriptionFeature.usedQuantity += additionalUsage;
+  } else {
+    // Decrease usage
+    subscriptionFeature.usedQuantity = Math.max(
+      0,
+      subscriptionFeature.usedQuantity + additionalUsage
+    );
+  }
+
+  await subscriptionFeature.save();
+}
+
+async function hasReachedFeatureLimit(featureId, businessId) {
+  const subscription = await Subscription.findOne({
+    where: {
+      businessId,
+    },
+    raw: true,
+  });
+
+  const subscriptionFeature = await SubscriptionFeature.findOne({
+    where: {
+      featureId,
+      subscriptionId: subscription.id,
+    },
+  });
+
+  console.log(
+    "parseInt(subscriptionFeature.quantity) - ",
+    subscriptionFeature.quantity
+  );
+
+  console.log(
+    "subscriptionFeature.usedQuantity - ",
+    subscriptionFeature.usedQuantity
+  );
+
+  console.log(
+    "result - ",
+    parseInt(subscriptionFeature.quantity) - subscriptionFeature.usedQuantity
+  );
+
+  return (
+    subscriptionFeature.quantity === "Unlimited" ||
+    parseInt(subscriptionFeature.quantity) - subscriptionFeature.usedQuantity <
+      1
+  );
+}
+
 const SubscriptionService = {
   handleSubscriptionCancellation,
   createSubscription,
   updateSubscription,
   cancelSubscription,
   resumeSubscription,
+  updateFeatureUsage,
+  hasReachedFeatureLimit,
 };
 
 module.exports = SubscriptionService;

@@ -52,6 +52,8 @@ const {
   AUDIO_FILES_BASE_URL,
   CALL_RECORDINGS_BASE_PATH,
   HUBPOST_INTEGRATION_ID,
+  CALL_MINUTES_FEATURE_ID,
+  MEETING_FEATURE_ID,
 } = require("../utils/constants");
 const {
   generateFilename,
@@ -59,6 +61,7 @@ const {
 } = require("../utils/helpers");
 const { sendEmail } = require("../integrations/nodemailer");
 const { Op } = require("sequelize");
+const SubscriptionService = require("../services/subscription.service");
 
 async function handleIncomingCall(request) {
   const VoiceResponse = twilio.twiml.VoiceResponse;
@@ -81,6 +84,18 @@ async function handleIncomingCall(request) {
 
   if (!business) {
     twiml.say("Sorry, we can't handle your call.");
+    return twiml.toString();
+  }
+
+  let hasReachedLimit = await SubscriptionService.hasReachedFeatureLimit(
+    CALL_MINUTES_FEATURE_ID,
+    business.id
+  );
+
+  if (hasReachedLimit) {
+    twiml.say(
+      "Sorry, we can't handle your call at the moment. please try again later."
+    );
     return twiml.toString();
   }
 
@@ -146,8 +161,13 @@ async function handleIncomingCall(request) {
 
   const count = await getConnectedIntegrationsCount(business.id);
 
+  hasReachedLimit = await SubscriptionService.hasReachedFeatureLimit(
+    MEETING_FEATURE_ID,
+    business.id
+  );
+
   // Businesses must connect both Google Calendar and Calendly integrations so that customers can schedule meetings on phone call.
-  let canScheduleMeeting = count !== 3 ? false : true;
+  let canScheduleMeeting = count !== 3 || hasReachedLimit ? false : true;
 
   let teamGroups = await TeamGroup.findAll({
     where: {
@@ -199,7 +219,8 @@ async function gatherSpeechInput() {
   const twiml = new VoiceResponse();
 
   twiml.gather({
-    speechTimeout: "auto",
+    // speechTimeout: "auto",
+    speechTimeout: "15",
     speechModel: "experimental_conversations",
     input: "speech",
     action: `${BASE_URL}/calls/speech-input`,
@@ -283,19 +304,19 @@ async function handleSpeechInput(request) {
 
   const textToSpeechFileURL = `${AUDIO_FILES_BASE_URL}/${fileName}`;
 
-  const { shouldRedirect, groupToRedirect } = await getCallData(callId);
+  const updatedCallData = await getCallData(callId);
 
-  if (shouldRedirect) {
+  if (updatedCallData?.shouldRedirect) {
     console.log("Dialing the human agent's number...");
     console.log("groupToRedirect - ", groupToRedirect);
 
     let teamGroup;
 
-    if (groupToRedirect?.length > 0) {
+    if (updatedCallData?.groupToRedirect?.length > 0) {
       teamGroup = await TeamGroup.findOne({
         where: {
           businessId,
-          name: groupToRedirect,
+          name: updatedCallData.groupToRedirect,
         },
       });
     }
@@ -539,13 +560,14 @@ async function handleCallDisconnect(request) {
     await Promise.all(promises);
   }
 
-  if (callData?.shouldAddGreetingMessageToTranscription) {
-    let call = await Call.findByPk(callId, {
-      attributes: ["businessId"],
-    });
+  let call = await Call.findByPk(callId, {
+    attributes: ["businessId"],
+    raw: true,
+  });
 
+  if (callData?.shouldAddGreetingMessageToTranscription) {
     const assistant = await Assistant.findOne({
-      where: { businessId: call.toJSON().businessId },
+      where: { businessId: call.businessId },
     });
 
     const greetingMessage = {
@@ -572,6 +594,17 @@ async function handleCallDisconnect(request) {
   }
 
   deleteCallData(callId);
+
+  if (call) {
+    const callDurationInSeconds = parseFloat(request.body.CallDuration);
+    const callDurationInMinutes = Math.round(callDurationInSeconds / 60);
+
+    await SubscriptionService.updateFeatureUsage(
+      CALL_MINUTES_FEATURE_ID,
+      call.businessId,
+      callDurationInMinutes
+    );
+  }
 }
 
 async function startCallRecording(callId) {

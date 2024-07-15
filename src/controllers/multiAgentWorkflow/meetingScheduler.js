@@ -3,6 +3,10 @@ const {
   addEventToGoogleCalendar,
 } = require("../../integrations/googleCalendar");
 const { getAvailableTimeSlots } = require("../../integrations/calendly");
+const SubscriptionService = require("../../services/subscription.service");
+const { MEETING_FEATURE_ID } = require("../../utils/constants");
+
+const { SubscriptionFeature } = require("../../../models");
 
 async function checkSlotAvailability(month, date, hour, businessId) {
   let convertedDate = constructDate(month, date, hour);
@@ -113,6 +117,25 @@ async function scheduleMeeting(
     meetingStartTime.toISOString(),
     meetingEndTime.toISOString()
   );
+
+  const subscriptionFeature = await SubscriptionFeature.findOne({
+    where: {
+      featureId: MEETING_FEATURE_ID,
+      businessId,
+    },
+    raw: true,
+  });
+
+  if (
+    subscriptionFeature.usedQuantity &&
+    typeof parseInt(subscriptionFeature.usedQuantity) === "number"
+  ) {
+    await SubscriptionService.updateFeatureUsage(
+      MEETING_FEATURE_ID,
+      businessId,
+      1
+    );
+  }
 
   return `Meeting has been scheduled.`;
 }

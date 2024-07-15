@@ -31,7 +31,9 @@ const {
   CHAT_UPLOADS_BASE_URL,
   CALENDLY_INTEGRATION_ID,
   GOOGLE_CALENDAR_INTEGRATION_ID,
+  CHATS_FEATURE_ID,
 } = require("../utils/constants");
+const SubscriptionService = require("../services/subscription.service");
 
 const storage = multer.diskStorage({
   destination: path.join(STORAGE_BASE_PATH, `chat-uploads`),
@@ -87,6 +89,18 @@ router.post("/", async (req, res) => {
       });
     }
 
+    const hasReachedLimit = await SubscriptionService.hasReachedFeatureLimit(
+      CHATS_FEATURE_ID,
+      businessId
+    );
+
+    if (hasReachedLimit) {
+      return res.status(400).json({
+        success: false,
+        message: "Operation denied: Feature limit has been exceeded.",
+      });
+    }
+
     chatWidget = chatWidget.toJSON();
 
     let chat = await Chat.create({
@@ -128,6 +142,12 @@ router.post("/", async (req, res) => {
       chatId: chat.id,
       messages: [preChatForm, welcomeMessage],
     };
+
+    await SubscriptionService.updateFeatureUsage(
+      CHATS_FEATURE_ID,
+      businessId,
+      1
+    );
 
     res.status(201).json({ success: true, data: response });
   } catch (error) {
