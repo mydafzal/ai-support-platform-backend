@@ -94,6 +94,19 @@ async function createStripePrice(totalCostInCents, productId, billingCycle) {
   });
 }
 
+async function updateSubscriptionDefaultPaymentMethod(
+  subscriptionId,
+  newPaymentMethodId
+) {
+  await stripe.subscriptions.update(subscriptionId, {
+    default_payment_method: newPaymentMethodId,
+  });
+}
+
+async function detachStripePaymentMethod(paymentMethodId) {
+  await stripe.paymentMethods.detach(paymentMethodId);
+}
+
 const StripeService = {
   createStripeSubscription,
   getCustomerPaymentMethod,
@@ -102,5 +115,7 @@ const StripeService = {
   updateStripeSubscriptionPrice,
   cancelStripeSubscription,
   resumeStripeSubscription,
+  updateSubscriptionDefaultPaymentMethod,
+  detachStripePaymentMethod,
 };
 module.exports = StripeService;
