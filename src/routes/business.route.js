@@ -41,6 +41,7 @@ const {
   AUDIO_FILES_BASE_PATH,
   AUDIO_FILES_BASE_URL,
   CARD_BRAND_LOGOS,
+  FREE_PLAN_ID,
 } = require("../utils/constants");
 const { Sequelize } = require("sequelize");
 
@@ -49,6 +50,7 @@ const {
   capitalizeFirstLetterOfEachWord,
   getNextMonthlyResetDate,
 } = require("../utils/helpers");
+const StripeService = require("../services/stripe.service");
 
 const businessDetailsValidationSchema = z.object({
   userId: z.number(),
@@ -866,7 +868,6 @@ router.post("/:id/payment-methods", async (req, res) => {
 
     const intent = await stripe.setupIntents.create({
       customer: business.stripeCustomerId,
-      // automatic_payment_methods: { enabled: true },
     });
 
     res.status(200).json({ clientSecret: intent.client_secret });
@@ -942,6 +943,7 @@ router.delete("/:id/payment-methods/:methodId", async (req, res) => {
       where: {
         id: businessId,
       },
+      raw: true,
     });
 
     if (!business) {
@@ -950,9 +952,9 @@ router.delete("/:id/payment-methods/:methodId", async (req, res) => {
         .json({ success: true, message: "Invalid business id." });
     }
 
-    business = business.toJSON();
-
-    const paymentMethod = await stripe.paymentMethods.detach(paymentMethodId);
+    const paymentMethod = await StripeService.detachStripePaymentMethod(
+      paymentMethodId
+    );
 
     if (!paymentMethod) {
       return res
@@ -975,6 +977,20 @@ router.delete("/:id/payment-methods/:methodId", async (req, res) => {
           default_payment_method: newPaymentMethod.id,
         },
       });
+    }
+
+    const subscription = await Subscription.findOne({
+      where: {
+        businessId: business.id,
+      },
+      raw: true,
+    });
+
+    if (subscription && subscription.planId !== FREE_PLAN_ID) {
+      await StripeService.updateSubscriptionDefaultPaymentMethod(
+        subscription.stripeSubscriptionId,
+        newPaymentMethod.id
+      );
     }
 
     res.status(204).send();
