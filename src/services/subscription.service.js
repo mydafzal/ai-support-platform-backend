@@ -19,20 +19,27 @@ async function createSubscription(data) {
 
     let business = await Business.findByPk(businessId, { raw: true });
 
-    if (!business) throw new Error("Invalid business id.");
+    if (!business) {
+      throw { statusCode: 404, message: "Invalid business id." };
+    }
 
     let pricingPlan = await PricingPlan.findByPk(planId, { raw: true });
 
-    if (!pricingPlan) throw new Error("Invalid pricing plan id.");
+    if (!pricingPlan) {
+      throw { statusCode: 404, message: "Invalid pricing plan id." };
+    }
 
-    if (!business.stripeCustomerId)
-      throw new Error("Please add a payment method first.");
+    if (!business.stripeCustomerId) {
+      throw { statusCode: 400, message: "Please add a payment method first." };
+    }
 
     const method = await StripeService.getCustomerPaymentMethod(
       business.stripeCustomerId
     );
 
-    if (!method) throw new Error("Please add a payment method first.");
+    if (!method) {
+      throw { statusCode: 400, message: "Please add a payment method first." };
+    }
 
     let basePrice;
 
@@ -116,6 +123,262 @@ async function createSubscription(data) {
     return "Subscription created succesfully.";
   } catch (error) {
     console.log("create subscription error - ", error);
+    throw error;
+  }
+}
+
+async function updateSubscription(data) {
+  try {
+    const {
+      subscriptionId,
+      newPlanId,
+      billingCycle,
+      customizedFeatures = [],
+    } = data;
+
+    let subscription = await Subscription.findByPk(subscriptionId, {
+      include: [
+        {
+          model: Business,
+          as: "business",
+        },
+      ],
+      raw: true,
+      nest: true,
+    });
+
+    if (!subscription) {
+      throw { statusCode: 404, message: "Invalid subscription id." };
+    }
+
+    const stripeSubscription = await StripeService.getStripeSubscription(
+      subscription.stripeSubscriptionId
+    );
+
+    const subscriptionItem = stripeSubscription.items.data[0];
+    const currentSubscriptionPrice = subscriptionItem.price;
+
+    const currentBillingCycle =
+      currentSubscriptionPrice.recurring.interval === "month"
+        ? "monthly"
+        : "yearly";
+
+    // Check if the new subscription changes are the same as current subscription details:
+
+    const hasPlanChanged = newPlanId != subscription.planId;
+
+    if (
+      !hasPlanChanged &&
+      currentBillingCycle === billingCycle &&
+      customizedFeatures.length < 1
+    ) {
+      throw {
+        statusCode: 400,
+        message: "No changes were identified in the subscrption.",
+      };
+    }
+
+    let pricingPlan = await PricingPlan.findByPk(
+      newPlanId || subscription.planId,
+      {
+        raw: true,
+      }
+    );
+
+    if (!pricingPlan) {
+      throw {
+        statusCode: 404,
+        message: "Invalid pricing plan id.",
+      };
+    }
+
+    const basePrice = pricingPlan.monthlyBasePrice;
+    let totalCost = parseFloat(basePrice);
+
+    const newPlanFeatures = await getFeaturesOfPlan(
+      newPlanId || subscription.planId,
+      {
+        raw: true,
+      }
+    );
+
+    if (customizedFeatures.length > 0) {
+      const totalExtraCost = calculateExtraCostBasedOnCustomizedFeatures(
+        newPlanFeatures,
+        customizedFeatures
+      );
+
+      totalCost += totalExtraCost;
+    }
+
+    if (billingCycle === "yearly") {
+      totalCost = calculateYearlyPrice(
+        totalCost,
+        pricingPlan.yearlyDiscountPercentage
+      );
+    }
+
+    const totalCostInCents = Math.round(totalCost * 100);
+
+    const newSubscriptionPrice = await StripeService.createStripePrice(
+      totalCostInCents,
+      pricingPlan.stripeProductId,
+      billingCycle
+    );
+
+    console.log("subscription - ", subscription);
+
+    const paymentMethod = await StripeService.getCustomerPaymentMethod(
+      subscription.business.stripeCustomerId
+    );
+
+    await StripeService.updateStripeSubscriptionPrice(
+      subscription.stripeSubscriptionId,
+      newSubscriptionPrice.id,
+      subscriptionItem.id,
+      paymentMethod.id
+    );
+
+    if (newPlanId) {
+      await Subscription.update(
+        {
+          planId: pricingPlan.id,
+        },
+        {
+          where: {
+            id: subscription.id,
+          },
+        }
+      );
+    }
+
+    // If subscription plan has changed, then:
+    if (newPlanId) {
+      // 1: Remove features from user's subscription that are not included in the new plan.
+      await SubscriptionFeature.destroy({
+        where: {
+          subscriptionId: subscription.id,
+          featureId: {
+            [Op.notIn]: newPlanFeatures.map((item) => item.id),
+          },
+        },
+      });
+
+      // 2: Add features to user's subscription that are not currently in the subscription but are included in the new plan:
+      const currentSubscriptionFeatures = await SubscriptionFeature.findAll({
+        where: { subscriptionId: subscription.id },
+        attributes: ["featureId"],
+      });
+
+      const currentFeatureIds = new Set(
+        currentSubscriptionFeatures.map((item) => item.featureId)
+      );
+
+      let newPlanFeaturesNotInCurrentSubscription = newPlanFeatures.filter(
+        (feature) => !currentFeatureIds.has(feature.id)
+      );
+
+      newPlanFeaturesNotInCurrentSubscription =
+        newPlanFeaturesNotInCurrentSubscription.map((item) => ({
+          featureId: item.id,
+          subscriptionId: subscription.id,
+          quantity: item.baseQuantity,
+        }));
+
+      await SubscriptionFeature.bulkCreate(
+        newPlanFeaturesNotInCurrentSubscription
+      );
+    }
+
+    // 1. Reset the quantity of features that were customized in the previous plan but are not customized in the new plan:
+    // 2. Set the quantity of features according to the customizations made to the new plan.
+
+    const allFeatures = newPlanFeatures.map((feature) => {
+      const customizedFeature = customizedFeatures.find(
+        (customFeature) => customFeature.featureId === feature.id
+      );
+
+      return {
+        featureId: feature.id,
+        quantity: customizedFeature
+          ? customizedFeature.quantity
+          : feature.baseQuantity,
+      };
+    });
+
+    const promises = allFeatures.map((feature) =>
+      SubscriptionFeature.update(
+        { quantity: feature.quantity },
+        {
+          where: {
+            subscriptionId: subscription.id,
+            featureId: feature.featureId,
+          },
+        }
+      )
+    );
+
+    await Promise.all(promises);
+
+    return "Subscription updated succesfully.";
+  } catch (error) {
+    console.log("update subscription error - ", error);
+    throw error;
+  }
+}
+
+async function cancelSubscription(data) {
+  try {
+    const { subscriptionId } = data;
+
+    let subscription = await Subscription.findByPk(subscriptionId, {
+      raw: true,
+    });
+
+    if (!subscription) {
+      throw { statusCode: 404, message: "Invalid subscription id." };
+    }
+
+    const stripeSubscription = await StripeService.cancelStripeSubscription(
+      subscription.stripeSubscriptionId
+    );
+
+    const result = {
+      isScheduledForCancellation: stripeSubscription.cancel_at_period_end,
+      currentPeriodEnd: stripeSubscription.current_period_end,
+    };
+
+    return result;
+  } catch (error) {
+    console.log("cancel subscription error - ", error);
+    throw error;
+  }
+}
+
+async function resumeSubscription(data) {
+  try {
+    const { subscriptionId } = data;
+
+    let subscription = await Subscription.findByPk(subscriptionId, {
+      raw: true,
+    });
+
+    if (!subscription) {
+      throw { statusCode: 404, message: "Invalid subscription id." };
+    }
+
+    const stripeSubscription = await StripeService.resumeStripeSubscription(
+      subscription.stripeSubscriptionId
+    );
+
+    const result = {
+      isScheduledForCancellation: stripeSubscription.cancel_at_period_end,
+      currentPeriodEnd: stripeSubscription.current_period_end,
+    };
+
+    return result;
+  } catch (error) {
+    console.log("cancel subscription error - ", error);
     throw error;
   }
 }
@@ -205,6 +468,9 @@ function calculateExtraCostBasedOnCustomizedFeatures(
 const SubscriptionService = {
   handleSubscriptionCancellation,
   createSubscription,
+  updateSubscription,
+  cancelSubscription,
+  resumeSubscription,
 };
 
 module.exports = SubscriptionService;

@@ -39,6 +39,42 @@ async function createStripeSubscription(
   return subscription;
 }
 
+async function updateStripeSubscriptionPrice(
+  subscriptionId,
+  newPriceId,
+  subscriptionItemId,
+  paymentMethodId
+) {
+  await stripe.subscriptions.update(subscriptionId, {
+    items: [
+      {
+        id: subscriptionItemId,
+        deleted: true,
+      },
+      {
+        price: newPriceId,
+      },
+    ],
+    default_payment_method: paymentMethodId,
+  });
+}
+
+async function getStripeSubscription(subscriptionId) {
+  return await stripe.subscriptions.retrieve(subscriptionId);
+}
+
+async function cancelStripeSubscription(subscriptionId) {
+  return await stripe.subscriptions.update(subscriptionId, {
+    cancel_at_period_end: true,
+  });
+}
+
+async function resumeStripeSubscription(subscriptionId) {
+  return await stripe.subscriptions.update(subscriptionId, {
+    cancel_at_period_end: false,
+  });
+}
+
 async function getCustomerPaymentMethod(customerId) {
   const paymentMethods = await stripe.customers.listPaymentMethods(customerId, {
     limit: 1,
@@ -47,5 +83,24 @@ async function getCustomerPaymentMethod(customerId) {
   return paymentMethods.data[0];
 }
 
-const StripeService = { createStripeSubscription, getCustomerPaymentMethod };
+async function createStripePrice(totalCostInCents, productId, billingCycle) {
+  return await stripe.prices.create({
+    currency: "usd",
+    unit_amount: totalCostInCents,
+    recurring: {
+      interval: billingCycle === "monthly" ? "month" : "year",
+    },
+    product: productId,
+  });
+}
+
+const StripeService = {
+  createStripeSubscription,
+  getCustomerPaymentMethod,
+  getStripeSubscription,
+  createStripePrice,
+  updateStripeSubscriptionPrice,
+  cancelStripeSubscription,
+  resumeStripeSubscription,
+};
 module.exports = StripeService;
