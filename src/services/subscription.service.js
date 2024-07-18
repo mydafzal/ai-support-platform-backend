@@ -48,16 +48,12 @@ async function createSubscription(data) {
 
     let totalCost = parseFloat(basePrice);
 
-    const customizedFeatureIds = customizedFeatures.map(
-      (feature) => feature.featureId
-    );
-
     if (customizedFeatures.length > 0) {
       const features = await getFeaturesOfPlan(planId);
 
       const extraCost = calculateExtraCostBasedOnCustomizedFeatures(
         features,
-        customizedFeatureIds
+        customizedFeatures
       );
 
       totalCost += extraCost;
@@ -93,12 +89,6 @@ async function createSubscription(data) {
     let whereCondition = {
       planId,
     };
-
-    if (customizedFeatures.length > 0) {
-      whereCondition.featureId = {
-        [Op.notIn]: customizedFeatureIds,
-      };
-    }
 
     let features = await PlanFeature.findAll({
       where: whereCondition,
