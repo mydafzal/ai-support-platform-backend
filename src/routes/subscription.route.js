@@ -82,6 +82,12 @@ router.post("/stripe-webhooks", async (req, res) => {
         await handleSubscriptionCancellation(cancelledSubscription.id);
         break;
 
+      case "invoice.payment_failed":
+        console.log("invoice.payment_failed - ", event.data.object);
+        // const cancelledSubscription = event.data.object;
+        // await handleSubscriptionCancellation(cancelledSubscription.id);
+        break;
+
       default:
         console.log(`Unhandled event type ${event.type}`);
     }
