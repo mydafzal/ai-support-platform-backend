@@ -56,17 +56,17 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const hasReachedLimit = await SubscriptionService.hasReachedFeatureLimit(
-      TEAM_MEMBERS_FEATURE_ID,
-      businessId
-    );
+    // const hasReachedLimit = await SubscriptionService.hasReachedFeatureLimit(
+    //   TEAM_MEMBERS_FEATURE_ID,
+    //   businessId
+    // );
 
-    if (hasReachedLimit) {
-      return res.status(400).json({
-        success: false,
-        message: "Operation denied: Feature limit has been exceeded.",
-      });
-    }
+    // if (hasReachedLimit) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Operation denied: Feature limit has been exceeded.",
+    //   });
+    // }
 
     let invitation = await Invitation.create({
       email,
