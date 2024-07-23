@@ -4,8 +4,13 @@ const { createClient } = require("redis");
 //   password: process.env.REDIS_PASSWORD,
 // });
 
+const URL =
+  process.env.NODE_ENV === "development"
+    ? `redis://localhost:${process.env.REDIS_PORT}`
+    : `redis://:${process.env.REDIS_PASSWORD}@localhost:${process.env.REDIS_PORT}`;
+
 const client = createClient({
-  url: `redis://:${process.env.REDIS_PASSWORD}@localhost:${process.env.REDIS_PORT}`,
+  url: URL,
 });
 
 async function connectRedis() {
