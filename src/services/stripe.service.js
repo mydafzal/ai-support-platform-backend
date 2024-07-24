@@ -4,10 +4,9 @@ async function createStripeSubscription(
   customerId,
   productId,
   billingCycle,
-  totalCostInCents
+  totalCostInCents,
+  paymentMethod
 ) {
-  const paymentMethod = await getCustomerPaymentMethod(customerId);
-
   let subscription = await stripe.subscriptions.create({
     customer: customerId,
     items: [
@@ -42,20 +41,18 @@ async function createStripeSubscription(
 async function updateStripeSubscriptionPrice(
   subscriptionId,
   newPriceId,
-  subscriptionItemId,
-  paymentMethodId
+  subscriptionItemId
 ) {
-  await stripe.subscriptions.update(subscriptionId, {
+  return await stripe.subscriptions.update(subscriptionId, {
+    payment_behavior: "pending_if_incomplete",
+    proration_behavior: "always_invoice",
+
     items: [
       {
         id: subscriptionItemId,
-        deleted: true,
-      },
-      {
         price: newPriceId,
       },
     ],
-    default_payment_method: paymentMethodId,
   });
 }
 
@@ -103,8 +100,67 @@ async function updateSubscriptionDefaultPaymentMethod(
   });
 }
 
+async function updateCustomerDefaultPaymentMethod(
+  customerId,
+  newPaymentMethodId
+) {
+  await stripe.customers.update(customerId, {
+    invoice_settings: {
+      default_payment_method: newPaymentMethodId,
+    },
+  });
+}
+
 async function detachStripePaymentMethod(paymentMethodId) {
   await stripe.paymentMethods.detach(paymentMethodId);
+}
+
+async function voidInvoice(invoiceId) {
+  await stripe.invoices.voidInvoice(invoiceId);
+}
+
+async function getStripeCustomer(customerId) {
+  return await stripe.customers.retrieve(customerId);
+}
+
+async function createStripeCustomer(email) {
+  return await stripe.customers.create({
+    email,
+  });
+}
+
+async function createStripeSetupIntent(customerId) {
+  return await stripe.setupIntents.create({
+    customer: customerId,
+  });
+}
+
+async function refundCreditBalanceToCustomer(customerId, subscriptionId) {
+  const customer = await getStripeCustomer(customerId);
+  customer.balance = Math.abs(customer.balance);
+
+  const invoices = await stripe.invoices.list({
+    subscription: subscriptionId,
+    expand: ["data.charge"],
+  });
+
+  await Promise.all(
+    invoices.data.map(async (invoice) => {
+      if (invoice.charge && invoice.charge.amount <= customer.balance) {
+        customer.balance -= invoice.charge.amount;
+
+        await stripe.refunds.create({
+          charge: invoice.charge.id,
+
+          amount: invoice.charge.amount,
+        });
+      }
+    })
+  );
+
+  await stripe.customers.update(customerId, {
+    balance: 0,
+  });
 }
 
 const StripeService = {
@@ -117,5 +173,11 @@ const StripeService = {
   resumeStripeSubscription,
   updateSubscriptionDefaultPaymentMethod,
   detachStripePaymentMethod,
+  voidInvoice,
+  getStripeCustomer,
+  createStripeCustomer,
+  createStripeSetupIntent,
+  refundCreditBalanceToCustomer,
+  updateCustomerDefaultPaymentMethod,
 };
 module.exports = StripeService;
