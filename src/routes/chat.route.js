@@ -89,17 +89,17 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const hasReachedLimit = await SubscriptionService.hasReachedFeatureLimit(
-      CHATS_FEATURE_ID,
-      businessId
-    );
+    // const hasReachedLimit = await SubscriptionService.hasReachedFeatureLimit(
+    //   CHATS_FEATURE_ID,
+    //   businessId
+    // );
 
-    if (hasReachedLimit) {
-      return res.status(400).json({
-        success: false,
-        message: "Operation denied: Feature limit has been exceeded.",
-      });
-    }
+    // if (hasReachedLimit) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Operation denied: Feature limit has been exceeded.",
+    //   });
+    // }
 
     chatWidget = chatWidget.toJSON();
 
