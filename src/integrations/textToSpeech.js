@@ -50,7 +50,9 @@ async function getElevenLabsModels() {
 }
 
 async function getElevenLabsVoices() {
-  const response = await fetch("https://api.elevenlabs.io/v1/voices");
+  const response = await fetch(
+    "https://api.elevenlabs.io/v1/voices?show_legacy=true"
+  );
   const data = await response.json();
 
   return data.voices.map((voice) => ({
