@@ -12,7 +12,7 @@ module.exports = {
       quantity: {
         type: Sequelize.INTEGER,
       },
-      usedQuantity: { type: Sequelize.INTEGER, defaultValue: 0 },
+      usedQuantity: { type: Sequelize.FLOAT, defaultValue: 0 },
       createdAt: {
         allowNull: false,
         type: Sequelize.DATE,
