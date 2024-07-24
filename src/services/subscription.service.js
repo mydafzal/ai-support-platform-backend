@@ -5,6 +5,7 @@ const {
   SubscriptionFeature,
   Business,
   PlanFeature,
+  User,
 } = require("../../models");
 
 const { FREE_PLAN_ID, TEAM_MEMBERS_FEATURE_ID } = require("../utils/constants");
@@ -17,7 +18,16 @@ async function createSubscription(data) {
   try {
     const { businessId, planId, billingCycle, customizedFeatures = [] } = data;
 
-    let business = await Business.findByPk(businessId, { raw: true });
+    let business = await Business.findByPk(businessId, {
+      include: [
+        {
+          model: User,
+          as: "adminUser",
+          attributes: ["email"],
+        },
+      ],
+      raw: true,
+    });
 
     if (!business) {
       throw { statusCode: 404, message: "Invalid business id." };
@@ -29,15 +39,35 @@ async function createSubscription(data) {
       throw { statusCode: 404, message: "Invalid pricing plan id." };
     }
 
-    if (!business.stripeCustomerId) {
-      throw { statusCode: 400, message: "Please add a payment method first." };
+    let method;
+
+    if (business.stripeCustomerId) {
+      method = await StripeService.getCustomerPaymentMethod(
+        business.stripeCustomerId
+      );
     }
 
-    const method = await StripeService.getCustomerPaymentMethod(
-      business.stripeCustomerId
-    );
+    if (planId == FREE_PLAN_ID) {
+      const customer = await StripeService.createStripeCustomer(
+        business.adminUser.email
+      );
 
-    if (!method) {
+      await Business.update(
+        {
+          stripeCustomerId: customer.id,
+        },
+        {
+          where: {
+            id: businessId,
+          },
+        }
+      );
+
+      business.stripeCustomerId = customer.id;
+    }
+
+    // For plans other than free, a payment method is required.
+    else if (!method) {
       throw { statusCode: 400, message: "Please add a payment method first." };
     }
 
@@ -72,7 +102,8 @@ async function createSubscription(data) {
       business.stripeCustomerId,
       pricingPlan.stripeProductId,
       billingCycle,
-      totalCostInCents
+      totalCostInCents,
+      method
     );
 
     const subscription = await Subscription.create(
@@ -216,20 +247,43 @@ async function updateSubscription(data) {
       billingCycle
     );
 
-    console.log("subscription - ", subscription);
-
     const paymentMethod = await StripeService.getCustomerPaymentMethod(
       subscription.business.stripeCustomerId
     );
 
-    await StripeService.updateStripeSubscriptionPrice(
-      subscription.stripeSubscriptionId,
-      newSubscriptionPrice.id,
-      subscriptionItem.id,
-      paymentMethod.id
-    );
+    const updatedStripeSubscription =
+      await StripeService.updateStripeSubscriptionPrice(
+        subscription.stripeSubscriptionId,
+        newSubscriptionPrice.id,
+        subscriptionItem.id,
+        paymentMethod.id
+      );
 
+    // If payment failed while updating the subscription
+    if (updatedStripeSubscription.pending_update) {
+      // Revert changes to the subscription.
+      await StripeService.voidInvoice(updatedStripeSubscription.latest_invoice);
+
+      throw {
+        statusCode: 400,
+        message: "Payment failed while updating the subscription",
+      };
+    } else {
+      const customer = await StripeService.getStripeCustomer(
+        subscription.business.stripeCustomerId
+      );
+
+      if (customer.balance < 0) {
+        await StripeService.refundCreditBalanceToCustomer(
+          subscription.business.stripeCustomerId,
+          subscription.stripeSubscriptionId
+        );
+      }
+    }
+
+    // If subscription plan has changed:
     if (newPlanId) {
+      // 1. Update subscription plan.
       await Subscription.update(
         {
           planId: pricingPlan.id,
@@ -240,11 +294,8 @@ async function updateSubscription(data) {
           },
         }
       );
-    }
 
-    // If subscription plan has changed, then:
-    if (newPlanId) {
-      // 1: Remove features from user's subscription that are not included in the new plan.
+      // 2: Remove features from user's subscription that are not included in the new plan.
       await SubscriptionFeature.destroy({
         where: {
           subscriptionId: subscription.id,
@@ -254,7 +305,7 @@ async function updateSubscription(data) {
         },
       });
 
-      // 2: Add features to user's subscription that are not currently in the subscription but are included in the new plan:
+      // 3: Add features to user's subscription that are not currently in the subscription but are included in the new plan:
       const currentSubscriptionFeatures = await SubscriptionFeature.findAll({
         where: { subscriptionId: subscription.id },
         attributes: ["featureId"],
@@ -390,10 +441,16 @@ async function handleSubscriptionCancellation(
     parseFloat(pricingPlan.monthlyBasePrice) * 100
   );
 
+  const method = await StripeService.getCustomerPaymentMethod(
+    business.stripeCustomerId
+  );
+
   const stripeSubscription = await StripeService.createStripeSubscription(
     business.stripeCustomerId,
     pricingPlan.stripeProductId,
-    totalCostInCents
+    "monthly",
+    totalCostInCents,
+    method
   );
 
   const subscription = await Subscription.create(
@@ -498,21 +555,6 @@ async function hasReachedFeatureLimit(featureId, businessId) {
       subscriptionId: subscription.id,
     },
   });
-
-  console.log(
-    "parseInt(subscriptionFeature.quantity) - ",
-    subscriptionFeature.quantity
-  );
-
-  console.log(
-    "subscriptionFeature.usedQuantity - ",
-    subscriptionFeature.usedQuantity
-  );
-
-  console.log(
-    "result - ",
-    parseInt(subscriptionFeature.quantity) - subscriptionFeature.usedQuantity
-  );
 
   return (
     subscriptionFeature.quantity === "Unlimited" ||

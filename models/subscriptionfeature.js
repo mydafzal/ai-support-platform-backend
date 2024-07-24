@@ -24,7 +24,7 @@ module.exports = (sequelize, DataTypes) => {
   SubscriptionFeature.init(
     {
       quantity: { type: DataTypes.STRING },
-      usedQuantity: { type: DataTypes.INTEGER, defaultValue: 0 },
+      usedQuantity: { type: DataTypes.FLOAT, defaultValue: 0 },
     },
     {
       sequelize,

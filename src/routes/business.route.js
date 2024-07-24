@@ -848,9 +848,9 @@ router.post("/:id/payment-methods", async (req, res) => {
     business = business.toJSON();
 
     if (!business.stripeCustomerId) {
-      const customer = await stripe.customers.create({
-        email: business.adminUser.email,
-      });
+      const customer = await StripeService.createStripeCustomer(
+        business.adminUser.email
+      );
 
       await Business.update(
         {
@@ -866,9 +866,9 @@ router.post("/:id/payment-methods", async (req, res) => {
       business.stripeCustomerId = customer.id;
     }
 
-    const intent = await stripe.setupIntents.create({
-      customer: business.stripeCustomerId,
-    });
+    const intent = await StripeService.createStripeSetupIntent(
+      business.stripeCustomerId
+    );
 
     res.status(200).json({ clientSecret: intent.client_secret });
   } catch (error) {
@@ -952,15 +952,7 @@ router.delete("/:id/payment-methods/:methodId", async (req, res) => {
         .json({ success: true, message: "Invalid business id." });
     }
 
-    const paymentMethod = await StripeService.detachStripePaymentMethod(
-      paymentMethodId
-    );
-
-    if (!paymentMethod) {
-      return res
-        .status(400)
-        .json({ status: false, message: "Invalid payment method id" });
-    }
+    await StripeService.detachStripePaymentMethod(paymentMethodId);
 
     const allMethods = await stripe.customers.listPaymentMethods(
       business.stripeCustomerId,
@@ -972,23 +964,8 @@ router.delete("/:id/payment-methods/:methodId", async (req, res) => {
     const newPaymentMethod = allMethods.data[0];
 
     if (newPaymentMethod) {
-      await stripe.customers.update(business.stripeCustomerId, {
-        invoice_settings: {
-          default_payment_method: newPaymentMethod.id,
-        },
-      });
-    }
-
-    const subscription = await Subscription.findOne({
-      where: {
-        businessId: business.id,
-      },
-      raw: true,
-    });
-
-    if (subscription && subscription.planId !== FREE_PLAN_ID) {
-      await StripeService.updateSubscriptionDefaultPaymentMethod(
-        subscription.stripeSubscriptionId,
+      await StripeService.updateCustomerDefaultPaymentMethod(
+        business.stripeCustomerId,
         newPaymentMethod.id
       );
     }
