@@ -27,6 +27,7 @@ async function createSubscription(data) {
         },
       ],
       raw: true,
+      nest: true,
     });
 
     if (!business) {
@@ -556,11 +557,19 @@ async function hasReachedFeatureLimit(featureId, businessId) {
     },
   });
 
-  return (
-    subscriptionFeature.quantity === "Unlimited" ||
+  if (
+    !subscriptionFeature.quantity ||
+    subscriptionFeature.quantity === "Unlimited"
+  ) {
+    return false;
+  } else if (
     parseInt(subscriptionFeature.quantity) - subscriptionFeature.usedQuantity <
-      1
-  );
+    1
+  ) {
+    return true;
+  } else {
+    return false;
+  }
 }
 
 const SubscriptionService = {
