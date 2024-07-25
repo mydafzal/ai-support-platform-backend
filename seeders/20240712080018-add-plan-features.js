@@ -50,7 +50,7 @@ module.exports = {
       {
         planId: FREE_PLAN_ID,
         featureId: CHATS_FEATURE_ID,
-        baseQuantity: 100,
+        baseQuantity: "Unlimited",
         createdAt: currentTimestamp,
         updatedAt: currentTimestamp,
       },
@@ -141,7 +141,7 @@ module.exports = {
       {
         planId: ENTERPRISE_PLAN_ID,
         featureId: COMPANIES_FEATURE_ID,
-        baseQuantity: 3,
+        baseQuantity: 5,
         createdAt: currentTimestamp,
         updatedAt: currentTimestamp,
       },
