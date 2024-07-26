@@ -973,6 +973,63 @@ router.patch("/:id/payment-methods/:methodId", async (req, res) => {
   }
 });
 
+router.get("/:id/payment-methods", async (req, res) => {
+  const businessId = req.params.id;
+
+  try {
+    let business = await Business.findOne({
+      where: {
+        id: businessId,
+      },
+    });
+
+    if (!business) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid business id." });
+    }
+
+    business = business.toJSON();
+
+    if (!business.stripeCustomerId) {
+      return res
+        .status(400)
+        .json({ status: false, message: "No payment method added yet." });
+    }
+
+    const allMethods = await stripe.customers.listPaymentMethods(
+      business.stripeCustomerId,
+      {
+        limit: 1,
+      }
+    );
+
+    const paymentMethod = allMethods.data[0];
+
+    if (!paymentMethod) {
+      return res
+        .status(400)
+        .json({ status: false, message: "No payment method added yet." });
+    }
+
+    const paymentMethodDetails = {
+      brand: paymentMethod.card.brand,
+      country: paymentMethod.card.country,
+      expiryMonth: paymentMethod.card.exp_month,
+      expiryYear: paymentMethod.card.exp_year,
+      last4: paymentMethod.card.last4,
+      createdAt: paymentMethod.created,
+      cardBrandLogoUrl: CARD_BRAND_LOGOS[paymentMethod.card.brand],
+      stripePaymentMethodId: paymentMethod.id,
+    };
+
+    res.status(200).json({ status: true, data: paymentMethodDetails });
+  } catch (error) {
+    console.error("Error getting connected integrations:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
 router.delete("/:id/payment-methods/:methodId", async (req, res) => {
   const businessId = req.params.id;
   const paymentMethodId = req.params.methodId;
