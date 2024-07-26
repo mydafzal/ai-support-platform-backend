@@ -214,6 +214,17 @@ async function updateSubscription(data) {
       };
     }
 
+    const paymentMethod = await StripeService.getCustomerPaymentMethod(
+      subscription.business.stripeCustomerId
+    );
+
+    if (pricingPlan != FREE_PLAN_ID && !paymentMethod) {
+      throw {
+        statusCode: 404,
+        message: "Please add a payment method first.",
+      };
+    }
+
     const basePrice = pricingPlan.monthlyBasePrice;
     let totalCost = parseFloat(basePrice);
 
@@ -246,10 +257,6 @@ async function updateSubscription(data) {
       totalCostInCents,
       pricingPlan.stripeProductId,
       billingCycle
-    );
-
-    const paymentMethod = await StripeService.getCustomerPaymentMethod(
-      subscription.business.stripeCustomerId
     );
 
     const updatedStripeSubscription =
