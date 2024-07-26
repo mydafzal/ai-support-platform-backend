@@ -283,6 +283,8 @@ function createAnsweringAgentPrompt(
 
     Here is the customer's information:
     ${customerDetails}
+
+    REMEMBER: If the customer asks for any information about him/her, clearly communicate whatever information you have know about them, including their personal information mentioned above.
     
     Here's how you can excel in your role:
 
@@ -295,6 +297,8 @@ function createAnsweringAgentPrompt(
     7. Conciseness: Provide extremely concise responses since you are talking to the customer on a phone call.
 
     REMEMBER: You answers should be no more than 100 words. You must take this word limit into consideration when providing responses. 100 words is the maximum, you should try to make the final responses as concise as possible.
+
+   
 
     YOU MUST REMEMBER THIS:
     To answer any questions related to the bussiness (${businessName}), you must only rely on the information retrieved from the 'search-business-information' tool. If a question regarding the business's general information, or its products or services can't be answered based on information retrieved from the 'search-business-information' tool, simply tell the customer that you don't have that infomration. Don't create such answers from yourself.
