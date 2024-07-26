@@ -877,7 +877,7 @@ router.post("/:id/payment-methods", async (req, res) => {
   }
 });
 
-router.get("/:id/payment-methods", async (req, res) => {
+router.post("/:id/payment-methods", async (req, res) => {
   const businessId = req.params.id;
 
   try {
@@ -885,6 +885,63 @@ router.get("/:id/payment-methods", async (req, res) => {
       where: {
         id: businessId,
       },
+      include: [
+        {
+          model: User,
+          as: "adminUser",
+          attributes: ["email"],
+        },
+      ],
+    });
+
+    if (!business) {
+      return res
+        .status(400)
+        .json({ success: true, message: "Invalid business id." });
+    }
+
+    business = business.toJSON();
+
+    if (!business.stripeCustomerId) {
+      const customer = await StripeService.createStripeCustomer(
+        business.adminUser.email
+      );
+
+      await Business.update(
+        {
+          stripeCustomerId: customer.id,
+        },
+        {
+          where: {
+            id: businessId,
+          },
+        }
+      );
+
+      business.stripeCustomerId = customer.id;
+    }
+
+    const intent = await StripeService.createStripeSetupIntent(
+      business.stripeCustomerId
+    );
+
+    res.status(200).json({ clientSecret: intent.client_secret });
+  } catch (error) {
+    console.error("Error getting connected integrations:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+router.patch("/:id/payment-methods/:methodId", async (req, res) => {
+  const businessId = req.params.id;
+  const paymentMethodId = req.params.methodId;
+
+  try {
+    let business = await Business.findOne({
+      where: {
+        id: businessId,
+      },
+      raw: true,
     });
 
     if (!business) {
@@ -893,44 +950,26 @@ router.get("/:id/payment-methods", async (req, res) => {
         .json({ success: false, message: "Invalid business id." });
     }
 
-    business = business.toJSON();
-
-    if (!business.stripeCustomerId) {
-      return res
-        .status(400)
-        .json({ status: false, message: "No payment method added yet." });
-    }
-
-    const allMethods = await stripe.customers.listPaymentMethods(
+    await StripeService.updateCustomerDefaultPaymentMethod(
       business.stripeCustomerId,
-      {
-        limit: 1,
-      }
+      paymentMethodId
     );
 
-    const paymentMethod = allMethods.data[0];
-
-    if (!paymentMethod) {
-      return res
-        .status(400)
-        .json({ status: false, message: "No payment method added yet." });
-    }
-
-    const paymentMethodDetails = {
-      brand: paymentMethod.card.brand,
-      country: paymentMethod.card.country,
-      expiryMonth: paymentMethod.card.exp_month,
-      expiryYear: paymentMethod.card.exp_year,
-      last4: paymentMethod.card.last4,
-      createdAt: paymentMethod.created,
-      cardBrandLogoUrl: CARD_BRAND_LOGOS[paymentMethod.card.brand],
-      stripePaymentMethodId: paymentMethod.id,
-    };
-
-    res.status(200).json({ status: true, data: paymentMethodDetails });
+    res
+      .status(200)
+      .json({ status: true, message: "Payment method set as default." });
   } catch (error) {
-    console.error("Error getting connected integrations:", error);
-    res.status(500).json({ success: false, message: "Internal Server Error" });
+    console.error("Error updating default payment method - ", error);
+
+    if (error.statusCode) {
+      res
+        .status(error.statusCode)
+        .json({ success: false, message: error.message });
+    } else {
+      res
+        .status(500)
+        .json({ success: false, message: "Internal Server Error" });
+    }
   }
 });
 
