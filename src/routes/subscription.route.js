@@ -1,10 +1,6 @@
 const Router = require("express").Router;
 const router = Router();
 
-const {
-  handleSubscriptionCancellation,
-} = require("../services/subscription.service");
-
 const validateRequest = require("../middleware/requestValidation.middleware");
 
 const {
@@ -78,14 +74,9 @@ router.post("/stripe-webhooks", async (req, res) => {
   try {
     switch (event.type) {
       case "customer.subscription.deleted":
-        const cancelledSubscription = event.data.object;
-        await handleSubscriptionCancellation(cancelledSubscription.id);
-        break;
-
-      case "invoice.payment_failed":
-        console.log("invoice.payment_failed - ", event.data.object);
-        // const cancelledSubscription = event.data.object;
-        // await handleSubscriptionCancellation(cancelledSubscription.id);
+        await SubscriptionService.handleSubscriptionCancellation(
+          event.data.object
+        );
         break;
 
       default:
