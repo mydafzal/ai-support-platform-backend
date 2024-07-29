@@ -1134,7 +1134,7 @@ router.get("/:id/subscriptions", async (req, res) => {
     );
 
     const formattedDate = getNextMonthlyResetDate(
-      stripeSubscription.start_date
+      stripeSubscription.billing_cycle_anchor
     );
 
     subscription = {
