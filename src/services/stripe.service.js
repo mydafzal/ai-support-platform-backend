@@ -146,7 +146,11 @@ async function refundCreditBalanceToCustomer(customerId, subscriptionId) {
 
   await Promise.all(
     invoices.data.map(async (invoice) => {
-      if (invoice.charge && invoice.charge.amount <= customer.balance) {
+      if (
+        invoice.charge &&
+        invoice.charge.refunded === false &&
+        invoice.charge.amount <= customer.balance
+      ) {
         customer.balance -= invoice.charge.amount;
 
         await stripe.refunds.create({

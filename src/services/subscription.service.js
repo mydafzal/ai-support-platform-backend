@@ -6,6 +6,8 @@ const {
   Business,
   PlanFeature,
   User,
+  Feature,
+  Invitation,
 } = require("../../models");
 
 const { FREE_PLAN_ID, TEAM_MEMBERS_FEATURE_ID } = require("../utils/constants");
@@ -200,6 +202,9 @@ async function updateSubscription(data) {
       };
     }
 
+    const isDowngradingSubscription =
+      hasPlanChanged && newPlanId < subscription.planId;
+
     let pricingPlan = await PricingPlan.findByPk(
       newPlanId || subscription.planId,
       {
@@ -368,6 +373,10 @@ async function updateSubscription(data) {
     );
 
     await Promise.all(promises);
+
+    if (isDowngradingSubscription) {
+      await removeExtraTeamMembers(subscription.id, subscription.businessId);
+    }
 
     return "Subscription updated succesfully.";
   } catch (error) {
@@ -579,6 +588,135 @@ async function hasReachedFeatureLimit(featureId, businessId) {
   }
 }
 
+async function resetSubscriptionUsage(subscriptionId) {
+  console.log(
+    `Reached the end of billing cycle - resetting features usage now...`
+  );
+
+  try {
+    let subscriptionFeatures = await SubscriptionFeature.findAll({
+      where: {
+        id: subscriptionId,
+      },
+      include: [
+        {
+          model: Feature,
+          as: "feature",
+        },
+      ],
+      raw: true,
+      nest: true,
+    });
+
+    // get features that have a certain limit. certain features have limit but their usage should not reset.
+    subscriptionFeatures = subscriptionFeatures.filter(
+      (sf) =>
+        sf.quantity &&
+        sf.quantity !== "Unlimited" &&
+        sf.feature.nameSingular.includes("month")
+    );
+
+    // reset usage for these features
+    await Promise.all(
+      subscriptionFeatures.map((sf) => {
+        return SubscriptionFeature.update(
+          {
+            usedQuantity: 0,
+          },
+          {
+            where: {
+              subscriptionId,
+              featureId: sf.feature.id,
+            },
+          }
+        );
+      })
+    );
+  } catch (error) {
+    console.log("resetSubscriptionUsage error - ", error);
+  }
+}
+
+async function scheduleResetForSubscriptionUsage() {
+  try {
+    let subscriptions = await Subscription.findAll({ raw: true });
+
+    const today = new Date();
+
+    const currentDate = today.getDate();
+    const endOfCurrentMonth = new Date(
+      today.getFullYear(),
+      today.getMonth() + 1,
+      0
+    ).getDate();
+
+    subscriptions.forEach(async (subscription) => {
+      const stripeSubscription = await StripeService.getStripeSubscription(
+        subscription.stripeSubscriptionId
+      );
+
+      const billingAnchorDate = new Date(
+        stripeSubscription.billing_cycle_anchor * 1000
+      ).getDate(); // Convert from Unix timestamp
+
+      const isResetDay = currentDate === billingAnchorDate;
+
+      const isEndOfMonthReset =
+        billingAnchorDate > endOfCurrentMonth &&
+        currentDate === endOfCurrentMonth;
+
+      if (isResetDay || isEndOfMonthReset) {
+        await resetSubscriptionUsage(subscription.id);
+      }
+    });
+  } catch (error) {
+    console.log("scheduleResetForSubscriptionUsage error - ", error);
+  }
+}
+
+async function removeExtraTeamMembers(subscriptionId, businessId) {
+  const subscriptionFeature = await SubscriptionFeature.findOne({
+    where: {
+      subscriptionId,
+      featureId: TEAM_MEMBERS_FEATURE_ID,
+    },
+    raw: true,
+  });
+
+  const newMemberLimit = parseInt(subscriptionFeature.quantity);
+
+  const users = await User.findAll({
+    where: {
+      businessId,
+    },
+    raw: true,
+  });
+
+  const membersToRemove = users
+    .filter((user) => user.role !== "Admin") // Exclude admin
+    .sort((a, b) => a.createdAt - b.createdAt) // Sort users by creation date
+    .slice(0, Math.max(0, users.length - newMemberLimit)); // Determine users to remove
+
+  for (const user of membersToRemove) {
+    await User.update(
+      {
+        businessId: null,
+      },
+      {
+        where: {
+          id: user.id,
+        },
+      }
+    );
+
+    await Invitation.destroy({
+      where: {
+        email: user.email,
+      },
+    });
+  }
+}
+
 const SubscriptionService = {
   handleSubscriptionCancellation,
   createSubscription,
@@ -587,6 +725,7 @@ const SubscriptionService = {
   resumeSubscription,
   updateFeatureUsage,
   hasReachedFeatureLimit,
+  scheduleResetForSubscriptionUsage,
 };
 
 module.exports = SubscriptionService;
