@@ -34,6 +34,16 @@ const { initializeSocketIO } = require("./src/loaders/socket-io.js");
 const errorHandler = require("./src/middleware/errorHandler.middleware.js");
 initializeSocketIO(server);
 
+const SubscriptionService = require("./src/services/subscription.service.js");
+
+const cron = require("node-cron");
+
+// Schedule the cron job to run every day at midnight
+cron.schedule(
+  "0 0 * * *",
+  SubscriptionService.scheduleResetForSubscriptionUsage
+);
+
 app.use(
   "/data",
   express.static(path.join(__dirname, "data"), {
