@@ -33,98 +33,140 @@ const {
 } = require("../controllers/trainingAgent.controller");
 const { getBrowser } = require("../integrations/urlScreenshot");
 const { DOCUMENTS_BASE_PATH } = require("../utils/constants");
+const { redisClient } = require("../integrations/redis");
+const SummarizationService = require("../services/summarization.service");
+const {
+  addUrlsSchema,
+  addDocumentsSchema,
+} = require("../validators/training.validator");
+const validateRequest = require("../middleware/requestValidation.middleware");
+const TrainingService = require("../services/training.service");
+const e = require("express");
 
-const urlsValidationSchema = z.object({
-  urls: z.array(z.string().url()),
-  businessId: z.number(),
-});
+// const urlsValidationSchema = z.object({
+//   urls: z.array(z.string().url()),
+//   businessId: z.number(),
+// });
 
 const teachChatValidationSchema = z.object({
   message: z.string(),
   businessId: z.number(),
 });
 
-router.post("/urls", async (req, res) => {
+router.post("/urls", validateRequest(addUrlsSchema), async (req, res) => {
   try {
-    const { urls, businessId } = req.body;
-
-    const { success, error } = await urlsValidationSchema.safeParseAsync(
-      req.body
-    );
-
-    if (!success) {
-      return res
-        .status(400)
-        .json({ success: false, message: error.errors[0].message });
-    }
-
-    if (!urls || urls?.length < 1) {
-      return res.status(400).send("Provide one or more urls.");
-    }
-
-    let assistant = await Assistant.findOne({
-      where: {
-        businessId,
-      },
-    });
-
-    if (!assistant) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid user id." });
-    }
-
-    assistant = assistant.toJSON();
-
-    let addUrlsResult = await Url.bulkCreate(
-      urls.map((url) => ({
-        link: url,
-        businessId,
-      }))
-    );
-
-    addUrlsResult = addUrlsResult.map((item) => item.toJSON());
-
-    let promises = addUrlsResult.map((url) =>
-      scrapeAndPersistData(url.link, assistant.knowledgeBaseName, url.id)
-    );
-
-    await Promise.all(promises);
-
-    const destinationPath = path.join(DOCUMENTS_BASE_PATH, `${businessId}`);
-
-    await fs.mkdir(destinationPath, { recursive: true });
-
-    const browser = getBrowser();
-
-    await Promise.all(
-      addUrlsResult.map(async (url) => {
-        try {
-          const page = await browser.newPage();
-
-          await page.goto(url.link);
-
-          await page.screenshot({
-            path: `${destinationPath}/url-${url.id}-preview.png`,
-          });
-
-          console.log("took screenshot");
-        } catch (error) {
-          console.log("error taking screenshot.", error);
-        }
-      })
-    );
-
-    res
-      .status(201)
-      .json({ success: true, message: "Data loaded from provided urls." });
+    const result = await TrainingService.trainWithUrls(req.body);
+    ResponseHandler.success(res, { statusCode: 201, message: result });
   } catch (error) {
-    console.error("Error fetching customer:", error);
-    res
-      .status(500)
-      .json({ success: false, falsemessage: "Internal Server Error" });
+    next(error);
   }
 });
+
+// router.post("/urls", async (req, res) => {
+//   try {
+//     const { urls, businessId } = req.body;
+
+//     const { success, error } = await urlsValidationSchema.safeParseAsync(
+//       req.body
+//     );
+
+//     if (!success) {
+//       return res
+//         .status(400)
+//         .json({ success: false, message: error.errors[0].message });
+//     }
+
+//     if (!urls || urls?.length < 1) {
+//       return res.status(400).send("Provide one or more urls.");
+//     }
+
+//     let assistant = await Assistant.findOne({
+//       where: {
+//         businessId,
+//       },
+//     });
+
+//     if (!assistant) {
+//       return res
+//         .status(400)
+//         .json({ success: false, message: "Invalid user id." });
+//     }
+
+//     assistant = assistant.toJSON();
+
+//     let addUrlsResult = await Url.bulkCreate(
+//       urls.map((url) => ({
+//         link: url,
+//         businessId,
+//       }))
+//     );
+
+//     addUrlsResult = addUrlsResult.map((item) => item.toJSON());
+
+//     let promises = addUrlsResult.map((url) =>
+//       scrapeAndPersistData(url.link, assistant.knowledgeBaseName, url.id)
+//     );
+
+//     await Promise.all(promises);
+
+//     const destinationPath = path.join(DOCUMENTS_BASE_PATH, `${businessId}`);
+
+//     await fs.mkdir(destinationPath, { recursive: true });
+
+//     const browser = getBrowser();
+
+//     await Promise.all(
+//       addUrlsResult.map(async (url) => {
+//         try {
+//           const page = await browser.newPage();
+
+//           await page.goto(url.link);
+
+//           await page.screenshot({
+//             path: `${destinationPath}/url-${url.id}-preview.png`,
+//           });
+
+//           console.log("took screenshot");
+//         } catch (error) {
+//           console.log("error taking screenshot.", error);
+//         }
+//       })
+//     );
+
+//     promises = addUrlsResult.map(async (url) => {
+//       const webpageSummary = await SummarizationService.summarizeWebpage(
+//         url.link
+//       );
+
+//       const urlMessage = {
+//         type: "human",
+//         data: {
+//           content: `User uploaded a url. The url link is ${url.link} and the url id is ${url.id}. \nHere is the summarized information about the uploaded url:
+
+//           ${webpageSummary}`,
+//           additional_kwargs: { timestamp: Date.now(), isUrl: true },
+//           response_metadata: {},
+//         },
+//       };
+
+//       return redisClient.rPush(
+//         `train-chat-${businessId}`,
+//         JSON.stringify(urlMessage)
+//       );
+//     });
+
+//     await Promise.all(promises);
+
+//     res
+//       .status(201)
+//       .json({ success: true, message: "Data loaded from provided urls." });
+//   } catch (error) {
+//     console.error("Error fetching customer:", error);
+//     res
+//       .status(500)
+//       .json({ success: false, falsemessage: "Internal Server Error" });
+//   }
+// });
 
 router.delete("/urls/:id", async (req, res) => {
   const urlId = req.params.id;
@@ -186,91 +228,129 @@ router.delete("/urls/:id", async (req, res) => {
   }
 });
 
-router.post("/documents", upload.array("files"), async (req, res) => {
-  try {
-    if (!req.files || req.files?.length < 1) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Provide one or more files." });
-    } else if (!req.body.businessId) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid user id." });
+// router.post("/documents", upload.array("files"), async (req, res) => {
+//   try {
+//     if (!req.files || req.files?.length < 1) {
+//       return res
+//         .status(400)
+//         .json({ success: false, message: "Provide one or more files." });
+//     } else if (!req.body.businessId) {
+//       return res
+//         .status(400)
+//         .json({ success: false, message: "Invalid user id." });
+//     }
+
+//     const { businessId } = req.body;
+
+//     let assistant = await Assistant.findOne({
+//       where: {
+//         businessId,
+//       },
+//       raw: true,
+//     });
+
+//     if (!assistant) {
+//       return res
+//         .status(400)
+//         .json({ success: false, message: "Invalid user id." });
+//     }
+
+//     let documents = await Document.bulkCreate(
+//       req.files.map((file) => ({
+//         name: file.originalname,
+//         size: file.size,
+//         type: file.mimetype,
+//         businessId: req.body.businessId,
+//       }))
+//     );
+
+//     documents = documents.map((doc) => doc.toJSON());
+
+//     let promises = documents.map((document) => {
+//       const filePath = path.join(
+//         __dirname,
+//         "..",
+//         "..",
+//         "documents",
+//         document.name
+//       );
+
+//       return readFileAndPersistData(
+//         filePath,
+//         assistant.knowledgeBaseName,
+//         document.id
+//       );
+//     });
+
+//     await Promise.all(promises);
+
+//     console.log("files", req.files);
+
+//     const destinationPath = path.join(
+//       DOCUMENTS_BASE_PATH,
+//       `${req.body.businessId}`
+//     );
+
+//     await fs.mkdir(destinationPath, { recursive: true });
+
+//     promises = documents.map((document) => {
+//       const sourcePath = path.join(
+//         __dirname,
+//         "..",
+//         "..",
+//         "documents",
+//         document.name
+//       );
+//       return fs.rename(sourcePath, `${destinationPath}/${document.name}`);
+//     });
+
+//     await Promise.all(promises);
+
+//     documents.map(async (document) => {
+//       const documentPath = `${destinationPath}/${document.name}`;
+//       const summarizedDocument = await SummarizationService.summarizeDocument(
+//         documentPath
+//       );
+
+//       const documentMessage = {
+//         type: "human",
+//         data: {
+//           content: `User uploaded a document. The document name is ${document.name} and the document id is ${document.id}. \nHere is the summarized information about the uploaded document:
+
+//           ${summarizedDocument}`,
+//           additional_kwargs: { timestamp: Date.now(), isDocument: true },
+//           response_metadata: {},
+//         },
+//       };
+
+//       return redisClient.rPush(
+//         `train-chat-${businessId}`,
+//         JSON.stringify(documentMessage)
+//       );
+//     });
+
+//     res
+//       .status(201)
+//       .json({ success: true, message: "Data loaded from provided files." });
+//   } catch (error) {
+//     console.error("Error uploading documents:", error);
+//     res.status(500).json({ success: false, message: "Internal Server Error" });
+//   }
+// });
+
+router.post(
+  "/documents",
+  upload.array("files"),
+  validateRequest(addDocumentsSchema),
+  async (req, res, next) => {
+    try {
+      const result = await TrainingService.trainWithDocuments(req.body);
+      ResponseHandler.success(res, { statusCode: 201, message: result });
+    } catch (error) {
+      next(error);
     }
-
-    let assistant = await Assistant.findOne({
-      where: {
-        businessId: req.body.businessId,
-      },
-    });
-
-    if (!assistant) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid user id." });
-    }
-
-    assistant = assistant.toJSON();
-
-    let documents = await Document.bulkCreate(
-      req.files.map((file) => ({
-        name: file.originalname,
-        size: file.size,
-        type: file.mimetype,
-        businessId: req.body.businessId,
-      }))
-    );
-
-    documents = documents.map((doc) => doc.toJSON());
-
-    let promises = documents.map((document) => {
-      const filePath = path.join(
-        __dirname,
-        "..",
-        "..",
-        "documents",
-        document.name
-      );
-
-      return readFileAndPersistData(
-        filePath,
-        assistant.knowledgeBaseName,
-        document.id
-      );
-    });
-
-    await Promise.all(promises);
-
-    console.log("files", req.files);
-
-    const destinationPath = path.join(
-      DOCUMENTS_BASE_PATH,
-      `${req.body.businessId}`
-    );
-
-    await fs.mkdir(destinationPath, { recursive: true });
-
-    promises = documents.map((file) => {
-      const sourcePath = path.join(
-        __dirname,
-        "..",
-        "..",
-        "documents",
-        file.name
-      );
-      return fs.rename(sourcePath, `${destinationPath}/${file.name}`);
-    });
-
-    await Promise.all(promises);
-
-    res
-      .status(201)
-      .json({ success: true, message: "Data loaded from provided files." });
-  } catch (error) {
-    console.error("Error uploading documents:", error);
-    res.status(500).json({ success: false, message: "Internal Server Error" });
   }
-});
+);
 
 router.delete("/documents/:id", async (req, res) => {
   const documentId = req.params.id;
