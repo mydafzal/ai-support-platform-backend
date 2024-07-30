@@ -468,9 +468,11 @@ router.get("/:id/train-chat-messages", async (req, res) => {
       return {
         type: item.type,
         content: item.data.content,
-        timestamp: item.data?.additional_kwargs?.timestamp,
+        ...item.data?.additional_kwargs,
       };
     });
+
+    result = result.filter((item) => !item.isUrl && !item.isDocument);
 
     res.status(200).json({ success: true, data: result?.reverse() });
   } catch (error) {
