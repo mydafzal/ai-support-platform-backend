@@ -2,7 +2,7 @@ const ResponseHandler = require("../utils/responseHandler");
 
 const validateRequest = (schema) => (req, res, next) => {
   try {
-    schema.parse(req.body);
+    schema.parse({ ...req.body, files: req.files });
     next();
   } catch (err) {
     return ResponseHandler.error(
