@@ -14,7 +14,10 @@ const { z } = require("zod");
 const { RunnableWithMessageHistory } = require("@langchain/core/runnables");
 const { ChatOpenAI } = require("@langchain/openai");
 const { DynamicStructuredTool } = require("@langchain/community/tools/dynamic");
-const { getVectoreStore, addTextToVectoreStore } = require("../integrations/chromaDB");
+const {
+  getVectoreStore,
+  addTextToVectoreStore,
+} = require("../integrations/chromaDB");
 
 const { ExtendedRedisChatMemory } = require("../utils/helpers");
 const { redisClient } = require("../integrations/redis");
@@ -53,6 +56,8 @@ async function initializeAgent() {
   });
 
   const systemTemplate = `You are an AI designed to learn about businesses through conversation. Your goal is to understand and reason about the information provided by the business. Continuously ask dynamic and insightful questions to gather more details, seek clarification, and make sense of the given information. Adapt your responses based on the context of the conversation and the information about the business that is provided to you below. Your role is to simulate a learning process, so engaging. If the business introduces new concepts, adapt your questions to explore those areas. Always strive to deepen your understanding and maintain a conversational flow. If the business starts the conversation with a greeting message, reply to the greeting message in way that conveys to the business that they should start telling you about the business.
+
+  NOTE: The business may upload webpages and documents to provide additional information. These will be visible in the conversation. If the business refers to a specific URL or document, mention the exact URL or document name, or ask for details that may be in the uploaded materials. Base your response on the information from these uploads. If you lack information about a reference, clearly state that you don’t know, rather than guessing or creating details.
 
   Here's some information about the business that we already know:
   ==========
