@@ -2,7 +2,19 @@ const { createClient } = require("redis");
 
 const client = createClient({
   password: process.env.REDIS_PASSWORD,
+  socket: {
+    port: process.env.REDIS_PORT,
+  },
 });
+
+// const URL =
+//   process.env.NODE_ENV === "development"
+//     ? `redis://localhost:${process.env.REDIS_PORT}`
+//     : `redis://:${process.env.REDIS_PASSWORD}@127.0.0.1:${process.env.REDIS_PORT}`;
+
+// const client = createClient({
+//   url: URL,
+// });
 
 async function connectRedis() {
   await client.connect();

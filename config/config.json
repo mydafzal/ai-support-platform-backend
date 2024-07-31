@@ -16,7 +16,7 @@
   "staging": {
     "username": "cheetahagency",
     "password": "cheetah",
-    "database": "customer-bot",
+    "database": "customer-bot-staging",
     "host": "127.0.0.1",
     "dialect": "postgres"
   },

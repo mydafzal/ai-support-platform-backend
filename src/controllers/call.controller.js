@@ -598,7 +598,9 @@ async function handleCallDisconnect(request) {
 
   if (call) {
     const callDurationInSeconds = parseFloat(request.body.CallDuration);
-    const callDurationInMinutes = Math.round(callDurationInSeconds / 60);
+    const callDurationInMinutes = parseFloat(
+      (callDurationInSeconds / 60).toFixed(2)
+    );
 
     await SubscriptionService.updateFeatureUsage(
       CALL_MINUTES_FEATURE_ID,

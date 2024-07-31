@@ -5,6 +5,9 @@ const {
   SubscriptionFeature,
   Business,
   PlanFeature,
+  User,
+  Feature,
+  Invitation,
 } = require("../../models");
 
 const { FREE_PLAN_ID, TEAM_MEMBERS_FEATURE_ID } = require("../utils/constants");
@@ -17,7 +20,17 @@ async function createSubscription(data) {
   try {
     const { businessId, planId, billingCycle, customizedFeatures = [] } = data;
 
-    let business = await Business.findByPk(businessId, { raw: true });
+    let business = await Business.findByPk(businessId, {
+      include: [
+        {
+          model: User,
+          as: "adminUser",
+          attributes: ["email"],
+        },
+      ],
+      raw: true,
+      nest: true,
+    });
 
     if (!business) {
       throw { statusCode: 404, message: "Invalid business id." };
@@ -29,15 +42,35 @@ async function createSubscription(data) {
       throw { statusCode: 404, message: "Invalid pricing plan id." };
     }
 
-    if (!business.stripeCustomerId) {
-      throw { statusCode: 400, message: "Please add a payment method first." };
+    let method;
+
+    if (business.stripeCustomerId) {
+      method = await StripeService.getCustomerPaymentMethod(
+        business.stripeCustomerId
+      );
     }
 
-    const method = await StripeService.getCustomerPaymentMethod(
-      business.stripeCustomerId
-    );
+    if (planId == FREE_PLAN_ID) {
+      const customer = await StripeService.createStripeCustomer(
+        business.adminUser.email
+      );
 
-    if (!method) {
+      await Business.update(
+        {
+          stripeCustomerId: customer.id,
+        },
+        {
+          where: {
+            id: businessId,
+          },
+        }
+      );
+
+      business.stripeCustomerId = customer.id;
+    }
+
+    // For plans other than free, a payment method is required.
+    else if (!method) {
       throw { statusCode: 400, message: "Please add a payment method first." };
     }
 
@@ -72,7 +105,8 @@ async function createSubscription(data) {
       business.stripeCustomerId,
       pricingPlan.stripeProductId,
       billingCycle,
-      totalCostInCents
+      totalCostInCents,
+      method
     );
 
     const subscription = await Subscription.create(
@@ -168,6 +202,9 @@ async function updateSubscription(data) {
       };
     }
 
+    const isDowngradingSubscription =
+      hasPlanChanged && newPlanId < subscription.planId;
+
     let pricingPlan = await PricingPlan.findByPk(
       newPlanId || subscription.planId,
       {
@@ -179,6 +216,17 @@ async function updateSubscription(data) {
       throw {
         statusCode: 404,
         message: "Invalid pricing plan id.",
+      };
+    }
+
+    const paymentMethod = await StripeService.getCustomerPaymentMethod(
+      subscription.business.stripeCustomerId
+    );
+
+    if (pricingPlan != FREE_PLAN_ID && !paymentMethod) {
+      throw {
+        statusCode: 404,
+        message: "Please add a payment method first.",
       };
     }
 
@@ -216,20 +264,39 @@ async function updateSubscription(data) {
       billingCycle
     );
 
-    console.log("subscription - ", subscription);
+    const updatedStripeSubscription =
+      await StripeService.updateStripeSubscriptionPrice(
+        subscription.stripeSubscriptionId,
+        newSubscriptionPrice.id,
+        subscriptionItem.id,
+        paymentMethod.id
+      );
 
-    const paymentMethod = await StripeService.getCustomerPaymentMethod(
-      subscription.business.stripeCustomerId
-    );
+    // If payment failed while updating the subscription
+    if (updatedStripeSubscription.pending_update) {
+      // Revert changes to the subscription.
+      await StripeService.voidInvoice(updatedStripeSubscription.latest_invoice);
 
-    await StripeService.updateStripeSubscriptionPrice(
-      subscription.stripeSubscriptionId,
-      newSubscriptionPrice.id,
-      subscriptionItem.id,
-      paymentMethod.id
-    );
+      throw {
+        statusCode: 400,
+        message: "Payment failed while updating the subscription",
+      };
+    } else {
+      const customer = await StripeService.getStripeCustomer(
+        subscription.business.stripeCustomerId
+      );
 
+      if (customer.balance < 0) {
+        await StripeService.refundCreditBalanceToCustomer(
+          subscription.business.stripeCustomerId,
+          subscription.stripeSubscriptionId
+        );
+      }
+    }
+
+    // If subscription plan has changed:
     if (newPlanId) {
+      // 1. Update subscription plan.
       await Subscription.update(
         {
           planId: pricingPlan.id,
@@ -240,11 +307,8 @@ async function updateSubscription(data) {
           },
         }
       );
-    }
 
-    // If subscription plan has changed, then:
-    if (newPlanId) {
-      // 1: Remove features from user's subscription that are not included in the new plan.
+      // 2: Remove features from user's subscription that are not included in the new plan.
       await SubscriptionFeature.destroy({
         where: {
           subscriptionId: subscription.id,
@@ -254,7 +318,7 @@ async function updateSubscription(data) {
         },
       });
 
-      // 2: Add features to user's subscription that are not currently in the subscription but are included in the new plan:
+      // 3: Add features to user's subscription that are not currently in the subscription but are included in the new plan:
       const currentSubscriptionFeatures = await SubscriptionFeature.findAll({
         where: { subscriptionId: subscription.id },
         attributes: ["featureId"],
@@ -309,6 +373,10 @@ async function updateSubscription(data) {
     );
 
     await Promise.all(promises);
+
+    if (isDowngradingSubscription) {
+      await removeExtraTeamMembers(subscription.id, subscription.businessId);
+    }
 
     return "Subscription updated succesfully.";
   } catch (error) {
@@ -390,10 +458,16 @@ async function handleSubscriptionCancellation(
     parseFloat(pricingPlan.monthlyBasePrice) * 100
   );
 
+  const method = await StripeService.getCustomerPaymentMethod(
+    business.stripeCustomerId
+  );
+
   const stripeSubscription = await StripeService.createStripeSubscription(
     business.stripeCustomerId,
     pricingPlan.stripeProductId,
-    totalCostInCents
+    "monthly",
+    totalCostInCents,
+    method
   );
 
   const subscription = await Subscription.create(
@@ -499,26 +573,148 @@ async function hasReachedFeatureLimit(featureId, businessId) {
     },
   });
 
-  console.log(
-    "parseInt(subscriptionFeature.quantity) - ",
-    subscriptionFeature.quantity
-  );
-
-  console.log(
-    "subscriptionFeature.usedQuantity - ",
-    subscriptionFeature.usedQuantity
-  );
-
-  console.log(
-    "result - ",
-    parseInt(subscriptionFeature.quantity) - subscriptionFeature.usedQuantity
-  );
-
-  return (
-    subscriptionFeature.quantity === "Unlimited" ||
+  if (
+    !subscriptionFeature.quantity ||
+    subscriptionFeature.quantity === "Unlimited"
+  ) {
+    return false;
+  } else if (
     parseInt(subscriptionFeature.quantity) - subscriptionFeature.usedQuantity <
-      1
+    1
+  ) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+async function resetSubscriptionUsage(subscriptionId) {
+  console.log(
+    `Reached the end of billing cycle - resetting features usage now...`
   );
+
+  try {
+    let subscriptionFeatures = await SubscriptionFeature.findAll({
+      where: {
+        id: subscriptionId,
+      },
+      include: [
+        {
+          model: Feature,
+          as: "feature",
+        },
+      ],
+      raw: true,
+      nest: true,
+    });
+
+    // get features that have a certain limit. certain features have limit but their usage should not reset.
+    subscriptionFeatures = subscriptionFeatures.filter(
+      (sf) =>
+        sf.quantity &&
+        sf.quantity !== "Unlimited" &&
+        sf.feature.nameSingular.includes("month")
+    );
+
+    // reset usage for these features
+    await Promise.all(
+      subscriptionFeatures.map((sf) => {
+        return SubscriptionFeature.update(
+          {
+            usedQuantity: 0,
+          },
+          {
+            where: {
+              subscriptionId,
+              featureId: sf.feature.id,
+            },
+          }
+        );
+      })
+    );
+  } catch (error) {
+    console.log("resetSubscriptionUsage error - ", error);
+  }
+}
+
+async function scheduleResetForSubscriptionUsage() {
+  try {
+    let subscriptions = await Subscription.findAll({ raw: true });
+
+    const today = new Date();
+
+    const currentDate = today.getDate();
+    const endOfCurrentMonth = new Date(
+      today.getFullYear(),
+      today.getMonth() + 1,
+      0
+    ).getDate();
+
+    subscriptions.forEach(async (subscription) => {
+      const stripeSubscription = await StripeService.getStripeSubscription(
+        subscription.stripeSubscriptionId
+      );
+
+      const billingAnchorDate = new Date(
+        stripeSubscription.billing_cycle_anchor * 1000
+      ).getDate(); // Convert from Unix timestamp
+
+      const isResetDay = currentDate === billingAnchorDate;
+
+      const isEndOfMonthReset =
+        billingAnchorDate > endOfCurrentMonth &&
+        currentDate === endOfCurrentMonth;
+
+      if (isResetDay || isEndOfMonthReset) {
+        await resetSubscriptionUsage(subscription.id);
+      }
+    });
+  } catch (error) {
+    console.log("scheduleResetForSubscriptionUsage error - ", error);
+  }
+}
+
+async function removeExtraTeamMembers(subscriptionId, businessId) {
+  const subscriptionFeature = await SubscriptionFeature.findOne({
+    where: {
+      subscriptionId,
+      featureId: TEAM_MEMBERS_FEATURE_ID,
+    },
+    raw: true,
+  });
+
+  const newMemberLimit = parseInt(subscriptionFeature.quantity);
+
+  const users = await User.findAll({
+    where: {
+      businessId,
+    },
+    raw: true,
+  });
+
+  const membersToRemove = users
+    .filter((user) => user.role !== "Admin") // Exclude admin
+    .sort((a, b) => a.createdAt - b.createdAt) // Sort users by creation date
+    .slice(0, Math.max(0, users.length - newMemberLimit)); // Determine users to remove
+
+  for (const user of membersToRemove) {
+    await User.update(
+      {
+        businessId: null,
+      },
+      {
+        where: {
+          id: user.id,
+        },
+      }
+    );
+
+    await Invitation.destroy({
+      where: {
+        email: user.email,
+      },
+    });
+  }
 }
 
 const SubscriptionService = {
@@ -529,6 +725,7 @@ const SubscriptionService = {
   resumeSubscription,
   updateFeatureUsage,
   hasReachedFeatureLimit,
+  scheduleResetForSubscriptionUsage,
 };
 
 module.exports = SubscriptionService;
