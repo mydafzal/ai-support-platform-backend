@@ -23,9 +23,11 @@ async function summarizeDocument(filePath) {
     type: "map_reduce",
   });
 
-  return await chain.invoke({
+  const result = await chain.invoke({
     input_documents: docs,
   });
+
+  return result?.text;
 }
 
 const SummarizationService = { summarizeWebpage, summarizeDocument };
