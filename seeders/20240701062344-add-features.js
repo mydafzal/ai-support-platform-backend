@@ -52,7 +52,7 @@ module.exports = {
       },
       {
         id: POWERED_BY_FEATURE_ID,
-        nameSingular: "No Powered by CustomerBot logo in chat widget",
+        nameSingular: "Remove CustomerBot badge from chat widget",
         createdAt: new Date(),
         updatedAt: new Date(),
       },
