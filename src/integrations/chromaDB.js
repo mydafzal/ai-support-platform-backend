@@ -55,21 +55,17 @@ async function deleteCollection(collectionName) {
 async function deleteChunksByUrl(collectionName, urlId) {
   const collection = await client.getCollection({ name: collectionName });
 
-  const result = await collection.delete({
+  await collection.delete({
     where: { urlId: `url-${urlId}` },
   });
-
-  console.log("deleteChunksByUrl - result", result);
 }
 
 async function deleteChunksByDocument(collectionName, documentId) {
   const collection = await client.getCollection({ name: collectionName });
 
-  const result = await collection.delete({
+  await collection.delete({
     where: { documentId: `document-${documentId}` },
   });
-
-  console.log("deleteChunksByDocument - result", result);
 }
 
 module.exports = {
