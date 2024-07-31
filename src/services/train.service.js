@@ -153,9 +153,11 @@ async function saveUploadsToTrainingChat(uploadType, data, businessId) {
     ${summary}`;
     } else {
       const documentPath = `${destinationPath}/${item.name}`;
+      const documentExtension = path.extname(documentPath);
 
       const summary = await SummarizationService.summarizeDocument(
-        documentPath
+        documentPath,
+        documentExtension
       );
 
       messageContent = `User uploaded a document. The document name is ${item.name} and the document id is ${item.id}. \nHere is the summarized information about the uploaded document:
