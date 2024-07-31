@@ -17,7 +17,7 @@ const {
   addUrlsSchema,
   addDocumentsSchema,
   teachChatSchema,
-} = require("../validators/training.validator");
+} = require("../validators/train.validator");
 
 const validateRequest = require("../middleware/requestValidation.middleware");
 const TrainService = require("../services/train.service");
