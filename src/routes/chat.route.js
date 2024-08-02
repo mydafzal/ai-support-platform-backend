@@ -15,6 +15,8 @@ const {
 } = require("../controllers/chatbotAgent.controller");
 
 const { z } = require("zod");
+const { parsePhoneNumberFromString } = require("libphonenumber-js");
+
 const { redisClient } = require("../integrations/redis");
 
 const { Op } = require("sequelize");
@@ -55,6 +57,23 @@ const preChatFormValidationSchema = z.object({
   email: z.string().email(),
   teamGroupName: z.string().optional(),
   teamGroupId: z.number().optional(),
+  phone: z.string({}).transform((arg, ctx) => {
+    const phone = parsePhoneNumberFromString(arg, {
+      // set to false to require that the whole string is exactly a phone number
+      extract: false,
+    });
+
+    if (phone && phone.isValid()) {
+      return phone.number;
+    }
+
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Invalid phone number",
+    });
+
+    return z.NEVER;
+  }),
 });
 
 const chatValidationSchema = z.object({
@@ -74,7 +93,8 @@ router.post("/", async (req, res) => {
         .json({ success: false, message: error.errors[0].message });
     }
 
-    const { name, email, teamGroupId, teamGroupName, businessId } = req.body;
+    const { name, email, phone, teamGroupId, teamGroupName, businessId } =
+      req.body;
 
     let chatWidget = await ChatWidget.findOne({
       where: {
@@ -110,6 +130,7 @@ router.post("/", async (req, res) => {
       content: {
         name,
         email,
+        phone,
         teamGroupId,
         teamGroupName,
       },
@@ -284,7 +305,8 @@ router.post("/:id/messages", async (req, res) => {
       },
     });
 
-    let canScheduleMeeting = count !== 2 ? false : true;
+    let canScheduleMeeting =
+      count === 2 && !chat.business.leadMode ? true : false;
 
     let customerDetails = await redisClient.lIndex(`chat-${chat.id}`, 0);
 
@@ -310,10 +332,7 @@ router.post("/:id/messages", async (req, res) => {
 
     const response = await generateChatbotAgentResponse(
       message,
-      chat.businessId,
-      chat.business.name,
-      chat.business.assistant.name,
-      chat.business.assistant.knowledgeBaseName,
+      chat.business,
       customerDetails,
       chat.id,
       canScheduleMeeting
