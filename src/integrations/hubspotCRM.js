@@ -180,6 +180,14 @@ async function createContact(
     hubspotClient.setAccessToken(updatedToken?.accessToken);
   }
 
+  if (!customerDetails.firstname) {
+    const [firstname, lastname] = customerDetails.name.split(" ");
+    customerDetails.firstname = firstname;
+    customerDetails.lastname = lastname;
+
+    delete customerDetails.name;
+  }
+
   const PublicObjectCreateRequest = {
     properties: {
       ...customerDetails,
