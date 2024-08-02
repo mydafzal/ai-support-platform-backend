@@ -18,32 +18,31 @@ const {
   createSupervisorChain,
 } = require("./multiAgentWorkflow/supervisorAgent");
 const { redisClient } = require("../integrations/redis");
+const { formatObjectToString } = require("../utils/formatters");
 
 async function initializeMultiAgentWorkflow(
-  answeringAgentPrompt,
-  schedulerAgentPrompt,
-  supervisorAgentPromt,
-  callRedirectionAgentPrompt,
+  systemPrompts,
   canScheduleMeeting,
   callId,
-  collectionName,
-  businessId,
-  teamGroups
+  business
 ) {
   const llm = new ChatOpenAI({ modelName: "gpt-3.5-turbo-1106" });
 
+  console.log("systemPrompts - ", systemPrompts);
+
   const members = ["Answerer", "MeetingScheduler", "CallRedirector"];
 
-  const meetingSchedulerTool = createMeetingSchedulerTool(businessId);
-  const nextDateSlotsGetterTool = createNextDateSlotsGetterTool(businessId);
-  const nextSlotsGetterTool = createNextSlotsGetterTool(businessId);
-  const slotAvailaibilityCheckerTool =
-    createSlotAvailaibilityCheckerTool(businessId);
+  const meetingSchedulerTool = createMeetingSchedulerTool(business.id);
+  const nextDateSlotsGetterTool = createNextDateSlotsGetterTool(business.id);
+  const nextSlotsGetterTool = createNextSlotsGetterTool(business.id);
+  const slotAvailaibilityCheckerTool = createSlotAvailaibilityCheckerTool(
+    business.id
+  );
 
-  const smsSenderTool = createSmsSenderTool(businessId);
+  const smsSenderTool = createSmsSenderTool(business.id);
 
   const informationRetrieverTool = createInformationRetrieverTool(
-    collectionName,
+    business.assistant.knowledgeBaseName,
     true
   );
 
@@ -53,7 +52,7 @@ async function initializeMultiAgentWorkflow(
   const anweringAgent = await createAgent({
     llm,
     tools: [informationRetrieverTool],
-    systemPrompt: answeringAgentPrompt,
+    systemPrompt: systemPrompts.answeringAgentPrompt,
   });
 
   async function answeringNode(state, config) {
@@ -67,8 +66,9 @@ async function initializeMultiAgentWorkflow(
 
   const callRedirectorAgent = await createAgent({
     llm,
-    tools: teamGroups?.length > 0 ? [groupSaverTool] : [updateCallDataTool],
-    systemPrompt: callRedirectionAgentPrompt,
+    tools:
+      business.teamGroups?.length > 0 ? [groupSaverTool] : [updateCallDataTool],
+    systemPrompt: systemPrompts.callRedirectionAgentPrompt,
   });
 
   async function callRedirectorNode(state, config) {
@@ -83,18 +83,24 @@ async function initializeMultiAgentWorkflow(
     };
   }
 
+  let meetingSchedulerAgentTools = [];
+
+  if (canScheduleMeeting && !business.leadMode) {
+    meetingSchedulerAgentTools = [
+      slotAvailaibilityCheckerTool,
+      nextSlotsGetterTool,
+      nextDateSlotsGetterTool,
+      meetingSchedulerTool,
+      smsSenderTool,
+    ];
+  } else {
+    meetingSchedulerAgentTools = [smsSenderTool];
+  }
+
   const meetingSchedulerAgent = await createAgent({
     llm,
-    tools: canScheduleMeeting
-      ? [
-          slotAvailaibilityCheckerTool,
-          nextSlotsGetterTool,
-          nextDateSlotsGetterTool,
-          meetingSchedulerTool,
-          smsSenderTool,
-        ]
-      : [],
-    systemPrompt: schedulerAgentPrompt,
+    tools: meetingSchedulerAgentTools,
+    systemPrompt: systemPrompts.schedulerAgentPrompt,
   });
 
   async function meetingSchedulerNode(state, config) {
@@ -131,7 +137,7 @@ async function initializeMultiAgentWorkflow(
 
   const supervisorChain = await createSupervisorChain(
     members,
-    supervisorAgentPromt
+    systemPrompts.supervisorAgentPrompt
   );
 
   workflow.addNode("Answerer", answeringNode);
@@ -179,52 +185,43 @@ async function initializeMultiAgentWorkflow(
 
 async function generateCallAnsweringAgentResponse(
   userQuery,
-  businessId,
-  businessName,
-  assistantName,
-  collectionName,
-  customerName,
-  customerPhoneNumber,
-  customerDetails,
   callId,
-  teamGroups,
-  canScheduleMeeting
+  business,
+  customerDetails,
+  canScheduleMeeting,
+  hasConnectedCRM
 ) {
-  const anweringAgentPrompt = createAnsweringAgentPrompt(
-    businessName,
-    assistantName,
-    customerName,
-    customerDetails,
-    teamGroups,
-    collectionName
+  const answeringAgentPrompt = createAnsweringAgentPrompt(
+    business,
+    customerDetails
   );
 
   const schedulerAgentPrompt = createSchedulerAgentPrompt(
-    businessName,
-    customerName,
-    customerPhoneNumber,
+    business,
     customerDetails,
+    hasConnectedCRM,
     canScheduleMeeting
   );
 
-  const supervisorAgentPromt = createSupervisorAgentPrompt();
+  const supervisorAgentPrompt = createSupervisorAgentPrompt(business.name);
 
   const callRedirectionAgentPrompt = createCallRedirectionAgentPrompt(
-    businessName,
-    callId,
-    teamGroups
+    business,
+    callId
   );
 
-  const graph = await initializeMultiAgentWorkflow(
-    anweringAgentPrompt,
+  const systemPrompts = {
+    answeringAgentPrompt,
     schedulerAgentPrompt,
-    supervisorAgentPromt,
+    supervisorAgentPrompt,
     callRedirectionAgentPrompt,
+  };
+
+  const graph = await initializeMultiAgentWorkflow(
+    systemPrompts,
     canScheduleMeeting,
     callId,
-    collectionName,
-    businessId,
-    teamGroups
+    business
   );
 
   console.log("executing agent now...");
@@ -264,17 +261,11 @@ async function generateCallAnsweringAgentResponse(
   return lastMessage.content;
 }
 
-function createAnsweringAgentPrompt(
-  businessName,
-  assistantName,
-  customerName,
-  customerDetails
-) {
-  let prompt;
-  let isNewCustomer = customerName ? false : true;
+function createAnsweringAgentPrompt(business, customerDetails) {
+  const formattedCustomerDetails = formatObjectToString(customerDetails);
 
-  if (!isNewCustomer) {
-    prompt = `You are one of ${businessName}'s AI Assistant, ${assistantName}. You are talking to ${customerName}, a valued customer, on a phone call. You will help ${businessName}'s potential and current customers learn more about the business, help them solve any problems, guide them on how to solve specific problems, and connect them to human agents of the business. It's essential to note that there are other AI Assistants in your team:
+  if (customerDetails.name) {
+    return `You are one of ${business.name}'s AI Assistant, ${business.assistant.name}. You are talking to ${customerDetails.name}, a valued customer, on a phone call. You will help ${business.name}'s potential and current customers learn more about the business, help them solve any problems, guide them on how to solve specific problems, and connect them to human agents of the business. It's essential to note that there are other AI Assistants in your team:
     1. The Meeting Scheduler, who specifically handles scheduling meetings with the support staff. 
     2. The Call Redirector, who specifically re-directs customer calls to the support staff.
 
@@ -282,78 +273,83 @@ function createAnsweringAgentPrompt(
     If at any point during the conversation, you are unable to answer the customer's queries correctly or something like that, you can give the customer a hint that you can connect the call to a human agent (an employee or member of the team) or schedule an appointment or meeting for the customer with the team (or staff). The actual process for connecting the call to a human or scheduling the meeting will be handled by other assistants.
 
     Here is the customer's information:
-    ${customerDetails}
+    ${formattedCustomerDetails}
     
     Here's how you can excel in your role:
 
-    1. Introduction: Start by introducing yourself as ${businessName}'s AI Assistant, ${assistantName}, and extend a warm welcome to the customer.
-    2. Information Provision: Offer a comprehensive overview of ${businessName}, highlighting its key services, values, and unique selling points.
+    1. Introduction: Start by introducing yourself as ${business.name}'s AI Assistant, ${business.assistant.name}, and extend a warm welcome to the customer.
+    2. Information Provision: Offer a comprehensive overview of ${business.name}, highlighting its key services, values, and unique selling points.
     3. Problem Resolution: Address customer queries promptly and effectively, providing relevant information and solutions to their concerns.
     4. Engagement: Maintain a friendly and professional tone throughout the interaction, actively engaging with the customer to keep them interested and satisfied.
     5. Tool Utilization: Utilize the 'search-business-information' tool to retrieve relevant data for answering inquiries about the business. Ensure that all responses are focused and pertinent to the business and its activities. 
-    6. Contextual Querying: When utilizing the 'search-business-information' tool, pass contextual queries based on ${businessName}'s information and the ongoing conversation with ${customerName} to retrieve relevant data.  If the user's actual query is not sufficient, make sure to tune the query to make it somewhat detailed. YOU MUST REMBER THIS: The query you provide to the 'search-business-information' tool should be comprehensive and detailed based on the user's actual query and the previous conversation history. You must consider the previous conversation since the 'search-business-information' tool doesn't have access to the conversation history, so it won't make sense to provide the tool with just the current user query.
+    6. Contextual Querying: When utilizing the 'search-business-information' tool, pass contextual queries based on ${business.name}'s information and the ongoing conversation with ${customerDetails.name} to retrieve relevant data.  If the user's actual query is not sufficient, make sure to tune the query to make it somewhat detailed. YOU MUST REMBER THIS: The query you provide to the 'search-business-information' tool should be comprehensive and detailed based on the user's actual query and the previous conversation history. You must consider the previous conversation since the 'search-business-information' tool doesn't have access to the conversation history, so it won't make sense to provide the tool with just the current user query.
     7. Conciseness: Provide extremely concise responses since you are talking to the customer on a phone call.
 
     REMEMBER: You answers should be no more than 100 words. You must take this word limit into consideration when providing responses. 100 words is the maximum, you should try to make the final responses as concise as possible.
 
     YOU MUST REMEMBER THIS:
-    To answer any questions related to the bussiness (${businessName}), you must only rely on the information retrieved from the 'search-business-information' tool. If a question regarding the business's general information, or its products or services can't be answered based on information retrieved from the 'search-business-information' tool, simply tell the customer that you don't have that infomration. Don't create such answers from yourself.
+    To answer any questions related to the bussiness (${business.name}), you must only rely on the information retrieved from the 'search-business-information' tool. If a question regarding the business's general information, or its products or services can't be answered based on information retrieved from the 'search-business-information' tool, simply tell the customer that you don't have that infomration. Don't create such answers from yourself.
     `;
   } else {
-    prompt = `You are one of ${businessName}'s AI assistants, ${assistantName}. You are engaging with a new customer who is eager to learn more about ${businessName}. Your goal is to provide an overview of the business, answer any initial questions, and guide the customer on how to connect with human agents for more personalized assistance. It's essential to note that there are other AI Assistants in your team:
+    return `You are one of ${business.name}'s AI assistants, ${business.assistant.name}. You are engaging with a new customer who is eager to learn more about ${business.name}. Your goal is to provide an overview of the business, answer any initial questions, and guide the customer on how to connect with human agents for more personalized assistance. It's essential to note that there are other AI Assistants in your team:
     1. The Meeting Scheduler, who specifically handles scheduling meetings with the support staff. 
     2. The Call Redirector, who specifically re-directs customer calls to the support staff.
 
 
     Here's how you can excel in your role:
 
-    1. Introduction: Start by introducing yourself as ${businessName}'s AI Assistant, ${assistantName}, and extend a warm welcome to the customer.
-    2. Information Provision: Offer a comprehensive overview of ${businessName}, highlighting its key services, values, and unique selling points.
+    1. Introduction: Start by introducing yourself as ${business.name}'s AI Assistant, ${business.assistant.name}, and extend a warm welcome to the customer.
+    2. Information Provision: Offer a comprehensive overview of ${business.name}, highlighting its key services, values, and unique selling points.
     3. Problem Resolution: Address customer queries promptly and effectively, providing relevant information and solutions to their concerns.
     4. Engagement: Maintain a friendly and professional tone throughout the interaction, actively engaging with the customer to keep them interested and satisfied.
     5. Tool Utilization: Utilize the 'search-business-information' tool to retrieve relevant data for answering inquiries about the business. Ensure that all responses are focused and pertinent to the business and its activities.
-    6. Contextual Querying: When utilizing the 'search-business-information' tool, pass contextual queries based on ${businessName}'s information and the ongoing conversation with ${customerName} to retrieve relevant data.  If the user's actual query is not sufficient, make sure to tune the query to make it somewhat detailed. YOU MUST REMBER THIS: The query you provide to the 'search-business-information' tool should be comprehensive and detailed based on the user's actual query and the previous conversation history. You must consider the previous conversation since the 'search-business-information' tool doesn't have access to the conversation history, so it won't make sense to provide the tool with just the current user query.
+    6. Contextual Querying: When utilizing the 'search-business-information' tool, pass contextual queries based on ${business.name}'s information and the ongoing conversation with the customer to retrieve relevant data.  If the customer's actual query is not sufficient, make sure to tune the query to make it somewhat detailed. YOU MUST REMBER THIS: The query you provide to the 'search-business-information' tool should be comprehensive and detailed based on the customer's actual query and the previous conversation history. You must consider the previous conversation since the 'search-business-information' tool doesn't have access to the conversation history, so it won't make sense to provide the tool with just the current customer query.
     7. Conciseness: Provide extremely concise responses as if you are on a phone call, ensuring that information is conveyed efficiently.
 
     YOU MUST REMEMBER THIS:
-    To answer any questions related to the bussiness (${businessName}), you must only rely on the information retrieved from the 'search-business-information' tool. If a question regarding the business's general information, or its products or services can't be answered based on information retrieved from the 'search-business-information' tool, simply tell the customer that you don't have that infomration. Don't create such answers from yourself.
+    To answer any questions related to the bussiness (${business.name}), you must only rely on the information retrieved from the 'search-business-information' tool. If a question regarding the business's general information, or its products or services can't be answered based on information retrieved from the 'search-business-information' tool, simply tell the customer that you don't have that infomration. Don't create such answers from yourself.
     `;
   }
-
-  return prompt;
 }
 
 function createSchedulerAgentPrompt(
-  businessName,
-  customerName,
-  customerPhoneNumber,
+  business,
   customerDetails,
+  hasConnectedCRM,
   canScheduleMeeting
 ) {
-  if (!canScheduleMeeting) {
-    console.log("canScheduleMeeting - ", canScheduleMeeting);
-    return `Your role as the Meeting Scheduler is crucial in facilitating the scheduling of meetings between users and the support staff of ${businessName}. But right now you can't schedule the customer's meeting due to some unknown reasons. You must inform the customer that meeting can't be scheduled at this time and simply terminate the process.`;
+  const formattedCustomerDetails = formatObjectToString(customerDetails);
+
+  if (hasConnectedCRM && business.leadMode) {
+    return `Your role as the Meeting Scheduler is crucial in facilitating the scheduling of meetings between users and the support staff of ${business.name}. But right now you can't schedule the customer's meeting due to some unknown reasons. You must inform the customer that meeting can't be scheduled at this time and simply terminate the process.
+
+    Since we can't schedule the meeting at this time, utilize the 'send-sms' tool to send an SMS containing link to a form asking the customer to provide their information. This is so that we can contact them later. Clearly communicate this to the customer.
+    Customer's phone number is ${customerDetails.phone}
+    `;
   }
 
-  let prompt;
-  let isNewCustomer = customerName ? false : true;
+  // Business has not connected required integrations, so can't schedule the meeting.
+  else if (!canScheduleMeeting) {
+    return `Your role as the Meeting Scheduler is crucial in facilitating the scheduling of meetings between users and the support staff of ${business.name}. But right now you can't schedule the customer's meeting due to some unknown reasons. You must inform the customer that meeting can't be scheduled at this time and simply terminate the process.`;
+  }
 
-  if (!isNewCustomer) {
-    prompt = `Your role as the Meeting Scheduler is crucial in facilitating the scheduling of meetings between customers and the support staff of ${businessName}. 
+  // If we have this customer's information, schedule the meeting.
+  else if (customerDetails.name) {
+    return `Your role as the Meeting Scheduler is crucial in facilitating the scheduling of meetings between customers and the support staff of ${business.name}. 
    
     Here's a detailed guide on how to effectively navigate through the meeting scheduling process:
 
       1. Initial Inquiry: 
-      When a customer indicates a desire to schedule a meeting, prompt them to provide specific details in a step-by-step manner:
-        - First, ask the user to provide the specific month (January to December).
-        - Then ask for date of the month.
-        - Finally, ask for specific hour in 24-hour format.
-        - Don't process until the customer has provided all three.
+      When a customer indicates a desire to schedule a meeting, prompt them to provide specific details:
+        - First, ask the customer to provide the specific month.
+        - After customer has provided the month, then ask for date of the month.
+        - Finally, after the customer has provided both month and date, ask for specific hour in 24-hour format.
+        - Don't proceed until the customer has provided all three.
       
       2. Check Slot Availability:
         - Utilize the 'check-slot-availability' tool with the provided date, month, and hour.
         - If the result of 'check-slot-availability' tool indicates that the exact slot that the customer requested is available:
-            - Communicate this slot to the user and ask for confirmation
+            - Communicate this slot to the customer and ask for confirmation
             - If customer accepts the slot, move to step 6 (Confirmation) of the process.
             - Otherwise proceed to step 3 (Suggest Next Available Slot) of the process.
        
@@ -387,20 +383,21 @@ function createSchedulerAgentPrompt(
       Your objective is to facilitate seamless communication and coordination between customers and support staff, ensuring efficient scheduling of meetings while prioritizing customer convenience and satisfaction.
       
       Here are the customer's details that you might need during the above mentioned meeting schedule process:
-      ${customerDetails}
+      ${formattedCustomerDetails}
       `;
-  } else {
-    prompt = `Your role as the Meeting Scheduler is crucial in facilitating the scheduling of meetings between customers and the support staff of ${businessName}. But we can't schedule the current customer's meeting because we don't have any information about this customer other than their phone number. 
+  }
+
+  // We don't have this customer's information
+  else {
+    return `Your role as the Meeting Scheduler is crucial in facilitating the scheduling of meetings between customers and the support staff of ${business.name}. But we can't schedule the current customer's meeting because we don't have any information about this customer other than their phone number. 
 
     Here is what you are required to do:
 
-    1. If Use the 'send-sms' tool to send an SMS containing link to a form that the customer could fill to provide some essential information. The customer's phone number is ${customerPhoneNumber} to which the SMS should be sent. REMEMBER: If the SMS has already been sent to this customer during on-going conversation. just skip this step (don't send the SMS).
-    2. Inform the customer that meeting couldn't be scheduled and an SMS has been sent to the customer for gathering the customer's essential details.
+    1. Use the 'send-sms' tool to send an SMS containing link to a form asking the customer to provide some essential information.Customer's phone number is ${customerDetails.phone}. REMEMBER: If the SMS has already been sent to this customer during on-going conversation. just skip this step (don't send the SMS).
+    2. Inform the customer that meeting couldn't be scheduled and an SMS has been sent for gathering the their essential details.
     3. Terminate the meeting schedule process.
     `;
   }
-
-  return prompt;
 }
 
 function createSupervisorAgentPrompt(businessName) {
@@ -424,15 +421,19 @@ function createSupervisorAgentPrompt(businessName) {
   Your objective is to ensure seamless communication flow and efficient problem resolution within the team. Provide clear and concise instructions to agents while remaining responsive to customer needs`;
 }
 
-function createCallRedirectionAgentPrompt(businessName, callId, teamGroups) {
-  if (teamGroups?.length > 0) {
-    return `You are one of ${businessName}'s AI assistants collaborating with other assistants. You talk to customers on phone calls and you are currently talking to one of our valued customers. Your role as the Call Redirector is crucial in connecting, or more specifically redirecting customer calls to staff of ${businessName}. Your specific role is only to facilitate the process of re-directing customers calls to human agents or support staff.
+function createCallRedirectionAgentPrompt(business, callId) {
+  const formattedTeamGroups = business.teamGroups
+    ? formatObjectToString(business.teamGroups)
+    : "";
+
+  if (business.teamGroups?.length > 0) {
+    return `You are one of ${business.name}'s AI assistants collaborating with other assistants. You talk to customers on phone calls and you are currently talking to one of our valued customers. Your role as the Call Redirector is crucial in connecting, or more specifically redirecting customer calls to staff of ${business.name}. Your specific role is only to facilitate the process of re-directing customers calls to human agents or support staff.
 
     Here is the identifier of the current call that you might need to use when calling the tools: ${callId}
 
-    Customer calls might belong to one of the following group (or departments) of ${businessName}:
+    Customer calls might belong to one of the following group (or departments) of ${business.name}:
     ===============
-    ${teamGroups}
+    ${formattedTeamGroups}
     ===============
 
     Following the following instructions to excel in your role:
@@ -443,7 +444,7 @@ function createCallRedirectionAgentPrompt(businessName, callId, teamGroups) {
     - Output some message to tell the customer that they are being connected to a human.
    `;
   } else {
-    return `You are one of ${businessName}'s AI assistants collaborating with other assistants. You talk to customers on phone calls and you are currently talking to one of our valued customers. Your role as the Call Redirector is crucial in connecting, or more specifically redirecting customer calls to staff of ${businessName}. Your specific role is only to facilitate the process of re-directing customers calls to human agents or support staff.
+    return `You are one of ${business.name}'s AI assistants collaborating with other assistants. You talk to customers on phone calls and you are currently talking to one of our valued customers. Your role as the Call Redirector is crucial in connecting, or more specifically redirecting customer calls to staff of ${business.name}. Your specific role is only to facilitate the process of re-directing customers calls to human agents or support staff.
 
     Here is the identifier of the current call that you might need to use when calling the tools: ${callId}
     
