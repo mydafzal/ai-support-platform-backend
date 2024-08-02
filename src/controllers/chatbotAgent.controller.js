@@ -9,6 +9,7 @@ const {
   createNextSlotsGetterTool,
   createSlotAvailaibilityCheckerTool,
   createAgentAvailabilityCheckerTool,
+  createCustomerSaverTool,
 } = require("./multiAgentWorkflow/agentToolsCreator");
 
 const { HumanMessage, AIMessage } = require("@langchain/core/messages");
@@ -21,9 +22,8 @@ const { formatObjectToString } = require("../utils/formatters");
 
 async function initializeMultiAgentWorkflow(
   systemPrompts,
-  businessId,
+  business,
   chatId,
-  collectionName,
   canScheduleMeeting
 ) {
   const llm = new ChatOpenAI({ modelName: "gpt-3.5-turbo-1106" });
@@ -31,14 +31,18 @@ async function initializeMultiAgentWorkflow(
   const members = ["Answerer", "MeetingScheduler", "HumanConnector"];
 
   // Initialize tools to be used by different agents.
-  const meetingSchedulerTool = createMeetingSchedulerTool(businessId);
-  const nextDateSlotsGetterTool = createNextDateSlotsGetterTool(businessId);
-  const nextSlotsGetterTool = createNextSlotsGetterTool(businessId);
-  const slotAvailaibilityCheckerTool =
-    createSlotAvailaibilityCheckerTool(businessId);
+  const meetingSchedulerTool = createMeetingSchedulerTool(business.id);
+  const nextDateSlotsGetterTool = createNextDateSlotsGetterTool(business.id);
+  const nextSlotsGetterTool = createNextSlotsGetterTool(business.id);
+  const slotAvailaibilityCheckerTool = createSlotAvailaibilityCheckerTool(
+    business.id
+  );
 
-  const informationRetrieverTool =
-    createInformationRetrieverTool(collectionName);
+  const customerSaverTool = createCustomerSaverTool(business.id);
+
+  const informationRetrieverTool = createInformationRetrieverTool(
+    business.assistant.knowledgeBaseName
+  );
 
   const agentAvailabilityCheckerTool = createAgentAvailabilityCheckerTool();
 
@@ -49,22 +53,30 @@ async function initializeMultiAgentWorkflow(
     systemPrompt: systemPrompts.answeringAgentPrompt,
   });
 
+  let meetingSchedulerAgentTools = [];
+  let humanConnectorAgentTools = [agentAvailabilityCheckerTool];
+
+  if (canScheduleMeeting) {
+    meetingSchedulerAgentTools = [
+      slotAvailaibilityCheckerTool,
+      nextSlotsGetterTool,
+      nextDateSlotsGetterTool,
+      meetingSchedulerTool,
+    ];
+  } else if (business.leadMode) {
+    meetingSchedulerAgentTools = [customerSaverTool];
+    humanConnectorAgentTools.push(customerSaverTool);
+  }
+
   const meetingSchedulerAgent = await createAgent({
     llm,
-    tools: canScheduleMeeting
-      ? [
-          slotAvailaibilityCheckerTool,
-          nextSlotsGetterTool,
-          nextDateSlotsGetterTool,
-          meetingSchedulerTool,
-        ]
-      : [],
+    tools: meetingSchedulerAgentTools,
     systemPrompt: systemPrompts.schedulerAgentPrompt,
   });
 
   const humanConnectorAgent = await createAgent({
     llm,
-    tools: [agentAvailabilityCheckerTool],
+    tools: humanConnectorAgentTools,
     systemPrompt: systemPrompts.humanConnectorAgentPrompt,
   });
 
@@ -184,31 +196,31 @@ async function initializeMultiAgentWorkflow(
 
 async function generateChatbotAgentResponse(
   userQuery,
-  businessId,
-  businessName,
-  assistantName,
-  collectionName,
+  business,
   customerDetails,
   chatId,
   canScheduleMeeting
 ) {
   const answeringAgentPrompt = createAgentPrompt(
-    businessName,
-    assistantName,
+    business.name,
+    business.assistant.name,
     formatObjectToString(customerDetails)
   );
 
+  const formattedCustomerDetails = formatObjectToString(customerDetails);
+
   const schedulerAgentPrompt = createSchedulerAgentPrompt(
-    businessName,
-    customerDetails,
+    business,
+    formattedCustomerDetails,
     canScheduleMeeting
   );
 
-  const supervisorAgentPromt = createSupervisorAgentPrompt(businessName);
+  const supervisorAgentPromt = createSupervisorAgentPrompt(business.name);
 
   const humanConnectorAgentPrompt = createHumanConnectorAgentPrompt(
-    businessName,
-    chatId
+    business,
+    chatId,
+    formattedCustomerDetails
   );
 
   const systemPrompts = {
@@ -220,9 +232,8 @@ async function generateChatbotAgentResponse(
 
   const graph = await initializeMultiAgentWorkflow(
     systemPrompts,
-    businessId,
+    business,
     chatId,
-    collectionName,
     canScheduleMeeting
   );
 
@@ -271,16 +282,27 @@ function createAgentPrompt(businessName, assistantName, customerDetails) {
 }
 
 function createSchedulerAgentPrompt(
-  businessName,
+  business,
   customerDetails,
   canScheduleMeeting
 ) {
-  const formattedCustomerDetails = formatObjectToString(customerDetails);
-
   if (!canScheduleMeeting) {
-    return `Your role as the Meeting Scheduler is crucial in facilitating the scheduling of meetings between users and the support staff of ${businessName}. But right now you can't schedule the customer's meeting due to some unknown reasons. You must inform the customer that meeting can't be scheduled at this time and simply terminate the process.`;
+    return `Your role as the Meeting Scheduler is crucial in facilitating the scheduling of meetings between customers and the support staff of ${
+      business.name
+    }. You're currently talking to the customer in a chat conversation. 
+    But right now you can't schedule the customer's meeting due to some unknown reasons. You must inform the customer that meeting can't be scheduled at this time and simply terminate the process.
+  
+    ${
+      business.leadMode &&
+      `Since we can't schedule meeting for the customer at this time, utlize the 'save-customer-information' tool to capture the potential lead (the prospect). Clearly communicate the customer that meeting can't be scheduled at this time and that we have noted/saved their information and our team will contact them.
+
+      Here is the customer's information:
+      ${customerDetails}
+      `
+    }
+    `;
   } else {
-    return `Your role as the Meeting Scheduler is crucial in facilitating the scheduling of meetings between customers and the support staff of ${businessName}. 
+    return `Your role as the Meeting Scheduler is crucial in facilitating the scheduling of meetings between customers and the support staff of ${business.name}. 
    
     Here's a detailed guide on how to effectively navigate through the meeting scheduling process:
 
@@ -330,7 +352,7 @@ function createSchedulerAgentPrompt(
       Your objective is to facilitate seamless communication and coordination between customers and support staff, ensuring efficient scheduling of meetings while prioritizing customer convenience and satisfaction.
       
       Here are the customer's details that you might need during the above mentioned meeting schedule process:
-      ${formattedCustomerDetails}
+      ${customerDetails}
       `;
   }
 }
@@ -352,15 +374,27 @@ function createSupervisorAgentPrompt(businessName) {
   `;
 }
 
-function createHumanConnectorAgentPrompt(businessName, chatId) {
-  return `You are one of ${businessName}'s AI assistants collaborating with other assistants. You talk to customers through chats. Your role as the Human Connector is crucial in connecting, or more specifically transferring customer chats to staff of ${businessName}. Your specific role is only to facilitate the process of connecting customer chats to human agents or support staff.
+function createHumanConnectorAgentPrompt(business, chatId, customerDetails) {
+  return `You are one of ${
+    business.name
+  }'s AI assistants collaborating with other assistants. You talk to customers through chats. Your role as the Human Connector is crucial in connecting, or more specifically transferring customer chats to staff of ${
+    business.name
+  }. Your specific role is only to facilitate the process of connecting customer chats to human agents or support staff.
 
-  NOTE: Here is the id of the current chat that you would need to utilize the tools: ${chatId}
+  NOTE: Here is the id of the current chat that you would need to utilize for the tools: ${chatId}
 
     Follow the given instructions to excel in your role:
 
     - Call the 'check-agent-availability' tool to check if a member of the staff is available to take over the chat.
-    - If the result of 'check-agent-availability' tool indicates that no agents are available, communicate to the customer that our agents are not available at the moment and please try after some time.
+    - If the result of 'check-agent-availability' tool indicates that no agents are available, then
+       ${
+         business.leadMode
+           ? `utlize the 'save-customer-information' tool to capture the potential lead (the prospect). Clearly communicate the customer that no agents are available at this time and that we have noted/saved their information and our team will contact them.
+         
+         Here is the customer's information:
+         ${customerDetails}`
+           : `communicate to the customer that our agents are not available at the moment and please try after some time.`
+       }
     - On the other hand, if the result of 'check-agent-availability' tool indicates availability of an agent who can take over the chat, simply communicate to the customer that they are being connected to a human agent.
    `;
 }
