@@ -30,15 +30,10 @@ const {
   redisClient,
 } = require("../integrations/redis");
 const { convertTextToSpeech } = require("../integrations/textToSpeech");
-const {
-  formatHubSpotContactDetails,
-  formatTeamGroups,
-} = require("../utils/formatters");
 
 const {
   Business,
   Assistant,
-  Integration,
   BusinessIntegration,
   IntegrationWarning,
   Call,
@@ -59,6 +54,7 @@ const {
   generateFilename,
   getConnectedIntegrationsCount,
 } = require("../utils/helpers");
+
 const { sendEmail } = require("../integrations/nodemailer");
 const { Op } = require("sequelize");
 const SubscriptionService = require("../services/subscription.service");
@@ -67,7 +63,7 @@ async function handleIncomingCall(request) {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
-  const customerPhoneNumber = request.body.From;
+  const customerPhoneNumber = request.body.From || "+923055952372";
   const businessPhoneNumber = request.body.To || "+14697074725";
   const callId = request.body.CallSid;
 
@@ -77,10 +73,14 @@ async function handleIncomingCall(request) {
     where: {
       twilioNumber: businessPhoneNumber,
     },
-    include: [{ model: Assistant, as: "assistant" }],
-  });
+    include: [
+      { model: Assistant, as: "assistant" },
+      { model: TeamGroup, as: "teamGroups", attributes: ["name"] },
+    ],
 
-  business = business?.toJSON();
+    raw: true,
+    nest: true,
+  });
 
   if (!business) {
     twiml.say("Sorry, we can't handle your call.");
@@ -99,43 +99,23 @@ async function handleIncomingCall(request) {
     return twiml.toString();
   }
 
-  const { assistant } = business;
-
   await Call.create({
     id: callId,
     from: customerPhoneNumber,
     businessId: business.id,
   });
 
-  let integration = await Integration.findOne({
+  let crmIntegration = await BusinessIntegration.findOne({
     where: {
-      id: HUBPOST_INTEGRATION_ID,
+      integrationId: HUBPOST_INTEGRATION_ID,
+      businessId: business.id,
     },
-    include: [
-      {
-        model: BusinessIntegration,
-        as: "integration",
-        where: {
-          businessId: business.id,
-        },
-      },
-    ],
+    raw: true,
   });
 
-  integration = integration?.toJSON();
+  let customerDetails = { phone: customerPhoneNumber };
 
-  let formattedCustomerDetails = "";
-  let customerFullName = "";
-
-  if (
-    !integration ||
-    !integration?.integration ||
-    integration?.integration?.length <= 0
-  ) {
-    console.log(
-      "HubSpot integration not available, couldn't retrieve customer's information."
-    );
-
+  if (!crmIntegration) {
     await handleIntegrationWarning(
       callId,
       HUBPOST_INTEGRATION_ID,
@@ -143,19 +123,19 @@ async function handleIncomingCall(request) {
       business.adminUserId
     );
   } else {
-    integration = integration.integration[0];
-
     const contact = await getContactByPhoneNumber(
-      integration.accessToken,
-      integration.refreshToken,
-      integration.expirationTime,
+      crmIntegration.accessToken,
+      crmIntegration.refreshToken,
+      crmIntegration.expirationTime,
       customerPhoneNumber,
       business.id
     );
 
     if (contact) {
-      formattedCustomerDetails = formatHubSpotContactDetails(contact);
-      customerFullName = `${contact.properties.firstname} ${contact.properties.lastname}`;
+      customerDetails = {
+        name: `${contact.properties.firstname} ${contact.properties.lastname}`,
+        email: contact.properties.email,
+      };
     }
   }
 
@@ -167,43 +147,26 @@ async function handleIncomingCall(request) {
   );
 
   // Businesses must connect both Google Calendar and Calendly integrations so that customers can schedule meetings on phone call.
-  let canScheduleMeeting = count !== 3 || hasReachedLimit ? false : true;
-
-  let teamGroups = await TeamGroup.findAll({
-    where: {
-      businessId: business.id,
-    },
-    attributes: ["name"],
-  });
-
-  teamGroups = teamGroups.map((member) => member.toJSON());
-  teamGroups = formatTeamGroups(teamGroups);
+  let canScheduleMeeting =
+    (count !== 3 || hasReachedLimit) && !business.leadMode ? false : true;
 
   let callDetails = {
-    businessId: business.id,
-    businessName: business.name,
-    businessPhoneNumber: business.twilioNumber,
-    voiceId: assistant.voiceId,
-    greetingMessageUrl: assistant.greetingMessageUrl,
-    farewellMessageUrl: assistant.farewellMessageUrl,
-    assistantName: assistant.name,
-    collectionName: assistant.knowledgeBaseName,
+    business,
     callId: callId,
-    customerDetails: formattedCustomerDetails,
-    customerName: customerFullName,
-    customerPhoneNumber,
+    customerDetails,
     shouldAddGreetingMessageToTranscription: false,
     shouldAddFarewellMessageToTranscription: false,
+    hasConnectedCRM: crmIntegration ? true : false,
     canScheduleMeeting,
-    teamGroups,
   };
 
   await storeCallData(callId, callDetails);
 
-  twiml.play(callDetails.greetingMessageUrl);
+  twiml.play(business.assistant.greetingMessageUrl);
 
   twiml.gather({
-    speechTimeout: "auto",
+    // speechTimeout: "auto",
+    speechTimeout: "15",
     speechModel: "experimental_conversations",
     input: "speech",
     action: `${BASE_URL}/calls/speech-input`,
@@ -241,28 +204,23 @@ async function handleSpeechInput(request) {
   const callData = await getCallData(callId);
 
   let {
-    farewellMessageUrl,
-    businessId,
-    businessName,
-    customerName,
-    customerPhoneNumber,
-    assistantName,
+    business,
     customerDetails,
-    voiceId,
-    collectionName,
     audioFileNames,
-    businessPhoneNumber,
     shouldAddGreetingMessageToTranscription,
-    teamGroups,
     canScheduleMeeting,
+    hasConnectedCRM,
+    groupToRedirect,
   } = callData;
+
+  console.log("business from call data - ", business, customerDetails);
 
   if (!shouldAddGreetingMessageToTranscription) {
     callData.shouldAddGreetingMessageToTranscription = true;
   }
 
   if (!voiceInput) {
-    twiml.play(farewellMessageUrl);
+    twiml.play(business.assistant.farewellMessageUrl);
     twiml.hangup();
 
     callData.shouldAddFarewellMessageToTranscription = true;
@@ -273,16 +231,11 @@ async function handleSpeechInput(request) {
 
   const aiResponse = await generateCallAnsweringAgentResponse(
     voiceInput,
-    businessId,
-    businessName,
-    assistantName,
-    collectionName,
-    customerName,
-    customerPhoneNumber,
-    customerDetails,
     callId,
-    teamGroups,
-    canScheduleMeeting
+    business,
+    customerDetails,
+    canScheduleMeeting,
+    hasConnectedCRM
   );
 
   console.log("aiResponse", aiResponse);
@@ -290,7 +243,7 @@ async function handleSpeechInput(request) {
 
   let generatedSpeechFile = await convertTextToSpeech(
     cleanedAiResponse,
-    voiceId
+    business.assistant.voiceId
   );
 
   // Save the audio file locally
@@ -315,24 +268,25 @@ async function handleSpeechInput(request) {
     if (updatedCallData?.groupToRedirect?.length > 0) {
       teamGroup = await TeamGroup.findOne({
         where: {
-          businessId,
+          businessId: business.id,
           name: updatedCallData.groupToRedirect,
         },
+        raw: true,
       });
     }
 
-    let whereCondition = { businessId, phone: { [Op.not]: null } };
+    let whereCondition = { businessId: business.id, phone: { [Op.not]: null } };
 
     if (teamGroup) {
-      teamGroup = teamGroup.toJSON();
       whereCondition.teamGroupId = teamGroup.id;
     }
 
     let teamMember = await User.findOne({
       where: whereCondition,
+      raw: true,
     });
 
-    if (!teamMember || teamMember?.toJSON()?.phone?.length < 1) {
+    if (!teamMember || teamMember?.phone?.length < 1) {
       twiml.say(
         "We couldn't connect your call to a human agent at the moment."
       );
@@ -347,8 +301,6 @@ async function handleSpeechInput(request) {
 
     //
     else {
-      teamMember = teamMember.toJSON();
-
       await Call.update(
         {
           status: "Redirected",
@@ -365,7 +317,7 @@ async function handleSpeechInput(request) {
 
       twiml
         .dial({
-          callerId: businessPhoneNumber,
+          callerId: business.twilioNumber,
         })
         .number(
           {
@@ -695,9 +647,8 @@ async function handleIntegrationWarning(
         businessId,
         integrationId: integrationId,
       },
+      raw: true,
     });
-
-    integrationWarning = integrationWarning?.toJSON();
 
     const cooldownPeriod = 24 * 60 * 60 * 1000; // 24 hours cooldown period
     const currentTime = Date.now();
@@ -711,9 +662,8 @@ async function handleIntegrationWarning(
         where: {
           id: adminUserId,
         },
+        raw: true,
       });
-
-      user = user.toJSON();
 
       // Trigger email to business to connect the CRM...
       const emailLink = `${process.env.CLIENT_BASE_URL}/integration?callId=${callId}`;
@@ -727,10 +677,12 @@ async function handleIntegrationWarning(
       if (integrationWarning) {
         await IntegrationWarning.update(
           {
-            id: integrationWarning.id,
+            lastEmailSentAt: new Date(),
           },
           {
-            lastEmailSentAt: new Date(),
+            where: {
+              id: integrationWarning.id,
+            },
           }
         );
       } else {
