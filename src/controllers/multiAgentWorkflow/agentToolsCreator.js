@@ -10,7 +10,13 @@ const {
 
 const jwt = require("jsonwebtoken");
 
-const { FormLink, User, Chat, ChatUserAssignment } = require("../../../models");
+const {
+  FormLink,
+  User,
+  Chat,
+  ChatUserAssignment,
+  BusinessIntegration,
+} = require("../../../models");
 
 const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
@@ -20,7 +26,10 @@ const {
   updateCallConversation,
   redisClient,
 } = require("../../integrations/redis");
-const { ACCEPTING_CHATS } = require("../../utils/constants");
+const {
+  ACCEPTING_CHATS,
+  HUBPOST_INTEGRATION_ID,
+} = require("../../utils/constants");
 const { Op } = require("sequelize");
 const { StringOutputParser } = require("@langchain/core/output_parsers");
 const { ChatOpenAI } = require("@langchain/openai");
@@ -29,6 +38,7 @@ const client = twilio(ACCOUNT_SID, AUTH_TOKEN);
 const MESSAGING_SERVICE_SID = process.env.TWILIO_MESSAGING_SERVICE_SID;
 
 const { v4: uuidv4 } = require("uuid");
+const { createContact } = require("../../integrations/hubspotCRM");
 
 const monthsEnum = [
   "January",
@@ -499,6 +509,41 @@ function reciprocalRankFusion(altQueryDocs, k = 60) {
   return fusedScores;
 }
 
+function createCustomerSaverTool(businessId) {
+  return new DynamicStructuredTool({
+    name: "save-customer-information",
+    description: "save the customer's information to capture a potential lead.",
+    schema: z.object({
+      name: z.string().describe("customer's full name"),
+      email: z.string().email().describe("customer's email"),
+      phone: z.string().describe("customer's phone number"),
+    }),
+    func: async (customerDetails) => {
+      try {
+        const hubspotIntegration = await BusinessIntegration.findOne({
+          where: {
+            businessId,
+            integrationId: HUBPOST_INTEGRATION_ID,
+          },
+          raw: true,
+        });
+
+        await createContact(
+          hubspotIntegration.accessToken,
+          hubspotIntegration.refreshToken,
+          hubspotIntegration.expirationTime,
+          businessId,
+          customerDetails
+        );
+
+        return "Customer's information has been saved";
+      } catch (error) {
+        console.log("save-customer-information tool error - ", error);
+      }
+    },
+  });
+}
+
 module.exports = {
   createSlotAvailaibilityCheckerTool,
   createNextSlotsGetterTool,
@@ -509,4 +554,5 @@ module.exports = {
   createGroupSaverTool,
   createUpdateCallDataTool,
   createAgentAvailabilityCheckerTool,
+  createCustomerSaverTool,
 };
