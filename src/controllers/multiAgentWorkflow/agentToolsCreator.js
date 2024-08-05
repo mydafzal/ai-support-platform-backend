@@ -16,6 +16,8 @@ const {
   Chat,
   ChatUserAssignment,
   BusinessIntegration,
+  Integration,
+  Business,
 } = require("../../../models");
 
 const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
@@ -39,6 +41,7 @@ const MESSAGING_SERVICE_SID = process.env.TWILIO_MESSAGING_SERVICE_SID;
 
 const { v4: uuidv4 } = require("uuid");
 const { createContact } = require("../../integrations/hubspotCRM");
+const { sendEmail } = require("../../integrations/nodemailer");
 
 const monthsEnum = [
   "January",
@@ -282,8 +285,19 @@ function createSmsSenderTool(businessId) {
     func: async ({ phoneNumber }) => {
       console.log("sms sender tool - called");
 
+      const business = await Business.findOne({
+        where: {
+          id: businessId,
+        },
+        raw: true,
+      });
+
       const token = jwt.sign(
-        { phoneNumber, timestamp: `${new Date()}` },
+        {
+          phoneNumber,
+          timestamp: `${new Date()}`,
+          leadMode: business.leadMode,
+        },
         process.env.JWT_SECRET
       );
 
@@ -291,6 +305,8 @@ function createSmsSenderTool(businessId) {
       
       ${process.env.CLIENT_BASE_URL}/form?token=${token}
       `;
+
+      console.log("messageBody - ", messageBody);
 
       const message = await client.messages.create({
         body: messageBody,
@@ -525,16 +541,54 @@ function createCustomerSaverTool(businessId) {
             businessId,
             integrationId: HUBPOST_INTEGRATION_ID,
           },
+          include: [
+            { model: Integration, as: "integration" },
+            {
+              model: Business,
+              as: "business",
+              include: [
+                {
+                  model: User,
+                  as: "adminUser",
+                  attributes: ["name", "email"],
+                },
+              ],
+            },
+          ],
           raw: true,
+          nest: true,
         });
+
+        const { adminUser } = hubspotIntegration.business;
 
         await createContact(
           hubspotIntegration.accessToken,
           hubspotIntegration.refreshToken,
           hubspotIntegration.expirationTime,
           businessId,
-          customerDetails
+          { ...customerDetails }
         );
+
+        console.log("customer Details - ", customerDetails);
+
+        const emailTemplate = `
+          <html>
+            <body>
+                <p>Dear ${adminUser.name},</p>
+                <p>A new lead has been successfully captured and added to your CRM.</p>
+                <p><strong>CRM:</strong> ${hubspotIntegration.integration.name}</p>
+                <p><strong>Lead Information:</strong></p>
+                <ul>
+                    <li><strong>Name:</strong> ${customerDetails.name}</li>
+                    <li><strong>Phone Number:</strong> ${customerDetails.phone}</li>
+                    <li><strong>Email Address:</strong> ${customerDetails.email}</li>
+                </ul>
+                <p>Thank you for using CustomerBot. If you have any questions or need further assistance, please contact our support team.</p>
+                <p>Best regards,<br>The CustomerBot Team</p>
+            </body>
+          </html>`;
+
+        await sendEmail(adminUser.email, emailTemplate);
 
         return "Customer's information has been saved";
       } catch (error) {

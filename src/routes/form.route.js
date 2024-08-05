@@ -1,5 +1,11 @@
 const router = require("express").Router();
-const { BusinessIntegration, Business, FormLink } = require("../../models");
+const {
+  BusinessIntegration,
+  Business,
+  FormLink,
+  Integration,
+  User,
+} = require("../../models");
 
 const { z } = require("zod");
 const { HUBPOST_INTEGRATION_ID } = require("../utils/constants");
@@ -11,6 +17,9 @@ const formValidationSchema = z.object({
   email: z.string().email(),
   phone: z.string(),
 });
+
+const jwt = require("jsonwebtoken");
+const { sendEmail } = require("../integrations/nodemailer");
 
 router.post("/", async (req, res) => {
   try {
@@ -25,8 +34,9 @@ router.post("/", async (req, res) => {
     }
 
     const { token } = req.query;
+    const customerDetails = req.body;
 
-    console.log("form link - token - ", token);
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
 
     let formLink = await FormLink.findOne({
       where: {
@@ -44,9 +54,9 @@ router.post("/", async (req, res) => {
           },
         },
       ],
+      raw: true,
+      nest: true,
     });
-
-    console.log("form link - query result - ", formLink);
 
     if (!formLink) {
       return res
@@ -54,9 +64,7 @@ router.post("/", async (req, res) => {
         .json({ success: false, message: "Invalid token." });
     }
 
-    formLink = formLink.toJSON();
-
-    const businessIntegration = formLink.business.businessIntegrations[0];
+    const businessIntegration = formLink.business.businessIntegrations;
 
     const { accessToken, refreshToken, expirationTime } = businessIntegration;
 
@@ -65,12 +73,50 @@ router.post("/", async (req, res) => {
       refreshToken,
       expirationTime,
       formLink.business.id,
-      req.body
+      customerDetails
     );
+
+    if (decodedToken.leadMode) {
+      const adminUser = await User.findOne({
+        where: {
+          businessId: formLink.business.id,
+          role: "Admin",
+        },
+        raw: true,
+      });
+
+      const integration = await Integration.findOne({
+        where: {
+          id: HUBPOST_INTEGRATION_ID,
+        },
+        raw: true,
+      });
+
+      customerDetails.name = `${customerDetails.firstname} ${customerDetails.lastname}`;
+
+      const emailTemplate = `
+      <html>
+        <body>
+            <p>Dear ${adminUser.name},</p>
+            <p>A new lead has been successfully captured and added to your CRM.</p>
+            <p><strong>CRM:</strong> ${integration.name}</p>
+            <p><strong>Lead Information:</strong></p>
+            <ul>
+                <li><strong>Name:</strong> ${customerDetails.name}</li>
+                <li><strong>Phone Number:</strong> ${customerDetails.phone}</li>
+                <li><strong>Email Address:</strong> ${customerDetails.email}</li>
+            </ul>
+            <p>Thank you for using CustomerBot. If you have any questions or need further assistance, please contact our support team.</p>
+            <p>Best regards,<br>The CustomerBot Team</p>
+        </body>
+      </html>`;
+
+      await sendEmail(adminUser.email, emailTemplate);
+    }
 
     res.status(200).json({
       success: true,
-      data: formLink,
+      message: "Information saved successfully.",
     });
   } catch (error) {
     console.error("Error posting customer form: ", error);
