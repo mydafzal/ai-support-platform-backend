@@ -63,7 +63,7 @@ async function handleIncomingCall(request) {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
-  const customerPhoneNumber = request.body.From || "+923055952372";
+  const customerPhoneNumber = request.body.From;
   const businessPhoneNumber = request.body.To || "+14697074725";
   const callId = request.body.CallSid;
 
@@ -212,8 +212,6 @@ async function handleSpeechInput(request) {
     hasConnectedCRM,
     groupToRedirect,
   } = callData;
-
-  console.log("business from call data - ", business, customerDetails);
 
   if (!shouldAddGreetingMessageToTranscription) {
     callData.shouldAddGreetingMessageToTranscription = true;

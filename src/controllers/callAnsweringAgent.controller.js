@@ -28,8 +28,6 @@ async function initializeMultiAgentWorkflow(
 ) {
   const llm = new ChatOpenAI({ modelName: "gpt-3.5-turbo-1106" });
 
-  console.log("systemPrompts - ", systemPrompts);
-
   const members = ["Answerer", "MeetingScheduler", "CallRedirector"];
 
   const meetingSchedulerTool = createMeetingSchedulerTool(business.id);
@@ -321,9 +319,11 @@ function createSchedulerAgentPrompt(
   const formattedCustomerDetails = formatObjectToString(customerDetails);
 
   if (hasConnectedCRM && business.leadMode) {
-    return `Your role as the Meeting Scheduler is crucial in facilitating the scheduling of meetings between users and the support staff of ${business.name}. But right now you can't schedule the customer's meeting due to some unknown reasons. You must inform the customer that meeting can't be scheduled at this time and simply terminate the process.
+    return `Your role as the Meeting Scheduler is crucial in facilitating the scheduling of meetings between users and the support staff of ${business.name}. But right now you can't schedule the customer's meeting due to some unknown reasons. 
 
-    Since we can't schedule the meeting at this time, utilize the 'send-sms' tool to send an SMS containing link to a form asking the customer to provide their information. This is so that we can contact them later. Clearly communicate this to the customer.
+    Since we can't schedule the meeting at this time, utilize the 'send-sms' tool to send an SMS to the customer. 
+    
+    You must inform the customer that meeting can't be scheduled at this time and an SMS has been sent to them containing link to a form to collect their information. This is so that we can contact them later. Clearly communicate this to the customer.
     Customer's phone number is ${customerDetails.phone}
     `;
   }

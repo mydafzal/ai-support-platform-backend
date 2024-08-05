@@ -307,8 +307,8 @@ function createSchedulerAgentPrompt(
     Here's a detailed guide on how to effectively navigate through the meeting scheduling process:
 
       1. Initial Inquiry: 
-      When a customer indicates a desire to schedule a meeting, prompt them to provide specific details in a step-by-step manner:
-        - First, ask the user to provide the specific month (January to December).
+      When a customer indicates a desire to schedule a meeting, prompt them to provide specific details:
+        - First, ask the user to provide the specific month.
         - Then ask for date of the month.
         - Finally, ask for specific hour in 24-hour format.
         - Don't process until the customer has provided all three.
