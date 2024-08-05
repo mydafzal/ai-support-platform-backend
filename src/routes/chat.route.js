@@ -14,9 +14,6 @@ const {
   generateChatbotAgentResponse,
 } = require("../controllers/chatbotAgent.controller");
 
-const { z } = require("zod");
-const { parsePhoneNumberFromString } = require("libphonenumber-js");
-
 const { redisClient } = require("../integrations/redis");
 
 const { Op } = require("sequelize");
@@ -37,6 +34,13 @@ const {
 } = require("../utils/constants");
 const SubscriptionService = require("../services/subscription.service");
 
+const {
+  preChatFormSchema,
+  chatMessageSchema,
+  updateChatSchema,
+} = require("../validators/chat.validator");
+const validateRequest = require("../middleware/requestValidation.middleware");
+
 const storage = multer.diskStorage({
   destination: path.join(STORAGE_BASE_PATH, `chat-uploads`),
   filename: (req, file, cb) => {
@@ -47,52 +51,8 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-const chatMessageValidationSchema = z.object({
-  message: z.string(),
-});
-
-const preChatFormValidationSchema = z.object({
-  businessId: z.number(),
-  name: z.string(),
-  email: z.string().email(),
-  teamGroupName: z.string().optional(),
-  teamGroupId: z.number().optional(),
-  phone: z.string({}).transform((arg, ctx) => {
-    const phone = parsePhoneNumberFromString(arg, {
-      // set to false to require that the whole string is exactly a phone number
-      extract: false,
-    });
-
-    if (phone && phone.isValid()) {
-      return phone.number;
-    }
-
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Invalid phone number",
-    });
-
-    return z.NEVER;
-  }),
-});
-
-const chatValidationSchema = z.object({
-  status: z.string().optional(),
-  teamGroupIds: z.array(z.number()).optional(),
-});
-
-router.post("/", async (req, res) => {
+router.post("/", validateRequest(preChatFormSchema), async (req, res, next) => {
   try {
-    const { success, error } = await preChatFormValidationSchema.safeParseAsync(
-      req.body
-    );
-
-    if (!success) {
-      return res
-        .status(400)
-        .json({ success: false, message: error.errors[0].message });
-    }
-
     const { name, email, phone, teamGroupId, teamGroupName, businessId } =
       req.body;
 
@@ -100,6 +60,7 @@ router.post("/", async (req, res) => {
       where: {
         businessId,
       },
+      raw: true,
     });
 
     if (!chatWidget) {
@@ -108,8 +69,6 @@ router.post("/", async (req, res) => {
         message: "Invalid request. Please create a chat widget first.",
       });
     }
-
-    chatWidget = chatWidget.toJSON();
 
     let chat = await Chat.create({
       title: name,
@@ -160,281 +119,284 @@ router.post("/", async (req, res) => {
 
     res.status(201).json({ success: true, data: response });
   } catch (error) {
-    console.error("Error getting chatbot agent's response: ", error);
-    res.status(500).json({ success: false, error: "Internal Server Error" });
+    console.error("error - ", error);
+    next(error);
   }
 });
 
-router.put("/:id/pre-chat-form", async (req, res) => {
-  const chatId = req.params.id;
+router.put(
+  "/:id/pre-chat-form",
+  validateRequest(preChatFormSchema),
+  async (req, res) => {
+    try {
+      const chatId = req.params.id;
 
-  try {
-    const { success, error } = await preChatFormValidationSchema.safeParseAsync(
-      req.body
-    );
+      const { name, email, phone, teamGroupId, teamGroupName, businessId } =
+        req.body;
 
-    if (!success) {
-      return res
-        .status(400)
-        .json({ success: false, message: error.errors[0].message });
-    }
-
-    const { name, email, teamGroupId, teamGroupName, businessId } = req.body;
-
-    let chatWidget = await ChatWidget.findOne({
-      where: {
-        businessId,
-      },
-    });
-
-    if (!chatWidget) {
-      return res
-        .status(400)
-        .json({ success: true, data: "Invalid chat widget id." });
-    }
-
-    chatWidget = chatWidget.toJSON();
-
-    if (teamGroupId && teamGroupName) {
-      // First, check if the customer again selected the same group.
-      let chatGroupAssignment = await ChatGroupAssignment.findOne({
-        chatId,
-        teamGroupId,
+      let chatWidget = await ChatWidget.findOne({
+        where: {
+          businessId,
+        },
+        raw: true,
       });
 
-      // If no, then this time the customer's queries belong to a different group (department)
-      if (!chatGroupAssignment) {
-        await ChatGroupAssignment.create({
-          chatId,
-          teamGroupId,
+      if (!chatWidget) {
+        return res
+          .status(400)
+          .json({ success: true, data: "Invalid chat widget id." });
+      }
+
+      if (teamGroupId && teamGroupName) {
+        // First, check if the customer again selected the same group.
+        let chatGroupAssignment = await ChatGroupAssignment.findOne({
+          where: {
+            chatId,
+            teamGroupId,
+          },
+          raw: true,
         });
+
+        // If no, then this time the customer's queries belong to a different group (department)
+        if (!chatGroupAssignment) {
+          await ChatGroupAssignment.create({
+            chatId,
+            teamGroupId,
+          });
+        }
       }
-    }
 
-    const preChatForm = {
-      type: "pre-chat-form",
-      content: {
-        email,
-        name,
-        teamGroupId,
-        teamGroupName,
-      },
-      timestamp: new Date().getTime(),
-    };
-
-    await redisClient.rPush(`chat-${chatId}`, JSON.stringify(preChatForm));
-
-    const welcomeMessage = {
-      type: "ai",
-      content: chatWidget.welcomeMessage,
-      timestamp: new Date().getTime(),
-    };
-
-    await redisClient.rPush(`chat-${chatId}`, JSON.stringify(welcomeMessage));
-
-    res
-      .status(200)
-      .json({ success: true, data: [preChatForm, welcomeMessage] });
-  } catch (error) {
-    console.error("Error getting chatbot agent's response: ", error);
-    res.status(500).json({ success: false, error: "Internal Server Error" });
-  }
-});
-
-router.post("/:id/messages", async (req, res) => {
-  const { message } = req.body;
-  const chatId = req.params.id;
-
-  try {
-    const { success, error } = await chatMessageValidationSchema.safeParseAsync(
-      req.body
-    );
-
-    if (!success) {
-      return res
-        .status(400)
-        .json({ success: false, message: error.errors[0].message });
-    }
-
-    let chat = await Chat.findOne({
-      where: {
-        id: chatId,
-      },
-      include: [
-        {
-          model: Business,
-          as: "business",
-          include: [
-            {
-              model: Assistant,
-              as: "assistant",
-            },
-          ],
-        },
-      ],
-    });
-
-    if (!chat) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid chat id." });
-    }
-
-    if (chat.toJSON().connectedUserId) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "A human agent has already been connected, can't continue chat with the ai agent.",
-      });
-    }
-
-    // Re-open the chat.
-    if (chat.toJSON().status !== "open") {
-      chat.status = "open";
-      await chat.save();
-    }
-
-    chat = chat.toJSON();
-
-    const count = await BusinessIntegration.count({
-      where: {
-        businessId: chat.businessId,
-        integrationId: {
-          [Op.in]: [CALENDLY_INTEGRATION_ID, GOOGLE_CALENDAR_INTEGRATION_ID],
-        },
-      },
-    });
-
-    let canScheduleMeeting =
-      count === 2 && !chat.business.leadMode ? true : false;
-
-    let customerDetails = await redisClient.lIndex(`chat-${chat.id}`, 0);
-
-    if (customerDetails) {
-      customerDetails = JSON.parse(customerDetails);
-
-      if (customerDetails?.type !== "pre-chat-form") {
-        customerDetails = "";
-      } else {
-        customerDetails = customerDetails.content;
-      }
-    }
-
-    const humanMessage = {
-      id: uuidv4(),
-      type: "human",
-      senderId: null,
-      content: message,
-      timestamp: new Date().getTime(),
-    };
-
-    await redisClient.rPush(`chat-${chatId}`, JSON.stringify(humanMessage));
-
-    const response = await generateChatbotAgentResponse(
-      message,
-      chat.business,
-      customerDetails,
-      chat.id,
-      canScheduleMeeting
-    );
-
-    const aiMessage = {
-      id: uuidv4(),
-      type: "ai",
-      content: response.content,
-      timestamp: new Date().getTime(),
-    };
-
-    await redisClient.rPush(`chat-${chatId}`, JSON.stringify(aiMessage));
-
-    chat = await Chat.findOne({
-      where: {
-        id: chatId,
-      },
-      include: [
-        {
-          model: User,
-          as: "connectedUser",
-          attributes: ["id", "name", "profileImageUrl"],
-        },
-        {
-          model: User,
-          attributes: ["id", "name", "profileImageUrl"],
-          as: "users",
-          through: {
-            // attributes: [],
-          },
-        },
-        {
-          model: TeamGroup,
-          attributes: ["id", "name"],
-          as: "teamGroups",
-          through: {
-            attributes: [],
-          },
-        },
-      ],
-    });
-
-    chat = chat.toJSON();
-
-    res.status(200).json({
-      success: true,
-      data: {
-        humanMessage,
-        aiMessage,
-      },
-    });
-
-    if (response?.name === "HumanConnector" && chat.connectedUser) {
-      // Trigger chat transfer notification to the human agent.
-
-      const statusUpdateMessage = {
-        id: uuidv4(),
-        type: "chat-transferred",
+      const preChatForm = {
+        type: "pre-chat-form",
         content: {
-          connectedUserId: chat.connectedUser.id,
-          connectedUserName: chat.connectedUser.name,
+          email,
+          name,
+          phone,
+          teamGroupId,
+          teamGroupName,
         },
         timestamp: new Date().getTime(),
       };
 
-      await redisClient.rPush(
-        `chat-${chatId}`,
-        JSON.stringify(statusUpdateMessage)
-      );
+      await redisClient.rPush(`chat-${chatId}`, JSON.stringify(preChatForm));
 
-      let messages = await redisClient.lRange(`chat-${chatId}`, 0, -1);
+      const welcomeMessage = {
+        type: "ai",
+        content: chatWidget.welcomeMessage,
+        timestamp: new Date().getTime(),
+      };
 
-      const io = getSocketIOInstance();
-      io.to(`${chat.connectedUser.id}`).emit("chat:incoming-chat", {
-        chat: {
-          ...chat,
-          lastMessage: statusUpdateMessage,
+      await redisClient.rPush(`chat-${chatId}`, JSON.stringify(welcomeMessage));
+
+      res
+        .status(200)
+        .json({ success: true, data: [preChatForm, welcomeMessage] });
+    } catch (error) {
+      console.error("Error getting chatbot agent's response: ", error);
+      res.status(500).json({ success: false, error: "Internal Server Error" });
+    }
+  }
+);
+
+router.post(
+  "/:id/messages",
+  validateRequest(chatMessageSchema),
+  async (req, res, next) => {
+    try {
+      const { message } = req.body;
+      const chatId = req.params.id;
+
+      let chat = await Chat.findOne({
+        where: {
+          id: chatId,
         },
-        messages,
+        include: [
+          {
+            model: Business,
+            as: "business",
+            include: [
+              {
+                model: Assistant,
+                as: "assistant",
+              },
+            ],
+          },
+        ],
+        raw: true,
+        nest: true,
       });
 
-      // Notify the customer that a human agent has joined the chat.
+      if (!chat) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Invalid chat id." });
+      }
 
-      setTimeout(() => {
-        io.to(`chat-${chat.id}`).emit("chat:update-status", {
-          chatId: chat.id,
-          statusUpdateMessage,
-          connectedUser: chat.connectedUser,
+      if (chat.connectedUserId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "A human agent has already been connected, can't continue chat with the ai agent.",
         });
-      }, 1000);
+      }
+
+      // Re-open the chat.
+      if (chat.status !== "open") {
+        chat.status = "open";
+
+        await Chat.update(
+          {
+            status: "open",
+          },
+          {
+            where: {
+              id: chatId,
+            },
+          }
+        );
+      }
+
+      const count = await BusinessIntegration.count({
+        where: {
+          businessId: chat.businessId,
+          integrationId: {
+            [Op.in]: [CALENDLY_INTEGRATION_ID, GOOGLE_CALENDAR_INTEGRATION_ID],
+          },
+        },
+      });
+
+      let canScheduleMeeting =
+        count === 2 && !chat.business.leadMode ? true : false;
+
+      let customerDetails = await redisClient.lIndex(`chat-${chat.id}`, 0);
+
+      if (customerDetails) {
+        customerDetails = JSON.parse(customerDetails);
+
+        if (customerDetails?.type !== "pre-chat-form") {
+          customerDetails = "";
+        } else {
+          customerDetails = customerDetails.content;
+        }
+      }
+
+      const humanMessage = {
+        id: uuidv4(),
+        type: "human",
+        senderId: null,
+        content: message,
+        timestamp: new Date().getTime(),
+      };
+
+      await redisClient.rPush(`chat-${chatId}`, JSON.stringify(humanMessage));
+
+      const response = await generateChatbotAgentResponse(
+        message,
+        chat.business,
+        customerDetails,
+        chat.id,
+        canScheduleMeeting
+      );
+
+      const aiMessage = {
+        id: uuidv4(),
+        type: "ai",
+        content: response.content,
+        timestamp: new Date().getTime(),
+      };
+
+      await redisClient.rPush(`chat-${chatId}`, JSON.stringify(aiMessage));
+
+      chat = await Chat.findOne({
+        where: {
+          id: chatId,
+        },
+        include: [
+          {
+            model: User,
+            as: "connectedUser",
+            attributes: ["id", "name", "profileImageUrl"],
+          },
+          {
+            model: User,
+            attributes: ["id", "name", "profileImageUrl"],
+            as: "users",
+            through: {
+              // attributes: [],
+            },
+          },
+          {
+            model: TeamGroup,
+            attributes: ["id", "name"],
+            as: "teamGroups",
+            through: {
+              attributes: [],
+            },
+          },
+        ],
+        raw: true,
+        nest: true,
+      });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          humanMessage,
+          aiMessage,
+        },
+      });
+
+      if (response?.name === "HumanConnector" && chat.connectedUser) {
+        // Trigger chat transfer notification to the human agent.
+
+        const statusUpdateMessage = {
+          id: uuidv4(),
+          type: "chat-transferred",
+          content: {
+            connectedUserId: chat.connectedUser.id,
+            connectedUserName: chat.connectedUser.name,
+          },
+          timestamp: new Date().getTime(),
+        };
+
+        await redisClient.rPush(
+          `chat-${chatId}`,
+          JSON.stringify(statusUpdateMessage)
+        );
+
+        let messages = await redisClient.lRange(`chat-${chatId}`, 0, -1);
+
+        const io = getSocketIOInstance();
+        io.to(`${chat.connectedUser.id}`).emit("chat:incoming-chat", {
+          chat: {
+            ...chat,
+            lastMessage: statusUpdateMessage,
+          },
+          messages,
+        });
+
+        // Notify the customer that a human agent has joined the chat.
+
+        setTimeout(() => {
+          io.to(`chat-${chat.id}`).emit("chat:update-status", {
+            chatId: chat.id,
+            statusUpdateMessage,
+            connectedUser: chat.connectedUser,
+          });
+        }, 1000);
+      }
+    } catch (error) {
+      console.error("error - ", error);
+      next(error);
     }
-  } catch (error) {
-    console.error("Error getting chatbot agent's response: ", error);
-    res.status(500).json({ success: false, error: "Internal Server Error" });
   }
-});
+);
 
 router.get("/:id/messages", async (req, res) => {
   try {
     let chat = await Chat.findOne({
       where: { id: req.params.id },
+      raw: true,
     });
 
     if (!chat) {
@@ -443,15 +405,13 @@ router.get("/:id/messages", async (req, res) => {
         .json({ success: true, message: "Invalid chat id." });
     }
 
-    chat = chat.toJSON();
-
     let messages = await redisClient.lRange(`chat-${chat.id}`, 0, -1);
     messages = messages.map((item) => JSON.parse(item));
 
     res.status(200).json({ success: true, data: messages });
   } catch (error) {
     console.error("Error getting chat messages: ", error);
-    res.status(500).json({ success: false, message: "Internal Server Error" });
+    next(error);
   }
 });
 
@@ -486,20 +446,9 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.patch("/:id", async (req, res) => {
-  const chatId = req.params.id;
-
+router.patch("/:id", validateRequest(updateChatSchema), async (req, res) => {
   try {
-    const { success, error } = await chatValidationSchema.safeParseAsync(
-      req.body
-    );
-
-    if (!success) {
-      return res
-        .status(400)
-        .json({ success: false, message: error.errors[0].message });
-    }
-
+    const chatId = req.params.id;
     let { status, teamGroupIds } = req.body;
 
     let chat = await Chat.findOne({
@@ -512,6 +461,7 @@ router.patch("/:id", async (req, res) => {
           as: "connectedUser",
         },
       ],
+      raw: true,
     });
 
     if (!chat) {
@@ -519,8 +469,6 @@ router.patch("/:id", async (req, res) => {
         .status(400)
         .json({ success: false, message: "Invalid chat id." });
     }
-
-    chat = chat.toJSON();
 
     let statusUpdateMessage;
     if (chat.status === "open" && status === "closed") {
