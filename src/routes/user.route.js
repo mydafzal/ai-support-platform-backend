@@ -1,415 +1,105 @@
 const router = require("express").Router();
-const {
-  User,
-  Invitation,
-  Business,
-  ChatUserAssignment,
-} = require("../../models");
-
-const bcrypt = require("bcrypt");
-const saltRounds = 10;
-
-const { z } = require("zod");
-
-const { sendEmail } = require("../integrations/nodemailer");
-const {
-  generateEmailVerificationToken,
-  generateEmailLink,
-  generateJWT,
-} = require("../utils/helpers");
-
-const {
-  STORAGE_BASE_PATH,
-  PROFILE_IMAGES_BASE_URL,
-  TEAM_MEMBERS_FEATURE_ID,
-} = require("../utils/constants");
-
 const path = require("path");
-const fs = require("fs");
+
+const { STORAGE_BASE_PATH } = require("../utils/constants");
 
 const { v4: uuidv4 } = require("uuid");
 
 const multer = require("multer");
-const SubscriptionService = require("../services/subscription.service");
+
+const {
+  addUserSchema,
+  unviewedChatsSchema,
+  updateUserSchema,
+} = require("../validators/user.validator");
+
+const UserService = require("../services/user.service");
+const ResponseHandler = require("../utils/responseHandler");
+const { emailSchema } = require("../validators/auth.validator");
+const ChatService = require("../services/chat.service");
+const validateRequest = require("../middleware/requestValidation.middleware");
 
 const storage = multer.diskStorage({
   destination: path.join(STORAGE_BASE_PATH, `profile-images`),
   filename: (req, file, cb) => {
     const uniqueFilename = uuidv4() + "-" + file.originalname;
-
-    console.log("uniqueFilename - ", uniqueFilename);
-
     cb(null, uniqueFilename);
   },
 });
 
 const upload = multer({ storage });
 
-const userValidationSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(4),
-  name: z.string(),
-});
-
-const updateUserValidationSchema = z.object({
-  name: z.string().optional(),
-  email: z.string().email().optional(),
-  phone: z.string().optional(),
-  teamGroupId: z.coerce.number().optional().or(z.coerce.string()),
-  businessId: z.coerce.number().optional().or(z.coerce.string()),
-});
-
-const unviewedChatsValidationSchema = z.object({
-  viewed: z.coerce.boolean().optional(),
-});
-
-router.post("/", async (req, res) => {
-  const { name, email, password } = req.body;
-
+router.post("/", validateRequest(addUserSchema), async (req, res, next) => {
   try {
-    const { success, error } = await userValidationSchema.safeParseAsync(
-      req.body
-    );
+    const token = await UserService.registerUser(req.body);
 
-    if (!success) {
-      return res
-        .status(400)
-        .json({ success: false, message: error.errors[0].message });
-    }
-
-    let user = await User.findOne({
-      where: {
-        email,
-      },
-    });
-
-    if (user?.toJSON()?.email) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Email already exists." });
-    }
-
-    let invitation = await Invitation.findOne({
-      where: {
-        email,
-      },
-    });
-    invitation = invitation?.toJSON();
-
-    let hashedPassword = await bcrypt.hash(password, saltRounds);
-
-    await User.create({
-      name,
-      email,
-      password: hashedPassword,
-    });
-
-    user = await User.findOne({
-      where: {
-        email,
-      },
-      attributes: {
-        exclude: ["password", "emailVerificationToken", "resetPasswordToken"],
-      },
-    });
-
-    const emailVerificationToken = generateEmailVerificationToken(
-      user.toJSON().id
-    );
-    user.emailVerificationToken = emailVerificationToken;
-    await user.save();
-
-    user = user.toJSON();
-
-    const emailLink = generateEmailLink(
-      req,
-      "email-verification",
-      `token=${emailVerificationToken}`
-    );
-    const emailTemplate = `Please verify your email by clicking <a href="${emailLink}">here</a>`;
-    await sendEmail(user.email, emailTemplate);
-
-    const payload = { ...user, invitation };
-    const token = generateJWT(payload);
-
-    res.status(201).json({
-      success: true,
+    ResponseHandler.success(res, {
+      statusCode: 201,
       data: token,
       message: "Email verification link sent.",
     });
   } catch (error) {
-    console.error("Error adding user: ", error);
-    res.status(500).json({ success: false, message: "Internal Server Error" });
+    next(error);
   }
 });
 
-router.delete("/:id", async (req, res) => {
-  const userId = req.params.id;
-
+router.delete("/:id", async (req, res, next) => {
   try {
-    let user = await User.findByPk(userId, { raw: true });
-
-    if (user) {
-      await Invitation.destroy({
-        where: {
-          email: user.email,
-        },
-      });
-
-      let business = await Business.findByPk(user.businessId, {
-        raw: true,
-      });
-
-      let adminUser = await User.findByPk(business.adminUserId, { raw: true });
-
-      let emailTemplate = `${adminUser.email} removed you from organization ${business.name}.`;
-      await sendEmail(user.email, emailTemplate);
-
-      await User.update(
-        {
-          businessId: null,
-        },
-        {
-          where: {
-            id: userId,
-          },
-        }
-      );
-
-      await SubscriptionService.updateFeatureUsage(
-        TEAM_MEMBERS_FEATURE_ID,
-        business.id,
-        -1
-      );
-    }
-
-    res.status(204).send();
+    await UserService.removeUserFromBusiness({ userId: req.params.id });
+    ResponseHandler.success(res, { statusCode: 204 });
   } catch (error) {
-    console.error("Error updating user: ", error);
-    res.status(500).json({ success: false, message: "Internal Server Error" });
+    next(error);
   }
 });
 
-router.patch("/:id", upload.single("file"), async (req, res) => {
-  const userId = req.params.id;
-
-  try {
-    const { success, error } = await updateUserValidationSchema.safeParseAsync(
-      req.body
-    );
-
-    if (!success) {
-      return res
-        .status(400)
-        .json({ success: false, message: error.errors[0].message });
-    }
-
-    let user = await User.findByPk(userId, {
-      attributes: {
-        exclude: ["emailVerificationToken", "resetPasswordToken"],
-      },
-    });
-
-    if (!user) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid user id." });
-    }
-
-    const { name, email, phone, teamGroupId, businessId } = req.body;
-
-    if (businessId || businessId == "") {
-      const currentBusinessId = user.toJSON().businessId;
-
-      user.businessId = businessId === "" ? null : businessId;
-
-      // IF the user is to removed from the organization, then also delete the user's invitation and trigger email to the removed user.
-      if (businessId === "") {
-        const invitation = await Invitation.findOne({
-          where: {
-            email: user.toJSON().email,
-          },
-        });
-
-        if (invitation) {
-          await Invitation.destroy({
-            where: {
-              email: user.toJSON().email,
-            },
-          });
-
-          const business = await Business.findOne({
-            where: {
-              id: currentBusinessId,
-            },
-          });
-
-          let adminUser = await User.findByPk(business.toJSON().adminUserId);
-
-          if (adminUser) {
-            adminUser = adminUser.toJSON();
-
-            let emailTemplate;
-
-            if (invitation.toJSON().status === "Pending") {
-              emailTemplate = `Your invitation for organization ${name} has been cancelled.`;
-            } else {
-              emailTemplate = `${adminUser.email} removed you from organization ${name}.`;
-            }
-
-            await sendEmail(invitation.email, emailTemplate);
-          }
-        }
-      }
-    }
-
-    if (phone != undefined) {
-      user.phone = phone;
-      user.phoneVerified = phone?.length > 0 ? false : true;
-    }
-
-    if (name) {
-      user.name = name;
-    }
-
-    if (teamGroupId || teamGroupId == "") {
-      user.teamGroupId = teamGroupId === "" ? null : teamGroupId;
-
-      await Invitation.update(
-        {
-          teamGroupId: teamGroupId === "" ? null : teamGroupId,
-        },
-        {
-          where: {
-            email: user.toJSON().email,
-          },
-        }
-      );
-    }
-
-    if (req.file) {
-      let profileImageUrl;
-
-      if (user.profileImageUrl) {
-        const urlChunks = user.profileImageUrl.split("/");
-        const filename = urlChunks[urlChunks.length - 1];
-
-        const existingFilePath = path.join(
-          STORAGE_BASE_PATH,
-          `profile-images`,
-          filename
-        );
-
-        const newFilePath = path.join(
-          STORAGE_BASE_PATH,
-          `profile-images`,
-          req.file.filename
-        );
-
-        if (fs.existsSync(existingFilePath)) {
-          await fs.promises.rm(existingFilePath);
-        }
-
-        await fs.promises.rename(newFilePath, existingFilePath);
-
-        profileImageUrl = `${PROFILE_IMAGES_BASE_URL}/${filename}`;
-      } else {
-        profileImageUrl = `${PROFILE_IMAGES_BASE_URL}/${req.file.filename}`;
-      }
-
-      user.profileImageUrl = profileImageUrl;
-    }
-
-    if (email?.length > 0) {
-      user.email = email;
-      user.emailVerified = false;
-
-      await Invitation.update(
-        {
-          email,
-        },
-        {
-          where: {
-            email,
-          },
-        }
-      );
-    }
-
-    await user.save();
-    user = user.toJSON();
-
-    delete user.password;
-    delete user.emailVerificationToken;
-
-    res.status(200).json({
-      success: true,
-      data: {
-        name: user.name,
-        email: user.email,
-        emailVerified: user.emailVerified,
-        phone: user.phone,
-        phoneVerified: user.phoneVerified,
-        profileImageUrl: user.profileImageUrl,
-      },
-    });
-  } catch (error) {
-    console.error("Error updating user: ", error);
-    res.status(500).json({ success: false, message: "Internal Server Error" });
-  }
-});
-
-router.get("/:id/chat-assignments", async (req, res) => {
-  try {
-    const { success } = await unviewedChatsValidationSchema.safeParseAsync(
-      req.query
-    );
-
-    if (!success) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid query parameters." });
-    }
-
-    const { viewed } = req.query;
-
-    let chatAssignmentsCount = await ChatUserAssignment.count({
-      where: {
+router.patch(
+  "/:id",
+  validateRequest(updateUserSchema),
+  upload.single("file"),
+  async (req, res, next) => {
+    try {
+      const result = await UserService.updateUser({
         userId: req.params.id,
-        viewed,
-      },
-    });
+        ...req.body,
+      });
 
-    res.status(200).json({
-      success: true,
-      data: chatAssignmentsCount,
-    });
-  } catch (error) {
-    console.error("Error adding user: ", error);
-    res.status(500).json({ success: false, message: "Internal Server Error" });
+      ResponseHandler.success(res, {
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
   }
-});
+);
 
-router.post("/check-email", async (req, res) => {
-  const { email = "" } = req.body;
+router.get(
+  "/:id/chat-assignments",
+  validateRequest(unviewedChatsSchema),
+  async (req, res, next) => {
+    try {
+      const data = { viewed: req.query.viewed, userId: req.params.id };
 
-  try {
-    const count = await User.count({
-      where: {
-        email,
-      },
-    });
-
-    res.status(200).json({
-      success: true,
-      data: {
-        available: count <= 0,
-      },
-    });
-  } catch (error) {
-    console.error("Error checking email availability - ", error);
-    res.status(500).json({ success: false, message: "Internal Server Error" });
+      const result = await ChatService.getUnviewedChatsCount(data);
+      ResponseHandler.success(res, { data: result });
+    } catch (error) {
+      next(error);
+    }
   }
-});
+);
+
+router.post(
+  "/check-email",
+  validateRequest(emailSchema),
+  async (req, res, next) => {
+    try {
+      const available = await UserService.checkEmailAvailability(req.body);
+      ResponseHandler.success(res, {
+        data: { available },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 module.exports = router;
