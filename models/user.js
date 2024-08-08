@@ -7,26 +7,17 @@ const {
 } = require("../src/utils/constants");
 module.exports = (sequelize, DataTypes) => {
   class User extends Model {
-    /**
-     * Helper method for defining associations.
-     * This method is not a part of Sequelize lifecycle.
-     * The `models/index` file will call this method automatically.
-     */
     static associate(models) {
-      // define association here
-      User.belongsTo(models.Business, {
-        foreignKey: "businessId",
-        as: "business",
+      User.belongsToMany(models.Business, {
+        through: models.BusinessMembership,
+        foreignKey: "userId",
+        as: "businesses",
       });
 
-      User.belongsTo(models.TeamGroup, {
-        foreignKey: "teamGroupId",
-        as: "teamGroup",
-      });
-
-      User.hasOne(models.Business, {
-        foreignKey: "adminUserId",
-        as: "adminUser",
+      User.belongsToMany(models.Group, {
+        through: models.GroupMembership,
+        foreignKey: "userId",
+        as: "groups",
       });
 
       User.belongsToMany(models.Chat, {

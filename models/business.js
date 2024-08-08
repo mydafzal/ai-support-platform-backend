@@ -2,19 +2,9 @@
 const { Model } = require("sequelize");
 module.exports = (sequelize, DataTypes) => {
   class Business extends Model {
-    /**
-     * Helper method for defining associations.
-     * This method is not a part of Sequelize lifecycle.
-     * The `models/index` file will call this method automatically.
-     */
     static associate(models) {
-      // define association here
-      Business.belongsTo(models.User, {
-        foreignKey: "adminUserId",
-        as: "adminUser",
-      });
-
-      Business.hasMany(models.User, {
+      Business.belongsToMany(models.User, {
+        through: models.BusinessMembership,
         foreignKey: "businessId",
         as: "users",
       });
@@ -45,9 +35,9 @@ module.exports = (sequelize, DataTypes) => {
         as: "callTags",
       });
 
-      Business.hasMany(models.TeamGroup, {
+      Business.hasMany(models.Group, {
         foreignKey: "businessId",
-        as: "teamGroups",
+        as: "groups",
       });
 
       Business.hasMany(models.Invitation, {
@@ -68,6 +58,11 @@ module.exports = (sequelize, DataTypes) => {
       Business.hasOne(models.Subscription, {
         foreignKey: "businessId",
         as: "subscription",
+      });
+
+      Business.hasMany(models.BusinessFeature, {
+        foreignKey: "businessId",
+        as: "businessFeatures",
       });
     }
   }
