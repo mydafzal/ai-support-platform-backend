@@ -102,11 +102,7 @@ router.post("/", async (req, res) => {
     });
     business = business.toJSON();
 
-    const emailLink = generateEmailLink(
-      req,
-      "invites",
-      `token=${invitationToken}`
-    );
+    const emailLink = generateEmailLink("invites", `token=${invitationToken}`);
     const emailTemplate = `${business.adminUser.email} invited you to ${business.name}. Click <a href="${emailLink}">here</a> to accept the invitation.`;
     await sendEmail(email, emailTemplate);
 

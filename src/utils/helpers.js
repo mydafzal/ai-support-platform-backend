@@ -85,7 +85,7 @@ function generateJWT(payload) {
   return jwt.sign({ ...payload }, process.env.JWT_SECRET);
 }
 
-function generateEmailLink(request, path, queryParams) {
+function generateEmailLink(path, queryParams) {
   return `${process.env.CLIENT_BASE_URL}/${path}?${queryParams}`;
 }
 
