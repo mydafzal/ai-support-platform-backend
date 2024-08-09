@@ -33,8 +33,14 @@ const updateChatSchema = z.object({
   teamGroupIds: z.array(z.number()).optional(),
 });
 
+const chatFileUploadsSchema = z.object({
+  files: z.array(z.any()).min(1),
+  userId: z.number().optional(),
+});
+
 module.exports = {
   chatMessageSchema,
   preChatFormSchema,
   updateChatSchema,
+  chatFileUploadsSchema,
 };
