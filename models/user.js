@@ -50,9 +50,6 @@ module.exports = (sequelize, DataTypes) => {
       emailVerificationToken: { type: DataTypes.STRING },
       resetPasswordToken: { type: DataTypes.STRING },
       profileImageUrl: { type: DataTypes.STRING },
-      role: {
-        type: DataTypes.STRING,
-      },
       status: {
         type: DataTypes.ENUM(ACCEPTING_CHATS, NOT_ACCEPTING_CHATS, OFFLINE),
         defaultValue: ACCEPTING_CHATS,
