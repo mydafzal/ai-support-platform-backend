@@ -3,54 +3,24 @@ const {
   createVerifyService,
 } = require("../controllers/call.controller");
 
-const sequelize = require("sequelize");
-
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
-
 const {
   Assistant,
   Business,
+  BusinessMembership,
   User,
-  Invitation,
-  Url,
-  Document,
-  TeamGroup,
-  Call,
-  CallTag,
-  Integration,
-  BusinessIntegration,
-  Chat,
-  ChatWidget,
-  PricingPlan,
-  Feature,
-  Subscription,
-  SubscriptionFeature,
 } = require("../../models");
 
 const { convertTextToSpeech } = require("../integrations/textToSpeech");
 
-const router = require("express").Router();
 const fs = require("fs/promises");
 const fsWithoutPromises = require("fs");
 
-const jwt = require("jsonwebtoken");
-
 const { v4: uuidv4 } = require("uuid");
-const { z } = require("zod");
+
 const {
   AUDIO_FILES_BASE_PATH,
   AUDIO_FILES_BASE_URL,
-  CARD_BRAND_LOGOS,
-  FREE_PLAN_ID,
 } = require("../utils/constants");
-const { Sequelize } = require("sequelize");
-
-const { redisClient } = require("../integrations/redis");
-const {
-  capitalizeFirstLetterOfEachWord,
-  getNextMonthlyResetDate,
-} = require("../utils/helpers");
-const StripeService = require("../services/stripe.service");
 
 async function addBusiness(data) {
   const {
@@ -85,20 +55,16 @@ async function addBusiness(data) {
     twilioNumber: "+14697074725",
     // twilioNumber: twilioNumber || "+14697074725",
     verifyServiceId: "",
-    adminUserId: userId,
+    // adminUserId: userId,
   });
 
   business = business.toJSON();
 
-  await User.update(
-    {
-      businessId: business.id,
-      role: "Admin",
-    },
-    {
-      where: { id: userId },
-    }
-  );
+  await BusinessMembership.create({
+    businessId: business.id,
+    userId: user.id,
+    role: "Admin",
+  });
 
   let promises = [
     convertTextToSpeech(greetingMessage, voiceId),
@@ -133,7 +99,7 @@ async function addBusiness(data) {
   const greetingMessageUrl = `${AUDIO_FILES_BASE_URL}/business-${business.id}/greetingMessage.mp3`;
   const farewellMessageUrl = `${AUDIO_FILES_BASE_URL}/business-${business.id}/farewellMessage.mp3`;
 
-  await Assistant.create({
+  let assistant = await Assistant.create({
     businessId: business.id,
     name: assistantName,
     voiceName,
@@ -145,36 +111,40 @@ async function addBusiness(data) {
     knowledgeBaseName: uuidv4(),
   });
 
-  user = await User.findOne({
-    where: {
-      id: userId,
-    },
-    include: [
-      {
-        model: Business,
-        as: "business",
-        include: [
-          {
-            model: Assistant,
-            as: "assistant",
-          },
-        ],
-      },
-    ],
-    raw: true,
-    nest: true,
-  });
+  // user = await User.findOne({
+  //   where: {
+  //     id: userId,
+  //   },
+  //   include: [
+  //     {
+  //       model: Business,
+  //       as: "business",
+  //       include: [
+  //         {
+  //           model: Assistant,
+  //           as: "assistant",
+  //         },
+  //       ],
+  //     },
+  //   ],
+  //   raw: true,
+  //   nest: true,
+  // });
 
-  return jwt.sign(
-    {
-      ...user,
-    },
-    process.env.JWT_SECRET
-  );
+  // const businessMemberships = await BusinessMembership.findAll({
+  //   where: {
+  //     userId: user.id,
+  //   },
+  //   attributes: ["businessId"],
+  //   raw: true,
+  // });
+
+  business.assistant = assistant.toJSON();
+  return business;
 }
 
 async function updateBusiness(data) {
-  const {
+  let {
     businessId,
     businessName,
     assistantName,
@@ -182,6 +152,7 @@ async function updateBusiness(data) {
     voiceId,
     greetingMessage,
     farewellMessage,
+    leadMode,
   } = data;
 
   let count = await Business.count({
@@ -194,18 +165,23 @@ async function updateBusiness(data) {
     throw { statusCode: 400, message: "Invalid business id." };
   }
 
+  const updatedBusinessDetails = {};
+
   if (businessName) {
-    await Business.update(
-      {
-        name: businessName,
-      },
-      {
-        where: {
-          id: businessId,
-        },
-      }
-    );
+    updatedBusinessDetails.name = businessName;
   }
+  if (typeof leadMode === "boolean") {
+    updatedBusinessDetails.leadMode = leadMode;
+  }
+
+  await Business.update(
+    { ...updatedBusinessDetails },
+    {
+      where: {
+        id: businessId,
+      },
+    }
+  );
 
   let assistant = await Assistant.findOne({
     where: {
@@ -216,11 +192,14 @@ async function updateBusiness(data) {
 
   let greetingMessageUrl = assistant.greetingMessageUrl;
   let farewellMessageUrl = assistant.farewellMessageUrl;
+
+  const currentGreetingMessage = assistant.greetingMessage;
+  const currentFarewellMessage = assistant.farewellMessage;
   voiceId = voiceId || assistant.voiceId;
 
-  if (greetingMessage) {
+  if (greetingMessage || (voiceId && voiceName)) {
     let greetingMessageSpeech = await convertTextToSpeech(
-      greetingMessage,
+      greetingMessage || currentGreetingMessage,
       voiceId
     );
     greetingMessageSpeech = Buffer.from(greetingMessageSpeech);
@@ -243,9 +222,9 @@ async function updateBusiness(data) {
     greetingMessageUrl = `${AUDIO_FILES_BASE_URL}/business-${businessId}/greetingMessage.mp3`;
   }
 
-  if (farewellMessage) {
+  if (farewellMessage || (voiceId && voiceName)) {
     let farewellMessageSpeech = await convertTextToSpeech(
-      farewellMessage,
+      farewellMessage || currentFarewellMessage,
       voiceId
     );
     farewellMessageSpeech = Buffer.from(farewellMessageSpeech);
