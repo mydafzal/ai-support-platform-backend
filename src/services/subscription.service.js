@@ -11,10 +11,14 @@ const {
 } = require("../../models");
 
 const { FREE_PLAN_ID, TEAM_MEMBERS_FEATURE_ID } = require("../utils/constants");
-const { calculateYearlyPrice } = require("../utils/helpers");
+const {
+  calculateYearlyPrice,
+  capitalizeFirstLetterOfEachWord,
+  getNextMonthlyResetDate,
+} = require("../utils/helpers");
 
 const StripeService = require("./stripe.service");
-const { getFeaturesOfPlan } = require("./pricingPlan.service");
+const { getFeaturesOfPlan } = require("./pricing-plan.service");
 
 async function createSubscription(data) {
   try {
@@ -717,6 +721,77 @@ async function removeExtraTeamMembers(subscriptionId, businessId) {
   }
 }
 
+async function getSubscriptionDetails(data) {
+  const { businessId } = data;
+
+  let subscription = await Subscription.findOne({
+    where: {
+      businessId,
+    },
+    include: [
+      {
+        model: PricingPlan,
+        as: "plan",
+        attributes: {
+          exclude: ["stripeProductId", "basePlanId"],
+        },
+      },
+      {
+        model: SubscriptionFeature,
+        as: "subscriptionFeatures",
+        attributes: {
+          exclude: ["subscriptionId"],
+        },
+        include: [
+          {
+            model: Feature,
+            as: "feature",
+          },
+        ],
+      },
+    ],
+    attributes: {
+      exclude: ["planId"],
+    },
+    raw: true,
+    nest: true,
+  });
+
+  subscription.subscriptionFeatures = subscription.subscriptionFeatures.map(
+    (item) => {
+      const featureName = item.feature.namePlural || item.feature.nameSingular;
+      item.featureName = capitalizeFirstLetterOfEachWord(featureName);
+
+      delete item.feature;
+      return item;
+    }
+  );
+
+  const stripeSubscription = await stripe.subscriptions.retrieve(
+    subscription.stripeSubscriptionId
+  );
+
+  const formattedDate = getNextMonthlyResetDate(
+    stripeSubscription.billing_cycle_anchor
+  );
+
+  subscription = {
+    ...subscription,
+    usageResetDate: formattedDate,
+    status: stripeSubscription.status,
+    startDate: stripeSubscription.start_date,
+    price: stripeSubscription.items.data[0].price.unit_amount / 100, // convert from cents to dollars
+    isScheduledForCancellation: stripeSubscription.cancel_at_period_end,
+    currentPeriodEnd: stripeSubscription.current_period_end,
+    billingCycle:
+      stripeSubscription.items.data[0].price.recurring.interval === "month"
+        ? "monthly"
+        : "yearly",
+  };
+
+  return subscription;
+}
+
 const SubscriptionService = {
   handleSubscriptionCancellation,
   createSubscription,
@@ -726,6 +801,7 @@ const SubscriptionService = {
   updateFeatureUsage,
   hasReachedFeatureLimit,
   scheduleResetForSubscriptionUsage,
+  getSubscriptionDetails,
 };
 
 module.exports = SubscriptionService;
