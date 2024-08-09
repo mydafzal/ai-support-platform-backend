@@ -1,4 +1,4 @@
-const stripe = require("../config/stripeConfig");
+const stripe = require("../config/stripe-config");
 
 async function createStripeSubscription(
   customerId,
