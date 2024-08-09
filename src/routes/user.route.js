@@ -14,10 +14,11 @@ const {
 } = require("../validators/user.validator");
 
 const UserService = require("../services/user.service");
-const ResponseHandler = require("../utils/responseHandler");
+const ResponseHandler = require("../utils/response-handler");
 const { emailSchema } = require("../validators/auth.validator");
 const ChatService = require("../services/chat.service");
-const validateRequest = require("../middleware/requestValidation.middleware");
+const validateRequest = require("../middleware/request-validation.middleware");
+const asyncHandler = require("../utils/async-handler");
 
 const storage = multer.diskStorage({
   destination: path.join(STORAGE_BASE_PATH, `profile-images`),
@@ -29,8 +30,10 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-router.post("/", validateRequest(addUserSchema), async (req, res, next) => {
-  try {
+router.post(
+  "/",
+  validateRequest(addUserSchema),
+  asyncHandler(async (req, res) => {
     const token = await UserService.registerUser(req.body);
 
     ResponseHandler.success(res, {
@@ -38,68 +41,56 @@ router.post("/", validateRequest(addUserSchema), async (req, res, next) => {
       data: token,
       message: "Email verification link sent.",
     });
-  } catch (error) {
-    next(error);
-  }
-});
+  })
+);
 
-router.delete("/:id", async (req, res, next) => {
-  try {
+router.delete(
+  "/:id",
+  asyncHandler(async (req, res, next) => {
     await UserService.removeUserFromBusiness({ userId: req.params.id });
+
     ResponseHandler.success(res, { statusCode: 204 });
-  } catch (error) {
-    next(error);
-  }
-});
+  })
+);
 
 router.patch(
   "/:id",
   validateRequest(updateUserSchema),
   upload.single("file"),
-  async (req, res, next) => {
-    try {
-      const result = await UserService.updateUser({
-        userId: req.params.id,
-        ...req.body,
-      });
+  asyncHandler(async (req, res, next) => {
+    const result = await UserService.updateUser({
+      userId: req.params.id,
+      ...req.body,
+      file: req.file,
+    });
 
-      ResponseHandler.success(res, {
-        data: result,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
+    ResponseHandler.success(res, {
+      data: result,
+    });
+  })
 );
 
 router.get(
   "/:id/chat-assignments",
   validateRequest(unviewedChatsSchema),
-  async (req, res, next) => {
-    try {
-      const data = { viewed: req.query.viewed, userId: req.params.id };
+  asyncHandler(async (req, res) => {
+    const data = { viewed: req.query.viewed, userId: req.params.id };
 
-      const result = await ChatService.getUnviewedChatsCount(data);
-      ResponseHandler.success(res, { data: result });
-    } catch (error) {
-      next(error);
-    }
-  }
+    const result = await ChatService.getUnviewedChatsCount(data);
+    ResponseHandler.success(res, { data: result });
+  })
 );
 
 router.post(
   "/check-email",
   validateRequest(emailSchema),
-  async (req, res, next) => {
-    try {
-      const available = await UserService.checkEmailAvailability(req.body);
-      ResponseHandler.success(res, {
-        data: { available },
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
+  asyncHandler(async (req, res) => {
+    const available = await UserService.checkEmailAvailability(req.body);
+
+    ResponseHandler.success(res, {
+      data: { available },
+    });
+  })
 );
 
 module.exports = router;

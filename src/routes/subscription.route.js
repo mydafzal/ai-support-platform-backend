@@ -1,7 +1,7 @@
 const Router = require("express").Router;
 const router = Router();
 
-const validateRequest = require("../middleware/requestValidation.middleware");
+const validateRequest = require("../middleware/request-validation.middleware");
 
 const {
   createSubscriptionSchema,
@@ -9,69 +9,61 @@ const {
 } = require("../validators/subscription.validator");
 
 const SubscriptionService = require("../services/subscription.service");
-const ResponseHandler = require("../utils/responseHandler");
+const ResponseHandler = require("../utils/response-handler");
+const asyncHandler = require("../utils/async-handler");
 
 router.post(
   "/",
   validateRequest(createSubscriptionSchema),
-  async (req, res, next) => {
-    try {
-      const result = await SubscriptionService.createSubscription(req.body);
+  asyncHandler(async (req, res) => {
+    const result = await SubscriptionService.createSubscription(req.body);
 
-      ResponseHandler.success(res, { statusCode: 201, message: result });
-    } catch (error) {
-      next(error);
-    }
-  }
+    ResponseHandler.success(res, { statusCode: 201, message: result });
+  })
 );
 
 router.put(
   "/:id",
   validateRequest(updateSubscriptionSchema),
-  async (req, res, next) => {
-    try {
-      const subscriptionId = req.params.id;
+  asyncHandler(async (req, res) => {
+    const subscriptionId = req.params.id;
 
-      const result = await SubscriptionService.updateSubscription({
-        subscriptionId,
-        ...req.body,
-      });
+    const result = await SubscriptionService.updateSubscription({
+      subscriptionId,
+      ...req.body,
+    });
 
-      ResponseHandler.success(res, { message: result });
-    } catch (error) {
-      next(error);
-    }
-  }
+    ResponseHandler.success(res, { message: result });
+  })
 );
 
-router.post("/:id/cancel", async (req, res, next) => {
-  try {
+router.post(
+  "/:id/cancel",
+  asyncHandler(async (req, res) => {
     const result = await SubscriptionService.cancelSubscription({
       subscriptionId: req.params.id,
     });
 
     ResponseHandler.success(res, { data: result });
-  } catch (error) {
-    next(error);
-  }
-});
+  })
+);
 
-router.post("/:id/resume", async (req, res, next) => {
-  try {
+router.post(
+  "/:id/resume",
+  asyncHandler(async (req, res) => {
     const result = await SubscriptionService.resumeSubscription({
       subscriptionId: req.params.id,
     });
 
     ResponseHandler.success(res, { data: result });
-  } catch (error) {
-    next(error);
-  }
-});
+  })
+);
 
-router.post("/stripe-webhooks", async (req, res) => {
-  let event = req.body;
+router.post(
+  "/stripe-webhooks",
+  asyncHandler(async (req) => {
+    let event = req.body;
 
-  try {
     switch (event.type) {
       case "customer.subscription.deleted":
         await SubscriptionService.handleSubscriptionCancellation(
@@ -82,9 +74,7 @@ router.post("/stripe-webhooks", async (req, res) => {
       default:
         console.log(`Unhandled event type ${event.type}`);
     }
-  } catch (error) {
-    console.log("stripe webhooks error - ", error);
-  }
-});
+  })
+);
 
 module.exports = router;
