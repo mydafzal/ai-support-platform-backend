@@ -1,8 +1,9 @@
-const { User, Business, Assistant, Invitation } = require("../../models");
+const { User, BusinessMembership } = require("../../models");
 const { sendEmail } = require("../integrations/nodemailer");
 const {
   generateEmailVerificationToken,
   generateEmailLink,
+  generateJWT,
 } = require("../utils/helpers");
 
 const jwt = require("jsonwebtoken");
@@ -19,13 +20,6 @@ async function login(data) {
     raw: true,
   });
 
-  let invitation = await Invitation.findOne({
-    where: {
-      email,
-    },
-    raw: true,
-  });
-
   if (externalType === "Google" || externalType === "Apple") {
     if (!user) {
       if (!name) {
@@ -38,24 +32,7 @@ async function login(data) {
         externalType,
         emailVerified: true,
         profileImageUrl,
-        businessId: invitation ? invitation.businessId : null,
-        role: invitation ? "TeamMember" : null,
       });
-
-      if (invitation && invitation?.status !== "Accepted") {
-        await Invitation.update(
-          {
-            status: "Accepted",
-          },
-          {
-            where: {
-              email,
-            },
-          }
-        );
-
-        invitation.status = "Accepted";
-      }
     } else if (!user.externalType) {
       throw {
         statusCode: 401,
@@ -111,25 +88,17 @@ async function login(data) {
 
   delete user.password;
 
-  let business = await Business.findOne({
+  const businessMemberships = await BusinessMembership.findAll({
     where: {
-      id: user.businessId,
+      userId: user.id,
     },
-    include: [
-      {
-        model: Assistant,
-        as: "assistant",
-      },
-    ],
+    attributes: ["businessId"],
     raw: true,
-    nest: true,
   });
-
-  user.business = business;
 
   const payload = {
     ...user,
-    invitation,
+    businessMemberships,
   };
 
   return generateJWT(payload);
@@ -179,7 +148,7 @@ async function generatePasswordResetLink(data) {
 }
 
 async function resetPassword(data) {
-  const { token } = data;
+  const { token, password } = data;
 
   let user = await User.findOne({
     where: { resetPasswordToken: token },
@@ -222,34 +191,13 @@ async function verifyEmail(data) {
 
   let user = await User.findByPk(decodedToken.userId, {
     attributes: {
-      exclude: ["resetPasswordToken", "password"],
+      exclude: ["resetPasswordToken", "password", "emailVerificationToken"],
     },
     raw: true,
   });
 
   if (!user || user.emailVerificationToken !== token) {
     throw { statusCode: 400, message: "Invalid or expired token." };
-  }
-
-  let invitation = await Invitation.findOne({
-    email: user.email,
-    raw: true,
-  });
-
-  if (invitation) {
-    await Invitation.update(
-      {
-        status: "Accepted",
-      },
-      {
-        where: {
-          id: invitation.id,
-        },
-      }
-    );
-
-    user.role = "TeamMember";
-    user.businessId = invitation.businessId;
   }
 
   await User.update(
@@ -266,25 +214,17 @@ async function verifyEmail(data) {
 
   delete user.emailVerificationToken;
 
-  let business = await Business.findOne({
+  const businessMemberships = await BusinessMembership.findAll({
     where: {
-      id: user.businessId,
+      userId: user.id,
     },
-    include: [
-      {
-        model: Assistant,
-        as: "assistant",
-      },
-    ],
+    attributes: ["businessId"],
     raw: true,
-    nest: true,
   });
-
-  user.business = business;
 
   const payload = {
     ...user,
-    invitation,
+    businessMemberships,
   };
 
   return generateJWT(payload);
