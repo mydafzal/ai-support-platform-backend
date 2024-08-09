@@ -1,4 +1,4 @@
-const ResponseHandler = require("../utils/responseHandler");
+const ResponseHandler = require("../utils/response-handler");
 
 const validateRequest = (schema) => (req, res, next) => {
   try {

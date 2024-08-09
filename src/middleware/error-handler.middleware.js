@@ -1,4 +1,4 @@
-const ResponseHandler = require("../utils/responseHandler");
+const ResponseHandler = require("../utils/response-handler");
 
 const errorHandler = (err, req, res, next) => {
   const { statusCode = 500, message = "Internal Server Error", stack } = err;
@@ -18,8 +18,8 @@ const errorHandler = (err, req, res, next) => {
 
   if (!res.headersSent) {
     ResponseHandler.error(res, {
-      statusCode: err.statusCode || 500,
-      message: err.message || "Internal Server Error",
+      statusCode,
+      message,
     });
 
     console.error(logMessage);
