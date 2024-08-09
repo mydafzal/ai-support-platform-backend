@@ -31,7 +31,7 @@ const app = express();
 const server = createServer(app);
 
 const { initializeSocketIO } = require("./src/loaders/socket-io.js");
-const errorHandler = require("./src/middleware/errorHandler.middleware.js");
+const errorHandler = require("./src/middleware/error-handler.middleware.js");
 initializeSocketIO(server);
 
 const SubscriptionService = require("./src/services/subscription.service.js");
@@ -78,22 +78,21 @@ app.use(cors());
 
 app.use("/auth", require("./src/routes/auth.route"));
 app.use("/calls", require("./src/routes/call.route"));
-app.use("/call-tags", require("./src/routes/callTag.route"));
+app.use("/call-tags", require("./src/routes/call-tag.route"));
 app.use("/businesses", require("./src/routes/business.route"));
 app.use("/users", require("./src/routes/user.route"));
 app.use("/invitations", require("./src/routes/invitation.route"));
 app.use("/train", require("./src/routes/train.route"));
-app.use("/agents", require("./src/routes/agent.route"));
 app.use("/voices", require("./src/routes/voice.route"));
 app.use("/download", require("./src/routes/download.route"));
-app.use("/team-groups", require("./src/routes/teamGroup.route"));
+app.use("/groups", require("./src/routes/group.route"));
 app.use("/integrations", require("./src/routes/integration.route"));
 app.use("/form-links", require("./src/routes/form.route.js"));
 app.use("/chats", require("./src/routes/chat.route.js"));
-app.use("/chat-widgets", require("./src/routes/chatWidget.route.js"));
+app.use("/chat-widgets", require("./src/routes/chat-widget.route.js"));
 app.use(
   "/chat-assignments",
-  require("./src/routes/chatUserAssignment.route.js")
+  require("./src/routes/chat-user-assignment.route.js")
 );
 app.use("/subscriptions", require("./src/routes/subscription.route.js"));
 
