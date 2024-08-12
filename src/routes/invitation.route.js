@@ -1,77 +1,47 @@
 const router = require("express").Router();
-const { User, Invitation, Business } = require("../../models");
+const {
+  User,
+  Invitation,
+  Business,
+  BusinessMembership,
+} = require("../../models");
 
 const jwt = require("jsonwebtoken");
-
-const { z } = require("zod");
 
 const { sendEmail } = require("../integrations/nodemailer");
 const { generateEmailLink } = require("../utils/helpers");
 const { Op } = require("sequelize");
+
 const SubscriptionService = require("../services/subscription.service");
 const { TEAM_MEMBERS_FEATURE_ID } = require("../utils/constants");
 
-const invitationValidationSchema = z.object({
-  email: z.string().email(),
-  teamGroupId: z.number().optional(),
-  businessId: z.number(),
-});
+const validateRequest = require("../middleware/request-validation.middleware");
+const { addInvitationSchema } = require("../validators/invitation.validator");
+const asyncHandler = require("../utils/async-handler");
+const ResponseHandler = require("../utils/response-handler");
 
-router.post("/", async (req, res) => {
-  try {
-    const { success, error } = await invitationValidationSchema.safeParseAsync(
-      req.body
-    );
+router.post(
+  "/",
+  validateRequest(addInvitationSchema),
+  asyncHandler(async (req, res) => {
+    const { businessId, email, groupId } = req.body;
 
-    if (!success) {
-      return res
-        .status(400)
-        .json({ success: false, message: error.errors[0].message });
-    }
+    // const hasReachedLimit = await SubscriptionService.hasReachedFeatureLimit(
+    //   TEAM_MEMBERS_FEATURE_ID,
+    //   businessId
+    // );
 
-    const { businessId, email, teamGroupId } = req.body;
-
-    let user = await Invitation.findOne({
-      where: {
-        email,
-      },
-    });
-
-    if (!user) {
-      user = await User.findOne({
-        where: {
-          email,
-          businessId: {
-            [Op.not]: null,
-          },
-        },
-      });
-    }
-
-    if (user) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Couldn't send invitation. User is already a member of a different organization.",
-      });
-    }
-
-    const hasReachedLimit = await SubscriptionService.hasReachedFeatureLimit(
-      TEAM_MEMBERS_FEATURE_ID,
-      businessId
-    );
-
-    if (hasReachedLimit) {
-      return res.status(400).json({
-        success: false,
-        message: "Operation denied: Feature limit has been exceeded.",
-      });
-    }
+    // if (hasReachedLimit) {
+    //   ResponseHandler.error(res, {
+    //     statusCode: 400,
+    //     message: "Operation denied: Feature limit has been exceeded.",
+    //   });
+    // }
 
     let invitation = await Invitation.create({
       email,
       businessId,
-      teamGroupId,
+      groupId,
       status: "Pending",
     });
 
@@ -92,39 +62,47 @@ router.post("/", async (req, res) => {
       { where: { id: invitation.id } }
     );
 
-    let business = await Business.findByPk(businessId, {
+    const business = await Business.findOne({
+      where: { id: businessId },
       include: [
         {
           model: User,
-          as: "adminUser",
+          as: "users",
+          attributes: ["id", "name", "email"],
+          through: {
+            attributes: [],
+            where: { role: "Admin" },
+          },
         },
       ],
+      raw: true,
+      nest: true,
     });
-    business = business.toJSON();
+
+    business.adminUser = business.users;
+    delete business.users;
 
     const emailLink = generateEmailLink("invites", `token=${invitationToken}`);
     const emailTemplate = `${business.adminUser.email} invited you to ${business.name}. Click <a href="${emailLink}">here</a> to accept the invitation.`;
     await sendEmail(email, emailTemplate);
 
-    await SubscriptionService.updateFeatureUsage(
-      TEAM_MEMBERS_FEATURE_ID,
-      businessId,
-      1
-    );
+    // await SubscriptionService.updateFeatureUsage(
+    //   TEAM_MEMBERS_FEATURE_ID,
+    //   businessId,
+    //   1
+    // );
 
-    res.status(201).json({
-      success: true,
+    ResponseHandler.success(res, {
+      statusCode: 201,
       data: invitation,
       message: "Invitation sent.",
     });
-  } catch (error) {
-    console.error("Error adding user:", error);
-    res.status(500).json({ success: false, message: "Internal Server Error" });
-  }
-});
+  })
+);
 
-router.put("/", async (req, res) => {
-  try {
+router.put(
+  "/",
+  asyncHandler(async (req, res) => {
     const { token } = req.query;
 
     let decodedToken;
@@ -132,16 +110,17 @@ router.put("/", async (req, res) => {
     try {
       decodedToken = jwt.verify(token, process.env.JWT_SECRET);
     } catch (error) {
-      console.log("Error verifying invitation token - ", error);
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid or expired token." });
+      return ResponseHandler.error(res, {
+        statusCode: 400,
+        message: "Invalid or expired token.",
+      });
     }
 
     if (!decodedToken || !decodedToken.invitationId) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid or expired token." });
+      return ResponseHandler.error(res, {
+        statusCode: 400,
+        message: "Invalid or expired token.",
+      });
     }
 
     let invitation = await Invitation.findByPk(decodedToken.invitationId);
@@ -153,9 +132,9 @@ router.put("/", async (req, res) => {
     }
 
     if (invitation?.toJSON()?.status === "Accepted") {
-      return res
-        .status(200)
-        .json({ success: true, message: "The invite was already accepted." });
+      return ResponseHandler.success(res, {
+        message: "The invite was already accepted.",
+      });
     }
 
     invitation.token = null;
@@ -164,8 +143,9 @@ router.put("/", async (req, res) => {
 
     invitation = invitation.toJSON();
 
-    let business = await Business.findByPk(invitation.businessId);
-    business = business.toJSON();
+    let business = await Business.findByPk(invitation.businessId, {
+      raw: true,
+    });
 
     await User.update(
       {
@@ -178,22 +158,19 @@ router.put("/", async (req, res) => {
       }
     );
 
-    res.status(200).json({
-      success: true,
+    ResponseHandler.success(res, {
       message: `You have been added to the organization ${business.name}.`,
     });
-  } catch (error) {
-    console.error("Error accepting invitation:", error);
-    res.status(500).json({ success: false, message: "Internal Server Error" });
-  }
-});
+  })
+);
 
-router.delete("/:id", async (req, res) => {
-  try {
+router.delete(
+  "/:id",
+  asyncHandler(async (req, res) => {
     let invitation = await Invitation.findByPk(req.params.id, { raw: true });
 
     if (!invitation) {
-      return res.status(204).send();
+      return ResponseHandler.success(res, { statusCode: 204 });
     }
 
     await Invitation.destroy({
@@ -203,47 +180,57 @@ router.delete("/:id", async (req, res) => {
     });
 
     if (invitation) {
-      await User.update(
-        {
-          businessId: null,
+      const user = await User.findOne({
+        where: {
+          email: invitation.email,
         },
-        {
-          where: {
-            email: invitation.email,
+        raw: true,
+      });
+
+      await BusinessMembership.destroy({
+        userId: user.id,
+        businessId: invitation.businessId,
+      });
+
+      const business = await Business.findOne({
+        where: { id: invitation.businessId },
+        include: [
+          {
+            model: User,
+            as: "users",
+            attributes: ["id", "name", "email"],
+            through: {
+              attributes: [],
+              where: { role: "Admin" },
+            },
           },
-        }
-      );
-
-      let business = await Business.findByPk(invitation.businessId, {
+        ],
         raw: true,
+        nest: true,
       });
 
-      let user = await User.findByPk(business.adminUserId, {
-        raw: true,
-      });
+      business.adminUser = business.users;
+      delete business.users;
 
       let emailTemplate;
 
       if (invitation.status === "Pending") {
         emailTemplate = `Your invitation for organization ${business.name} has been cancelled.`;
       } else {
-        emailTemplate = `${user.email} removed you from organization ${business.name}.`;
+        emailTemplate = `${business.adminUser.email} removed you from organization ${business.name}.`;
       }
 
       await sendEmail(invitation.email, emailTemplate);
 
-      await SubscriptionService.updateFeatureUsage(
-        TEAM_MEMBERS_FEATURE_ID,
-        business.id,
-        -1
-      );
+      // await SubscriptionService.updateFeatureUsage(
+      //   TEAM_MEMBERS_FEATURE_ID,
+      //   business.id,
+      //   -1
+      // );
     }
 
-    res.status(204).send();
-  } catch (error) {
-    console.error("Error deleting invitation: ", error);
-    res.status(500).json({ success: false, message: "Internal Server Error" });
-  }
-});
+    ResponseHandler.success(res, { statusCode: 204 });
+  })
+);
 
 module.exports = router;
