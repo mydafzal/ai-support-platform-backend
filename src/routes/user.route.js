@@ -93,4 +93,17 @@ router.post(
   })
 );
 
+router.get(
+  "/:id/businesses",
+  asyncHandler(async (req, res) => {
+    const result = await UserService.getBusinessesOfUser({
+      userId: req.params.id,
+    });
+
+    ResponseHandler.success(res, {
+      data: result,
+    });
+  })
+);
+
 module.exports = router;

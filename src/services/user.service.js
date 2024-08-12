@@ -331,6 +331,42 @@ async function createMembershipsForAcceptedInvitations(userId, email) {
   return businessMemberships;
 }
 
+async function getBusinessesOfUser(data) {
+  const { userId } = data;
+
+  const user = await User.findOne({
+    where: {
+      id: userId,
+    },
+    include: [
+      {
+        model: Business,
+        as: "businesses",
+        attributes: ["id", "name", "twilioNumber"],
+        through: {
+          attributes: [],
+        },
+      },
+    ],
+  });
+
+  if (!user) {
+    throw { statusCode: 404, message: "Invalid user id" };
+  }
+
+  return user.toJSON().businesses;
+
+  // const memberships = await BusinessMembership.findAll({
+  //   where: { userId },
+  //   raw: true,
+  //   attributes: ["businessId"],
+  // });
+
+  // memberships.map(membership => {
+  //   await Business.
+  // })
+}
+
 const UserService = {
   registerUser,
   updateUser,
@@ -338,5 +374,6 @@ const UserService = {
   removeUserFromBusiness,
   getUsersByBusiness,
   createMembershipsForAcceptedInvitations,
+  getBusinessesOfUser,
 };
 module.exports = UserService;
