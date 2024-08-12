@@ -355,16 +355,6 @@ async function getBusinessesOfUser(data) {
   }
 
   return user.toJSON().businesses;
-
-  // const memberships = await BusinessMembership.findAll({
-  //   where: { userId },
-  //   raw: true,
-  //   attributes: ["businessId"],
-  // });
-
-  // memberships.map(membership => {
-  //   await Business.
-  // })
 }
 
 const UserService = {
