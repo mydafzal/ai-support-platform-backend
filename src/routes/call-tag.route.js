@@ -1,5 +1,5 @@
 const router = require("express").Router();
-const { CallTag, Call } = require("../../models");
+const { CallTag, Call, Business } = require("../../models");
 
 const validateRequest = require("../middleware/request-validation.middleware");
 const {
@@ -14,6 +14,17 @@ router.post(
   "/",
   validateRequest(addCallTagSchema),
   asyncHandler(async (req, res) => {
+    const business = await Business.findByPk(req.body.businessId, {
+      raw: true,
+    });
+
+    if (!business) {
+      ResponseHandler.error(res, {
+        statusCode: 404,
+        message: "Invalid business id ",
+      });
+    }
+
     let callTag = await CallTag.create(req.body);
 
     ResponseHandler.success(res, { data: callTag });
