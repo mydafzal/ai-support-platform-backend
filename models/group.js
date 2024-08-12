@@ -10,7 +10,7 @@ module.exports = (sequelize, DataTypes) => {
 
       Group.belongsToMany(models.User, {
         through: models.GroupMembership,
-        foreignKey: "userId",
+        foreignKey: "groupId",
         as: "users",
       });
 
