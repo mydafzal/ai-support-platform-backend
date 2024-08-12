@@ -8,6 +8,7 @@ const {
 
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
+const UserService = require("./user.service");
 
 async function login(data) {
   const { email, password, externalType, name, profileImageUrl } = data;
@@ -35,6 +36,11 @@ async function login(data) {
       });
 
       user = user.toJSON();
+
+      await UserService.createMembershipsForAcceptedInvitations(
+        user.id,
+        user.email
+      );
     } else if (!user.externalType) {
       throw {
         statusCode: 401,
@@ -89,12 +95,14 @@ async function login(data) {
   }
 
   delete user.password;
+  delete user.emailVerificationToken;
+  delete user.resetPasswordToken;
 
   const businessMemberships = await BusinessMembership.findAll({
     where: {
       userId: user.id,
     },
-    attributes: ["businessId"],
+    attributes: ["businessId", "role"],
     raw: true,
   });
 

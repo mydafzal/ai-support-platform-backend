@@ -61,7 +61,6 @@ async function registerUser(data) {
   });
 
   const emailVerificationToken = generateEmailVerificationToken(user.id);
-  user.emailVerificationToken = emailVerificationToken;
 
   await User.update(
     {
@@ -74,20 +73,17 @@ async function registerUser(data) {
     }
   );
 
+  const businessMemberships = await createMembershipsForAcceptedInvitations(
+    user.id,
+    user.email
+  );
+
   const emailLink = generateEmailLink(
     "email-verification",
     `token=${emailVerificationToken}`
   );
   const emailTemplate = `Please verify your email by clicking <a href="${emailLink}">here</a>`;
   await sendEmail(user.email, emailTemplate);
-
-  const businessMemberships = await BusinessMembership.findAll({
-    where: {
-      userId: user.id,
-    },
-    attributes: ["businessId"],
-    raw: true,
-  });
 
   return generateJWT({ ...user, businessMemberships });
 }
@@ -306,11 +302,41 @@ async function getUsersByBusiness(data) {
   return [...users, ...invitations];
 }
 
+// If a user has accepted invitations of companies before signing up, then as the user signs up, they become member of the companies they accepted invitations for.
+async function createMembershipsForAcceptedInvitations(userId, email) {
+  const invitations = await Invitation.findAll({
+    where: {
+      email,
+      status: "Accepted",
+    },
+    raw: true,
+  });
+
+  let businessMemberships = [];
+
+  if (invitations) {
+    businessMemberships = invitations.map((invitation) => ({
+      businessId: invitation.businessId,
+      userId,
+      role: "TeamMember",
+    }));
+
+    await BusinessMembership.bulkCreate(businessMemberships);
+
+    businessMemberships.forEach((membership) => {
+      delete membership.userId;
+    });
+  }
+
+  return businessMemberships;
+}
+
 const UserService = {
   registerUser,
   updateUser,
   checkEmailAvailability,
   removeUserFromBusiness,
   getUsersByBusiness,
+  createMembershipsForAcceptedInvitations,
 };
 module.exports = UserService;
