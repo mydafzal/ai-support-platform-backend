@@ -177,6 +177,18 @@ router.get(
   })
 );
 
+router.delete(
+  "/:id/members/:memberId",
+  asyncHandler(async (req, res) => {
+    await BusinessService.removeMember({
+      businessId: req.params.id,
+      memberId: req.params.memberId,
+    });
+
+    ResponseHandler.success(res, { statusCode: 204 });
+  })
+);
+
 router.get(
   "/:id/chat-widgets",
   asyncHandler(async (req, res) => {
