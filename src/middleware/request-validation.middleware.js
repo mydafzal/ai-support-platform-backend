@@ -1,18 +1,27 @@
 const ResponseHandler = require("../utils/response-handler");
 
-const validateRequest = (schema) => (req, res, next) => {
-  try {
-    schema.parse(req.body);
-    next();
-  } catch (err) {
-    return ResponseHandler.error(res, {
-      statusCode: 400,
-      message: err.errors.map((error) => ({
-        path: error.path,
-        message: error.message,
-      })),
-    });
-  }
-};
+const validateRequest =
+  (schema, dataToValidate = "body") =>
+  (req, res, next) => {
+    try {
+      if (dataToValidate === "body") {
+        schema.parse(req.body);
+      } else if (dataToValidate === "query") {
+        schema.parse(req.query);
+      } else if (dataToValidate === "param") {
+        schema.parse(req.param);
+      }
+
+      next();
+    } catch (err) {
+      return ResponseHandler.error(res, {
+        statusCode: 400,
+        message: err.errors.map((error) => ({
+          path: error.path,
+          message: error.message,
+        })),
+      });
+    }
+  };
 
 module.exports = validateRequest;
