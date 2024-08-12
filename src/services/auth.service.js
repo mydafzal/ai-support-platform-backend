@@ -33,6 +33,8 @@ async function login(data) {
         emailVerified: true,
         profileImageUrl,
       });
+
+      user = user.toJSON();
     } else if (!user.externalType) {
       throw {
         statusCode: 401,
@@ -191,7 +193,7 @@ async function verifyEmail(data) {
 
   let user = await User.findByPk(decodedToken.userId, {
     attributes: {
-      exclude: ["resetPasswordToken", "password", "emailVerificationToken"],
+      exclude: ["resetPasswordToken", "password"],
     },
     raw: true,
   });
