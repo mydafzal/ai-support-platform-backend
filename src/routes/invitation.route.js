@@ -19,12 +19,37 @@ const validateRequest = require("../middleware/request-validation.middleware");
 const { addInvitationSchema } = require("../validators/invitation.validator");
 const asyncHandler = require("../utils/async-handler");
 const ResponseHandler = require("../utils/response-handler");
+const { emailSchema } = require("../validators/auth.validator");
 
 router.post(
   "/",
   validateRequest(addInvitationSchema),
   asyncHandler(async (req, res) => {
     const { businessId, email, groupId } = req.body;
+
+    const business = await Business.findOne({
+      where: { id: businessId },
+      include: [
+        {
+          model: User,
+          as: "users",
+          attributes: ["id", "name", "email"],
+          through: {
+            attributes: [],
+            where: { role: "Admin" },
+          },
+        },
+      ],
+      raw: true,
+      nest: true,
+    });
+
+    if (!business) {
+      ResponseHandler.error(res, {
+        statusCode: 404,
+        message: "Invalid business id",
+      });
+    }
 
     // const hasReachedLimit = await SubscriptionService.hasReachedFeatureLimit(
     //   TEAM_MEMBERS_FEATURE_ID,
@@ -61,23 +86,6 @@ router.post(
       },
       { where: { id: invitation.id } }
     );
-
-    const business = await Business.findOne({
-      where: { id: businessId },
-      include: [
-        {
-          model: User,
-          as: "users",
-          attributes: ["id", "name", "email"],
-          through: {
-            attributes: [],
-            where: { role: "Admin" },
-          },
-        },
-      ],
-      raw: true,
-      nest: true,
-    });
 
     business.adminUser = business.users;
     delete business.users;
@@ -147,16 +155,20 @@ router.put(
       raw: true,
     });
 
-    await User.update(
-      {
-        businessId: business.id,
+    let user = await User.findOne({
+      where: {
+        email: invitation.email,
       },
-      {
-        where: {
-          email: invitation.email,
-        },
-      }
-    );
+      raw: true,
+    });
+
+    if (user) {
+      await BusinessMembership.create({
+        businessId: invitation.businessId,
+        userId: user.id,
+        role: "TeamMember",
+      });
+    }
 
     ResponseHandler.success(res, {
       message: `You have been added to the organization ${business.name}.`,
@@ -230,6 +242,23 @@ router.delete(
     }
 
     ResponseHandler.success(res, { statusCode: 204 });
+  })
+);
+
+router.get(
+  "/",
+  validateRequest(emailSchema, "query"),
+  asyncHandler(async (req, res) => {
+    const { email } = req.query;
+
+    const invitations = await Invitation.findAll({
+      where: {
+        email,
+      },
+      raw: true,
+    });
+
+    ResponseHandler.success(res, { data: invitations });
   })
 );
 
