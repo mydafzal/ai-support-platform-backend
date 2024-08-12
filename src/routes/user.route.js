@@ -46,7 +46,7 @@ router.post(
 
 router.delete(
   "/:id",
-  asyncHandler(async (req, res, next) => {
+  asyncHandler(async (req, res) => {
     await UserService.removeUserFromBusiness({ userId: req.params.id });
 
     ResponseHandler.success(res, { statusCode: 204 });
@@ -57,7 +57,7 @@ router.patch(
   "/:id",
   validateRequest(updateUserSchema),
   upload.single("file"),
-  asyncHandler(async (req, res, next) => {
+  asyncHandler(async (req, res) => {
     const result = await UserService.updateUser({
       userId: req.params.id,
       ...req.body,
