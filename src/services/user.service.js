@@ -6,6 +6,7 @@ const {
   Invitation,
   Business,
   BusinessMembership,
+  Group,
 } = require("../../models");
 
 const {
@@ -117,53 +118,6 @@ async function updateUser(data) {
     throw { statusCode: 404, message: "Invalid user id." };
   }
 
-  // if (businessId || businessId == "") {
-  //   const currentBusinessId = user.businessId;
-
-  //   user.businessId = businessId === "" ? null : businessId;
-
-  //   // IF the user is to removed from the organization, then also delete the user's invitation and trigger email to the removed user.
-  //   if (businessId === "") {
-  //     const invitation = await Invitation.findOne({
-  //       where: {
-  //         email: user.email,
-  //       },
-  //       raw: true,
-  //     });
-
-  //     if (invitation) {
-  //       await Invitation.destroy({
-  //         where: {
-  //           email: user.email,
-  //         },
-  //       });
-
-  //       const business = await Business.findOne({
-  //         where: {
-  //           id: currentBusinessId,
-  //         },
-  //         raw: true,
-  //       });
-
-  //       let adminUser = await User.findByPk(business.adminUserId, {
-  //         raw: true,
-  //       });
-
-  //       if (adminUser) {
-  //         let emailTemplate;
-
-  //         if (invitation.status === "Pending") {
-  //           emailTemplate = `Your invitation for organization ${name} has been cancelled.`;
-  //         } else {
-  //           emailTemplate = `${adminUser.email} removed you from organization ${name}.`;
-  //         }
-
-  //         await sendEmail(invitation.email, emailTemplate);
-  //       }
-  //     }
-  //   }
-  // }
-
   if (phone != undefined) {
     user.phone = phone;
     user.phoneVerified = phone?.length > 0 ? false : true;
@@ -172,21 +126,6 @@ async function updateUser(data) {
   if (name) {
     user.name = name;
   }
-
-  // if (teamGroupId || teamGroupId == "") {
-  //   user.teamGroupId = teamGroupId === "" ? null : teamGroupId;
-
-  //   await Invitation.update(
-  //     {
-  //       teamGroupId: teamGroupId === "" ? null : teamGroupId,
-  //     },
-  //     {
-  //       where: {
-  //         email: user.email,
-  //       },
-  //     }
-  //   );
-  // }
 
   if (file) {
     let profileImageUrl;
@@ -224,17 +163,6 @@ async function updateUser(data) {
   if (email?.length > 0) {
     user.email = email;
     user.emailVerified = false;
-
-    // await Invitation.update(
-    //   {
-    //     email,
-    //   },
-    //   {
-    //     where: {
-    //       email,
-    //     },
-    //   }
-    // );
   }
 
   await User.update(
@@ -301,21 +229,46 @@ async function removeUserFromBusiness(data) {
 async function getUsersByBusiness(data) {
   const { businessId } = data;
 
-  let users = await User.findAll({
-    where: {
-      businessId,
-    },
-    attributes: {
-      exclude: [
-        "password",
-        "emailVerificationToken",
-        "resetPasswordToken",
-        "externalType",
-      ],
-    },
-    include: [{ model: Group, as: "group", attributes: ["name", "id"] }],
-    raw: true,
-    nest: true,
+  const businessWithUsers = await Business.findOne({
+    where: { id: businessId },
+    include: [
+      {
+        model: User,
+        as: "users",
+        attributes: {
+          exclude: [
+            "password",
+            "emailVerificationToken",
+            "resetPasswordToken",
+            "externalType",
+          ],
+        },
+        through: {
+          attributes: [],
+        },
+        include: [
+          {
+            model: Group,
+            as: "groups",
+            attributes: ["name", "id"],
+            through: {
+              attributes: [],
+            },
+            where: { businessId },
+            required: false,
+          },
+        ],
+      },
+    ],
+  });
+
+  let users = businessWithUsers.toJSON().users;
+
+  users = users.map((user) => {
+    user.group = user.groups[0];
+    delete user.groups;
+
+    return user;
   });
 
   let whereCondition = {
@@ -324,19 +277,31 @@ async function getUsersByBusiness(data) {
 
   if (users?.length > 0) {
     whereCondition.email = {
-      [sequelize.Op.notIn]: users.map((item) => item.email),
+      [sequelize.Op.notIn]: users.map((user) => user.email),
     };
   }
 
   let invitations = await Invitation.findAll({
     where: whereCondition,
     attributes: {
-      exclude: ["token"],
+      exclude: ["token", "groupId"],
     },
-    include: [{ model: Group, as: "group", attributes: ["name", "id"] }],
+    include: [
+      {
+        model: Group,
+        as: "group",
+        attributes: ["name", "id"],
+        required: false,
+      },
+    ],
     raw: true,
     nest: true,
   });
+
+  invitations = invitations.map((invitation) => ({
+    ...invitation,
+    group: invitation.group.name ? invitation.group : undefined, // Remove the group property if it's null
+  }));
 
   return [...users, ...invitations];
 }
