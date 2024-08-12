@@ -281,6 +281,22 @@ async function updateBusiness(data) {
 async function removeMember(data) {
   let { businessId, memberId } = data;
 
+  const membership = await BusinessMembership.findOne({
+    where: {
+      businessId,
+      userId: memberId,
+    },
+    attributes: ["role"],
+    raw: true,
+  });
+
+  if (membership?.role === "Admin") {
+    throw {
+      statusCode: 400,
+      message: "Admin user cannot be removed from an organization",
+    };
+  }
+
   await BusinessMembership.destroy({
     where: {
       businessId,
