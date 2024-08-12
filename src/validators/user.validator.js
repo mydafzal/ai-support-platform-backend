@@ -10,7 +10,6 @@ const updateUserSchema = z.object({
   name: z.string().optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
-  teamGroupId: z.coerce.number().optional().or(z.coerce.string()),
   businessId: z.coerce.number().optional().or(z.coerce.string()),
 });
 

@@ -278,9 +278,21 @@ async function updateBusiness(data) {
   };
 }
 
+async function removeMember(data) {
+  let { businessId, memberId } = data;
+
+  await BusinessMembership.destroy({
+    where: {
+      businessId,
+      userId: memberId,
+    },
+  });
+}
+
 const BusinessService = {
   addBusiness,
   updateBusiness,
+  removeMember,
 };
 
 module.exports = BusinessService;
