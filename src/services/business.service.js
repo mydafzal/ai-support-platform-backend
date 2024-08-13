@@ -55,7 +55,6 @@ async function addBusiness(data) {
     twilioNumber: "+14697074725",
     // twilioNumber: twilioNumber || "+14697074725",
     verifyServiceId: "",
-    // adminUserId: userId,
   });
 
   business = business.toJSON();
@@ -110,34 +109,6 @@ async function addBusiness(data) {
     farewellMessage,
     knowledgeBaseName: uuidv4(),
   });
-
-  // user = await User.findOne({
-  //   where: {
-  //     id: userId,
-  //   },
-  //   include: [
-  //     {
-  //       model: Business,
-  //       as: "business",
-  //       include: [
-  //         {
-  //           model: Assistant,
-  //           as: "assistant",
-  //         },
-  //       ],
-  //     },
-  //   ],
-  //   raw: true,
-  //   nest: true,
-  // });
-
-  // const businessMemberships = await BusinessMembership.findAll({
-  //   where: {
-  //     userId: user.id,
-  //   },
-  //   attributes: ["businessId"],
-  //   raw: true,
-  // });
 
   business.assistant = assistant.toJSON();
   return business;
