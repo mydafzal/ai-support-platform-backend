@@ -16,6 +16,14 @@ module.exports = {
         constraint.constraintName === "Subscriptions_businessId_fkey"
     );
 
+    if (userIdConstraint) {
+      // Remove the existing foreign key constraint for businessId
+      await queryInterface.removeConstraint(
+        "Subscriptions",
+        "Subscriptions_userId_fkey"
+      );
+    }
+
     if (businessIdConstraint) {
       // Remove the existing foreign key constraint for businessId
       await queryInterface.removeConstraint(
