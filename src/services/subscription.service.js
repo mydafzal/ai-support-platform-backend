@@ -3,11 +3,13 @@ const {
   PricingPlan,
   Subscription,
   SubscriptionFeature,
+  BusinessFeature,
   Business,
   PlanFeature,
   User,
   Feature,
   Invitation,
+  BusinessMembership,
 } = require("../../models");
 
 const { FREE_PLAN_ID, TEAM_MEMBERS_FEATURE_ID } = require("../utils/constants");
@@ -21,138 +23,129 @@ const StripeService = require("./stripe.service");
 const { getFeaturesOfPlan } = require("./pricing-plan.service");
 
 async function createSubscription(data) {
-  try {
-    const { businessId, planId, billingCycle, customizedFeatures = [] } = data;
+  const { userId, planId, billingCycle, customizedFeatures = [] } = data;
 
-    let business = await Business.findByPk(businessId, {
-      include: [
-        {
-          model: User,
-          as: "adminUser",
-          attributes: ["email"],
-        },
-      ],
-      raw: true,
-      nest: true,
-    });
+  let user = await User.findByPk(userId, {
+    raw: true,
+  });
 
-    if (!business) {
-      throw { statusCode: 404, message: "Invalid business id." };
-    }
+  if (!user) {
+    throw { statusCode: 404, message: "Invalid user id." };
+  }
 
-    let pricingPlan = await PricingPlan.findByPk(planId, { raw: true });
+  let pricingPlan = await PricingPlan.findByPk(planId, { raw: true });
 
-    if (!pricingPlan) {
-      throw { statusCode: 404, message: "Invalid pricing plan id." };
-    }
+  if (!pricingPlan) {
+    throw { statusCode: 404, message: "Invalid pricing plan id." };
+  }
 
-    let method;
+  let method;
 
-    if (business.stripeCustomerId) {
-      method = await StripeService.getCustomerPaymentMethod(
-        business.stripeCustomerId
-      );
-    }
-
-    if (planId == FREE_PLAN_ID) {
-      const customer = await StripeService.createStripeCustomer(
-        business.adminUser.email
-      );
-
-      await Business.update(
-        {
-          stripeCustomerId: customer.id,
-        },
-        {
-          where: {
-            id: businessId,
-          },
-        }
-      );
-
-      business.stripeCustomerId = customer.id;
-    }
-
-    // For plans other than free, a payment method is required.
-    else if (!method) {
-      throw { statusCode: 400, message: "Please add a payment method first." };
-    }
-
-    let basePrice;
-
-    if (pricingPlan.name.toLowerCase() === "free") basePrice = 0;
-    else basePrice = pricingPlan.monthlyBasePrice;
-
-    let totalCost = parseFloat(basePrice);
-
-    if (customizedFeatures.length > 0) {
-      const features = await getFeaturesOfPlan(planId);
-
-      const extraCost = calculateExtraCostBasedOnCustomizedFeatures(
-        features,
-        customizedFeatures
-      );
-
-      totalCost += extraCost;
-    }
-
-    if (billingCycle === "yearly") {
-      totalCost = calculateYearlyPrice(
-        totalCost,
-        pricingPlan.yearlyDiscountPercentage
-      );
-    }
-
-    const totalCostInCents = Math.round(totalCost * 100);
-
-    const stripeSubscription = await StripeService.createStripeSubscription(
-      business.stripeCustomerId,
-      pricingPlan.stripeProductId,
-      billingCycle,
-      totalCostInCents,
-      method
+  if (user.stripeCustomerId) {
+    method = await StripeService.getCustomerPaymentMethod(
+      user.stripeCustomerId
     );
+  }
 
-    const subscription = await Subscription.create(
+  if (planId == FREE_PLAN_ID) {
+    const customer = await StripeService.createStripeCustomer(user.email);
+
+    await User.update(
       {
-        stripeSubscriptionId: stripeSubscription.id,
-        planId: pricingPlan.id,
-        businessId: business.id,
+        stripeCustomerId: customer.id,
       },
       {
-        raw: true,
+        where: {
+          id: userId,
+        },
       }
     );
 
-    let whereCondition = {
-      planId,
-    };
-
-    let features = await PlanFeature.findAll({
-      where: whereCondition,
-      raw: true,
-    });
-
-    features = features.map((item) => {
-      const customFeature = customizedFeatures.find(
-        (f) => f.featureId === item.featureId
-      );
-
-      return {
-        subscriptionId: subscription.id,
-        featureId: item.featureId,
-        quantity: customFeature ? customFeature.quantity : item.baseQuantity,
-        usedQuantity: item.featureId == TEAM_MEMBERS_FEATURE_ID ? 1 : 0,
-      };
-    });
-
-    await SubscriptionFeature.bulkCreate(features);
-
-    return "Subscription created succesfully.";
-  } catch (error) {
-    console.log("create subscription error - ", error);
-    throw error;
+    user.stripeCustomerId = customer.id;
   }
+
+  // For plans other than free, a payment method is required.
+  else if (!method) {
+    throw { statusCode: 400, message: "Please add a payment method first." };
+  }
+
+  let basePrice;
+
+  if (pricingPlan.name.toLowerCase() === "free") basePrice = 0;
+  else basePrice = pricingPlan.monthlyBasePrice;
+
+  let totalCost = parseFloat(basePrice);
+
+  if (customizedFeatures.length > 0) {
+    const features = await getFeaturesOfPlan(planId);
+
+    const extraCost = calculateExtraCostBasedOnCustomizedFeatures(
+      features,
+      customizedFeatures
+    );
+
+    totalCost += extraCost;
+  }
+
+  if (billingCycle === "yearly") {
+    totalCost = calculateYearlyPrice(
+      totalCost,
+      pricingPlan.yearlyDiscountPercentage
+    );
+  }
+
+  const totalCostInCents = Math.round(totalCost * 100);
+
+  const stripeSubscription = await StripeService.createStripeSubscription(
+    user.stripeCustomerId,
+    pricingPlan.stripeProductId,
+    billingCycle,
+    totalCostInCents,
+    method
+  );
+
+  await Subscription.create(
+    {
+      stripeSubscriptionId: stripeSubscription.id,
+      planId: pricingPlan.id,
+      userId: user.id,
+    },
+    {
+      raw: true,
+    }
+  );
+
+  let features = await PlanFeature.findAll({
+    where: {
+      planId,
+    },
+    raw: true,
+  });
+
+  const businessMemberhsip = await BusinessMembership.findOne({
+    where: {
+      userId: user.id,
+      role: "Admin",
+    },
+    raw: true,
+  });
+
+  features = features.map((item) => {
+    const customFeature = customizedFeatures.find(
+      (f) => f.featureId === item.featureId
+    );
+
+    return {
+      businessId: businessMemberhsip.businessId,
+      featureId: item.featureId,
+      quantity: customFeature ? customFeature.quantity : item.baseQuantity,
+      usedQuantity: item.featureId == TEAM_MEMBERS_FEATURE_ID ? 1 : 0,
+    };
+  });
+
+  await BusinessFeature.bulkCreate(features);
+
+  return "Subscription created succesfully.";
 }
 
 async function updateSubscription(data) {
@@ -167,8 +160,8 @@ async function updateSubscription(data) {
     let subscription = await Subscription.findByPk(subscriptionId, {
       include: [
         {
-          model: Business,
-          as: "business",
+          model: User,
+          as: "user",
         },
       ],
       raw: true,
@@ -224,7 +217,7 @@ async function updateSubscription(data) {
     }
 
     const paymentMethod = await StripeService.getCustomerPaymentMethod(
-      subscription.business.stripeCustomerId
+      subscription.user.stripeCustomerId
     );
 
     if (pricingPlan != FREE_PLAN_ID && !paymentMethod) {
@@ -287,16 +280,29 @@ async function updateSubscription(data) {
       };
     } else {
       const customer = await StripeService.getStripeCustomer(
-        subscription.business.stripeCustomerId
+        subscription.user.stripeCustomerId
       );
 
       if (customer.balance < 0) {
         await StripeService.refundCreditBalanceToCustomer(
-          subscription.business.stripeCustomerId,
+          subscription.user.stripeCustomerId,
           subscription.stripeSubscriptionId
         );
       }
     }
+
+    // Get all companies for which this user is the admin:
+    const businessMemberships = await BusinessMembership.findAll({
+      where: {
+        userId: subscription.userId,
+        role: "Admin",
+      },
+      raw: true,
+    });
+
+    const businessIds = businessMemberships.map((item) => item.businessId);
+
+    let promises;
 
     // If subscription plan has changed:
     if (newPlanId) {
@@ -313,9 +319,11 @@ async function updateSubscription(data) {
       );
 
       // 2: Remove features from user's subscription that are not included in the new plan.
-      await SubscriptionFeature.destroy({
+      await BusinessFeature.destroy({
         where: {
-          subscriptionId: subscription.id,
+          businessId: {
+            [Op.in]: businessIds,
+          },
           featureId: {
             [Op.notIn]: newPlanFeatures.map((item) => item.id),
           },
@@ -323,29 +331,38 @@ async function updateSubscription(data) {
       });
 
       // 3: Add features to user's subscription that are not currently in the subscription but are included in the new plan:
-      const currentSubscriptionFeatures = await SubscriptionFeature.findAll({
-        where: { subscriptionId: subscription.id },
+
+      const currentFeatures = await PlanFeature.findAll({
+        where: {
+          planId: subscription.planId,
+        },
         attributes: ["featureId"],
+        raw: true,
       });
 
       const currentFeatureIds = new Set(
-        currentSubscriptionFeatures.map((item) => item.featureId)
+        currentFeatures.map((item) => item.featureId)
       );
 
       let newPlanFeaturesNotInCurrentSubscription = newPlanFeatures.filter(
         (feature) => !currentFeatureIds.has(feature.id)
       );
 
-      newPlanFeaturesNotInCurrentSubscription =
-        newPlanFeaturesNotInCurrentSubscription.map((item) => ({
-          featureId: item.id,
-          subscriptionId: subscription.id,
-          quantity: item.baseQuantity,
-        }));
+      promises = businessIds.map((businessId) => {
+        newPlanFeaturesNotInCurrentSubscription =
+          newPlanFeaturesNotInCurrentSubscription.map((item) => ({
+            featureId: item.id,
+            // subscriptionId: subscription.id,
+            businessId,
+            quantity: item.baseQuantity,
+          }));
 
-      await SubscriptionFeature.bulkCreate(
-        newPlanFeaturesNotInCurrentSubscription
-      );
+        return BusinessFeature.bulkCreate(
+          newPlanFeaturesNotInCurrentSubscription
+        );
+      });
+
+      await Promise.all(promises);
     }
 
     // 1. Reset the quantity of features that were customized in the previous plan but are not customized in the new plan:
@@ -364,13 +381,15 @@ async function updateSubscription(data) {
       };
     });
 
-    const promises = allFeatures.map((feature) =>
-      SubscriptionFeature.update(
+    promises = allFeatures.map((feature) =>
+      BusinessFeature.update(
         { quantity: feature.quantity },
         {
           where: {
-            subscriptionId: subscription.id,
             featureId: feature.featureId,
+            businessId: {
+              [Op.in]: businessIds,
+            },
           },
         }
       )
@@ -379,7 +398,7 @@ async function updateSubscription(data) {
     await Promise.all(promises);
 
     if (isDowngradingSubscription) {
-      await removeExtraTeamMembers(subscription.id, subscription.businessId);
+      await removeExtraTeamMembers(subscription.userId);
     }
 
     return "Subscription updated succesfully.";
@@ -390,59 +409,49 @@ async function updateSubscription(data) {
 }
 
 async function cancelSubscription(data) {
-  try {
-    const { subscriptionId } = data;
+  const { subscriptionId } = data;
 
-    let subscription = await Subscription.findByPk(subscriptionId, {
-      raw: true,
-    });
+  let subscription = await Subscription.findByPk(subscriptionId, {
+    raw: true,
+  });
 
-    if (!subscription) {
-      throw { statusCode: 404, message: "Invalid subscription id." };
-    }
-
-    const stripeSubscription = await StripeService.cancelStripeSubscription(
-      subscription.stripeSubscriptionId
-    );
-
-    const result = {
-      isScheduledForCancellation: stripeSubscription.cancel_at_period_end,
-      currentPeriodEnd: stripeSubscription.current_period_end,
-    };
-
-    return result;
-  } catch (error) {
-    console.log("cancel subscription error - ", error);
-    throw error;
+  if (!subscription) {
+    throw { statusCode: 404, message: "Invalid subscription id." };
   }
+
+  const stripeSubscription = await StripeService.cancelStripeSubscription(
+    subscription.stripeSubscriptionId
+  );
+
+  const result = {
+    isScheduledForCancellation: stripeSubscription.cancel_at_period_end,
+    currentPeriodEnd: stripeSubscription.current_period_end,
+  };
+
+  return result;
 }
 
 async function resumeSubscription(data) {
-  try {
-    const { subscriptionId } = data;
+  const { subscriptionId } = data;
 
-    let subscription = await Subscription.findByPk(subscriptionId, {
-      raw: true,
-    });
+  let subscription = await Subscription.findByPk(subscriptionId, {
+    raw: true,
+  });
 
-    if (!subscription) {
-      throw { statusCode: 404, message: "Invalid subscription id." };
-    }
-
-    const stripeSubscription = await StripeService.resumeStripeSubscription(
-      subscription.stripeSubscriptionId
-    );
-
-    const result = {
-      isScheduledForCancellation: stripeSubscription.cancel_at_period_end,
-      currentPeriodEnd: stripeSubscription.current_period_end,
-    };
-
-    return result;
-  } catch (error) {
-    console.log("cancel subscription error - ", error);
-    throw error;
+  if (!subscription) {
+    throw { statusCode: 404, message: "Invalid subscription id." };
   }
+
+  const stripeSubscription = await StripeService.resumeStripeSubscription(
+    subscription.stripeSubscriptionId
+  );
+
+  const result = {
+    isScheduledForCancellation: stripeSubscription.cancel_at_period_end,
+    currentPeriodEnd: stripeSubscription.current_period_end,
+  };
+
+  return result;
 }
 
 async function handleSubscriptionCancellation(
@@ -453,7 +462,10 @@ async function handleSubscriptionCancellation(
     raw: true,
   });
 
-  const business = await Business.findByPk(customerId, {
+  const user = await User.findOne({
+    where: {
+      stripeCustomerId: customerId,
+    },
     attributes: ["id", "stripeCustomerId"],
     raw: true,
   });
@@ -463,11 +475,11 @@ async function handleSubscriptionCancellation(
   );
 
   const method = await StripeService.getCustomerPaymentMethod(
-    business.stripeCustomerId
+    user.stripeCustomerId
   );
 
   const stripeSubscription = await StripeService.createStripeSubscription(
-    business.stripeCustomerId,
+    user.stripeCustomerId,
     pricingPlan.stripeProductId,
     "monthly",
     totalCostInCents,
@@ -478,7 +490,7 @@ async function handleSubscriptionCancellation(
     {
       stripeSubscriptionId: stripeSubscription.id,
       planId: pricingPlan.id,
-      businessId: business.id,
+      userId: user.id,
     },
     {
       raw: true,
@@ -487,19 +499,46 @@ async function handleSubscriptionCancellation(
 
   let features = await PlanFeature.findAll({
     where: {
-      planId,
+      planId: pricingPlan.id,
     },
     raw: true,
   });
 
-  features = features.map((item) => ({
-    subscriptionId: subscription.id,
-    featureId: item.featureId,
-    quantity: item.baseQuantity,
-    usedQuantity: 0,
-  }));
+  // features = features.map((item) => ({
+  //   subscriptionId: subscription.id,
+  //   featureId: item.featureId,
+  //   quantity: item.baseQuantity,
+  //   usedQuantity: 0,
+  // }));
 
-  await SubscriptionFeature.bulkCreate(features);
+  // Get all companies for which this user is the admin:
+  const businesses = await BusinessMembership.findAll({
+    where: {
+      userId: subscription.userId,
+      role: "Admin",
+    },
+    raw: true,
+  });
+
+  await BusinessFeature.destroy({
+    where: {
+      businessId: {
+        [Op.in]: businesses.map((item) => item.businessId),
+      },
+    },
+    raw: true,
+  });
+
+  businesses.map(({ businessId }) => {
+    features = features.map((item) => ({
+      businessId,
+      featureId: item.featureId,
+      quantity: item.baseQuantity,
+      usedQuantity: 0,
+    }));
+
+    return BusinessFeature.bulkCreate(features);
+  });
 
   await Subscription.destroy({
     where: {
@@ -678,10 +717,22 @@ async function scheduleResetForSubscriptionUsage() {
   }
 }
 
-async function removeExtraTeamMembers(subscriptionId, businessId) {
-  const subscriptionFeature = await SubscriptionFeature.findOne({
+async function removeExtraTeamMembers(userId) {
+  const businesses = await BusinessMembership.findAll({
     where: {
-      subscriptionId,
+      userId,
+    },
+    attributes: ["businessId"],
+    raw: true,
+  });
+
+  const businessIds = businesses.map((item) => item.businessId);
+
+  const subscriptionFeature = await BusinessFeature.findOne({
+    where: {
+      businessId: {
+        [Op.in]: businessIds,
+      },
       featureId: TEAM_MEMBERS_FEATURE_ID,
     },
     raw: true,
@@ -689,36 +740,33 @@ async function removeExtraTeamMembers(subscriptionId, businessId) {
 
   const newMemberLimit = parseInt(subscriptionFeature.quantity);
 
-  const users = await User.findAll({
+  const memberships = await BusinessMembership.findAll({
     where: {
-      businessId,
+      businessId: {
+        [Op.in]: businessIds,
+      },
     },
     raw: true,
   });
 
-  const membersToRemove = users
-    .filter((user) => user.role !== "Admin") // Exclude admin
+  const membershipsToRemove = memberships
+    .filter((member) => member.role !== "Admin")
     .sort((a, b) => a.createdAt - b.createdAt) // Sort users by creation date
-    .slice(0, Math.max(0, users.length - newMemberLimit)); // Determine users to remove
+    .slice(
+      0,
+      Math.max(0, memberships.length - newMemberLimit * businessIds.length)
+    ); // Determine users to remove
 
-  for (const user of membersToRemove) {
-    await User.update(
-      {
-        businessId: null,
+  await BusinessMembership.destroy({
+    where: {
+      userId: {
+        [Op.in]: membershipsToRemove.map((item) => item.userId),
       },
-      {
-        where: {
-          id: user.id,
-        },
-      }
-    );
-
-    await Invitation.destroy({
-      where: {
-        email: user.email,
+      businessId: {
+        [Op.in]: businessIds,
       },
-    });
-  }
+    },
+  });
 }
 
 async function getSubscriptionDetails(data) {

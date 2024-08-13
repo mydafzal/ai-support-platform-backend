@@ -6,7 +6,7 @@ const customizedFeatureSchema = z.object({
 });
 
 const createSubscriptionSchema = z.object({
-  businessId: z.number(),
+  userId: z.number(),
   planId: z.number(),
   billingCycle: z.enum(["monthly", "yearly"]),
   customizedFeatures: z.array(customizedFeatureSchema).optional(),

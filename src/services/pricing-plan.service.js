@@ -1,7 +1,6 @@
 const {
   Feature,
   Subscription,
-  SubscriptionFeature,
   PricingPlan,
   BusinessFeature,
 } = require("../../models");
