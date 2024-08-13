@@ -38,7 +38,8 @@ const {
   IntegrationWarning,
   Call,
   User,
-  TeamGroup,
+  Group,
+  GroupMembership,
 } = require("../../models");
 
 const {
@@ -75,29 +76,41 @@ async function handleIncomingCall(request) {
     },
     include: [
       { model: Assistant, as: "assistant" },
-      { model: TeamGroup, as: "teamGroups", attributes: ["name"] },
+      { model: Group, as: "groups", attributes: ["name"] },
+      {
+        model: User,
+        as: "users",
+        attributes: ["id", "name", "email"],
+        through: {
+          attributes: [],
+          where: { role: "Admin" },
+        },
+      },
     ],
-
     raw: true,
     nest: true,
   });
+
+  business.adminUser = business.users;
+  delete business.users;
 
   if (!business) {
     twiml.say("Sorry, we can't handle your call.");
     return twiml.toString();
   }
 
-  let hasReachedLimit = await SubscriptionService.hasReachedFeatureLimit(
-    CALL_MINUTES_FEATURE_ID,
-    business.id
-  );
+  let hasReachedLimit = false;
+  // let hasReachedLimit = await SubscriptionService.hasReachedFeatureLimit(
+  //   CALL_MINUTES_FEATURE_ID,
+  //   business.id
+  // );
 
-  if (hasReachedLimit) {
-    twiml.say(
-      "Sorry, we can't handle your call at the moment. please try again later."
-    );
-    return twiml.toString();
-  }
+  // if (hasReachedLimit) {
+  //   twiml.say(
+  //     "Sorry, we can't handle your call at the moment. please try again later."
+  //   );
+  //   return twiml.toString();
+  // }
 
   await Call.create({
     id: callId,
@@ -120,7 +133,7 @@ async function handleIncomingCall(request) {
       callId,
       HUBPOST_INTEGRATION_ID,
       business.id,
-      business.adminUserId
+      business.adminUser.id
     );
   } else {
     const contact = await getContactByPhoneNumber(
@@ -141,10 +154,12 @@ async function handleIncomingCall(request) {
 
   const count = await getConnectedIntegrationsCount(business.id);
 
-  hasReachedLimit = await SubscriptionService.hasReachedFeatureLimit(
-    MEETING_FEATURE_ID,
-    business.id
-  );
+  console.log("count - ", count);
+
+  // hasReachedLimit = await SubscriptionService.hasReachedFeatureLimit(
+  //   MEETING_FEATURE_ID,
+  //   business.id
+  // );
 
   // Businesses must connect both Google Calendar and Calendly integrations so that customers can schedule meetings on phone call.
   let canScheduleMeeting =
@@ -161,6 +176,8 @@ async function handleIncomingCall(request) {
   };
 
   await storeCallData(callId, callDetails);
+
+  console.log("playing greeting message now....");
 
   twiml.play(business.assistant.greetingMessageUrl);
 
@@ -261,10 +278,10 @@ async function handleSpeechInput(request) {
     console.log("Dialing the human agent's number...");
     console.log("groupToRedirect - ", groupToRedirect);
 
-    let teamGroup;
+    let group;
 
     if (updatedCallData?.groupToRedirect?.length > 0) {
-      teamGroup = await TeamGroup.findOne({
+      group = await Group.findOne({
         where: {
           businessId: business.id,
           name: updatedCallData.groupToRedirect,
@@ -273,10 +290,20 @@ async function handleSpeechInput(request) {
       });
     }
 
-    let whereCondition = { businessId: business.id, phone: { [Op.not]: null } };
+    let whereCondition = { phone: { [Op.not]: null } };
 
-    if (teamGroup) {
-      whereCondition.teamGroupId = teamGroup.id;
+    if (group) {
+      const groupMemberships = await GroupMembership.findAll({
+        where: {
+          groupId: group.id,
+        },
+        raw: true,
+      });
+
+      if (groupMemberships) {
+        const usersInGroup = groupMemberships.map((item) => item.userId);
+        whereCondition.id = { [Op.in]: usersInGroup };
+      }
     }
 
     let teamMember = await User.findOne({
@@ -551,11 +578,11 @@ async function handleCallDisconnect(request) {
       (callDurationInSeconds / 60).toFixed(2)
     );
 
-    await SubscriptionService.updateFeatureUsage(
-      CALL_MINUTES_FEATURE_ID,
-      call.businessId,
-      callDurationInMinutes
-    );
+    // await SubscriptionService.updateFeatureUsage(
+    //   CALL_MINUTES_FEATURE_ID,
+    //   call.businessId,
+    //   callDurationInMinutes
+    // );
   }
 }
 
