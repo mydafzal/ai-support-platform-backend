@@ -19,4 +19,8 @@ const updateBusinessSchema = z.object({
   farewellMessage: z.string().optional(),
 });
 
-module.exports = { addBusinessSchema, updateBusinessSchema };
+const getBusinessSchema = z.object({
+  id: z.coerce.number(),
+});
+
+module.exports = { addBusinessSchema, updateBusinessSchema, getBusinessSchema };

@@ -276,10 +276,38 @@ async function removeMember(data) {
   });
 }
 
+async function getBusinessDetails(data) {
+  let { businessId } = data;
+
+  const business = await Business.findOne({
+    where: {
+      id: businessId,
+    },
+    include: [
+      {
+        model: Assistant,
+        as: "assistant",
+      },
+    ],
+    raw: true,
+    nest: true,
+  });
+
+  if (!business) {
+    throw {
+      statusCode: 404,
+      message: "Invalid business id",
+    };
+  }
+
+  return business;
+}
+
 const BusinessService = {
   addBusiness,
   updateBusiness,
   removeMember,
+  getBusinessDetails,
 };
 
 module.exports = BusinessService;

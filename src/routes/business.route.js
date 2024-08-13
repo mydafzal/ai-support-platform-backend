@@ -8,6 +8,7 @@ const validateRequest = require("../middleware/request-validation.middleware");
 const {
   addBusinessSchema,
   updateBusinessSchema,
+  getBusinessSchema,
 } = require("../validators/business.validator");
 
 const BusinessService = require("../services/business.service");
@@ -20,9 +21,7 @@ const CallService = require("../services/call.service");
 const CallTagService = require("../services/call-tags.service");
 const IntegrationService = require("../services/integration.service");
 const UserService = require("../services/user.service");
-const PaymentMethodService = require("../services/payment-method.service");
 const SubscriptionService = require("../services/subscription.service");
-const PricingPlanService = require("../services/pricing-plan.service");
 const asyncHandler = require("../utils/async-handler");
 
 router.post(
@@ -32,6 +31,21 @@ router.post(
     const result = await BusinessService.addBusiness(req.body);
     ResponseHandler.success(res, {
       statusCode: 201,
+      data: result,
+    });
+  })
+);
+
+router.get(
+  "/:id",
+  validateRequest(getBusinessSchema, "params"),
+  asyncHandler(async (req, res) => {
+    const result = await BusinessService.getBusinessDetails({
+      businessId: req.params.id,
+    });
+
+    ResponseHandler.success(res, {
+      statusCode: 200,
       data: result,
     });
   })
@@ -205,69 +219,12 @@ router.get(
 
 router.delete(
   "/:id/chats",
-  asyncHandler(async (req, res, next) => {
+  asyncHandler(async (req, res) => {
     await ChatService.deleteChatsByBusiness({
       businessId: req.params.id,
     });
 
     ResponseHandler.success(res, { statusCode: 204 });
-  })
-);
-
-router.post(
-  "/:id/payment-methods",
-  asyncHandler(async (req, res) => {
-    const clientSecret = await PaymentMethodService.addPaymentMethod({
-      businessId: req.params.id,
-    });
-
-    ResponseHandler.success(res, { data: { clientSecret } });
-  })
-);
-
-router.patch(
-  "/:id/payment-methods/:methodId",
-  asyncHandler(async (req, res) => {
-    await PaymentMethodService.setDefaultPaymentMethod({
-      businessId: req.params.id,
-      paymentMethodId: req.params.methodId,
-    });
-
-    ResponseHandler.success(res, { message: "Payment method set as default." });
-  })
-);
-
-router.get(
-  "/:id/payment-methods",
-  asyncHandler(async (req, res) => {
-    const result = await PaymentMethodService.getPaymentMethodByBusiness({
-      businessId: req.params.id,
-    });
-
-    ResponseHandler.statusCode(res, { data: result });
-  })
-);
-
-router.delete(
-  "/:id/payment-methods/:methodId",
-  asyncHandler(async (req, res) => {
-    await PaymentMethodService.deletePaymentMethod({
-      businessId: req.params.id,
-      paymentMethodId: req.params.methodId,
-    });
-
-    ResponseHandler.success(res, { statusCode: 204 });
-  })
-);
-
-router.get(
-  "/:id/pricing-plans",
-  asyncHandler(async (req, res) => {
-    const pricingPlans = await PricingPlanService.getPricingPlans({
-      businessId: req.params.id,
-    });
-
-    ResponseHandler.success(res, { data: pricingPlans });
   })
 );
 
