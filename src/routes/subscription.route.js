@@ -66,8 +66,11 @@ router.post(
 
     switch (event.type) {
       case "customer.subscription.deleted":
+        const { id: subscriptionId, customer: customerId } = event.data.object;
+
         await SubscriptionService.handleSubscriptionCancellation(
-          event.data.object
+          subscriptionId,
+          customerId
         );
         break;
 
