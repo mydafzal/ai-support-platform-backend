@@ -32,7 +32,6 @@ module.exports = {
       // Add the userId column
       await queryInterface.addColumn("Subscriptions", "userId", {
         type: Sequelize.INTEGER,
-        allowNull: false,
         references: {
           model: "Users", // Name of the target table
           key: "id", // Key in the target table
