@@ -255,7 +255,14 @@ router.get(
       where: {
         email,
       },
+      include: [
+        { model: Business, as: "business", attributes: ["id", "name"] },
+      ],
+      attributes: {
+        exclude: ["businessId", "token"],
+      },
       raw: true,
+      nest: true,
     });
 
     ResponseHandler.success(res, { data: invitations });
