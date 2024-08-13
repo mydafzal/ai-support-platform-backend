@@ -19,6 +19,8 @@ const { emailSchema } = require("../validators/auth.validator");
 const ChatService = require("../services/chat.service");
 const validateRequest = require("../middleware/request-validation.middleware");
 const asyncHandler = require("../utils/async-handler");
+const PricingPlanService = require("../services/pricing-plan.service");
+const PaymentMethodService = require("../services/payment-method.service");
 
 const storage = multer.diskStorage({
   destination: path.join(STORAGE_BASE_PATH, `profile-images`),
@@ -103,6 +105,64 @@ router.get(
     ResponseHandler.success(res, {
       data: result,
     });
+  })
+);
+
+router.get(
+  "/:id/pricing-plans",
+  asyncHandler(async (req, res) => {
+    const pricingPlans = await PricingPlanService.getPricingPlans({
+      userId: req.params.id,
+      businessId: req.query.businessId,
+    });
+
+    ResponseHandler.success(res, { data: pricingPlans });
+  })
+);
+
+router.post(
+  "/:id/payment-methods",
+  asyncHandler(async (req, res) => {
+    const clientSecret = await PaymentMethodService.addPaymentMethod({
+      userId: req.params.id,
+    });
+
+    ResponseHandler.success(res, { data: { clientSecret } });
+  })
+);
+
+router.get(
+  "/:id/payment-methods",
+  asyncHandler(async (req, res) => {
+    const result = await PaymentMethodService.getPaymentMethodByBusiness({
+      userId: req.params.id,
+    });
+
+    ResponseHandler.success(res, { data: result });
+  })
+);
+
+router.delete(
+  "/:id/payment-methods/:methodId",
+  asyncHandler(async (req, res) => {
+    await PaymentMethodService.deletePaymentMethod({
+      userId: req.params.id,
+      paymentMethodId: req.params.methodId,
+    });
+
+    ResponseHandler.success(res, { statusCode: 204 });
+  })
+);
+
+router.patch(
+  "/:id/payment-methods/:methodId",
+  asyncHandler(async (req, res) => {
+    await PaymentMethodService.setDefaultPaymentMethod({
+      userId: req.params.id,
+      paymentMethodId: req.params.methodId,
+    });
+
+    ResponseHandler.success(res, { message: "Payment method set as default." });
   })
 );
 

@@ -3,93 +3,84 @@ const { CARD_BRAND_LOGOS } = require("../utils/constants");
 const StripeService = require("./stripe.service");
 
 async function addPaymentMethod(data) {
-  const { businessId } = data;
+  const { userId } = data;
 
-  let business = await Business.findOne({
+  let user = await User.findOne({
     where: {
-      id: businessId,
+      id: userId,
     },
-    include: [
-      {
-        model: User,
-        as: "adminUser",
-        attributes: ["email"],
-      },
-    ],
+    attributes: ["email"],
     raw: true,
-    nest: true,
   });
 
-  if (!business) {
-    throw { statusCode: 404, message: "Invalid business id." };
+  if (!user) {
+    throw { statusCode: 404, message: "Invalid user id." };
   }
 
-  if (!business.stripeCustomerId) {
-    const customer = await StripeService.createStripeCustomer(
-      business.adminUser.email
-    );
+  if (!user.stripeCustomerId) {
+    const customer = await StripeService.createStripeCustomer(user.email);
 
-    await Business.update(
+    await User.update(
       {
         stripeCustomerId: customer.id,
       },
       {
         where: {
-          id: businessId,
+          id: userId,
         },
       }
     );
 
-    business.stripeCustomerId = customer.id;
+    user.stripeCustomerId = customer.id;
   }
 
   const intent = await StripeService.createStripeSetupIntent(
-    business.stripeCustomerId
+    user.stripeCustomerId
   );
 
   return intent.client_secret;
 }
 
 async function setDefaultPaymentMethod(data) {
-  const { businessId, paymentMethodId } = data;
+  const { userId, paymentMethodId } = data;
 
-  let business = await Business.findOne({
+  let user = await User.findOne({
     where: {
-      id: businessId,
+      id: userId,
     },
     raw: true,
   });
 
-  if (!business) {
-    throw { statusCode: 404, message: "Invalid business id." };
+  if (!user) {
+    throw { statusCode: 404, message: "Invalid user id." };
   }
 
   await StripeService.updateCustomerDefaultPaymentMethod(
-    business.stripeCustomerId,
+    user.stripeCustomerId,
     paymentMethodId
   );
 }
 
 async function getPaymentMethodByBusiness(data) {
-  const { businessId } = data;
+  const { userId } = data;
 
-  let business = await Business.findOne({
+  let user = await User.findOne({
     where: {
-      id: businessId,
+      id: userId,
     },
     raw: true,
   });
 
-  if (!business) {
-    throw { statusCode: 404, message: "Invalid business id." };
+  if (!user) {
+    throw { statusCode: 404, message: "Invalid user id." };
   }
 
-  if (!business.stripeCustomerId) {
+  if (!user.stripeCustomerId) {
     throw { statusCode: 400, message: "No payment method added yet." };
   }
 
   const paymentMethod = await StripeService.getCustomerPaymentMethod(
-    business.stripeCustomerId
+    user.stripeCustomerId
   );
 
   if (!paymentMethod) {
@@ -111,28 +102,28 @@ async function getPaymentMethodByBusiness(data) {
 }
 
 async function deletePaymentMethod(data) {
-  const { businessId, paymentMethodId } = data;
+  const { userId, paymentMethodId } = data;
 
-  let business = await Business.findOne({
+  let user = await User.findOne({
     where: {
-      id: businessId,
+      id: userId,
     },
     raw: true,
   });
 
-  if (!business) {
-    throw { statusCode: 404, message: "Invalid business id." };
+  if (!user) {
+    throw { statusCode: 404, message: "Invalid user id." };
   }
 
   await StripeService.detachStripePaymentMethod(paymentMethodId);
 
   const newPaymentMethod = await StripeService.getCustomerPaymentMethod(
-    business.stripeCustomerId
+    user.stripeCustomerId
   );
 
   if (newPaymentMethod) {
     await StripeService.updateCustomerDefaultPaymentMethod(
-      business.stripeCustomerId,
+      user.stripeCustomerId,
       newPaymentMethod.id
     );
   }
