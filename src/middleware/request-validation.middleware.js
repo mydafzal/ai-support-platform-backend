@@ -8,8 +8,8 @@ const validateRequest =
         schema.parse(req.body);
       } else if (dataToValidate === "query") {
         schema.parse(req.query);
-      } else if (dataToValidate === "param") {
-        schema.parse(req.param);
+      } else if (dataToValidate === "params") {
+        schema.parse(req.params);
       }
 
       next();
