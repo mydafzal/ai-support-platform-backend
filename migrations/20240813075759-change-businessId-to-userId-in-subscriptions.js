@@ -25,7 +25,7 @@ module.exports = {
     }
 
     if (columns.businessId) {
-      await queryInterface.removeColumn("subscriptions", "businessId");
+      await queryInterface.removeColumn("Subscriptions", "businessId");
     }
 
     if (!columns.userId) {
