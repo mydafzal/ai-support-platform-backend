@@ -43,6 +43,9 @@ module.exports = (sequelize, DataTypes) => {
       phone: {
         type: DataTypes.STRING,
       },
+      stripeCustomerId: {
+        type: DataTypes.STRING,
+      },
       password: { type: DataTypes.STRING },
       externalType: { type: DataTypes.ENUM("Google", "Apple") },
       emailVerified: { type: DataTypes.BOOLEAN, defaultValue: false },
