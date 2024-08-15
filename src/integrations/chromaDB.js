@@ -43,13 +43,18 @@ async function getVectoreStore(collectionName) {
 async function deleteCollection(collectionName) {
   const collections = await client.listCollections();
 
+  const collectionToDelete = await client.getCollection(collectionName);
+
+  const result = await collectionToDelete.delete();
+  console.log("deletion result -  ", result);
+
   console.log("collections ", collections?.length);
 
-  if (collections?.length > 0) {
-    await Promise.all(
-      collections.map((item) => client.deleteCollection({ name: item.name }))
-    );
-  }
+  // if (collections?.length > 0) {
+  //   await Promise.all(
+  //     collections.map((item) => client.deleteCollection({ name: item.name }))
+  //   );
+  // }
 }
 
 async function deleteChunksByUrl(collectionName, urlId) {
