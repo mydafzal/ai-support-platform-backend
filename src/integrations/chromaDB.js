@@ -10,6 +10,9 @@ client.heartbeat().then((result) => {
 });
 
 async function addToVectoreStore(collectionName, docs) {
+  console.log("collectionName - ", collectionName);
+  console.log("docs?.[0] - ", docs?.[0]);
+
   const vectorStore = await Chroma.fromDocuments(docs, new OpenAIEmbeddings(), {
     collectionName,
     url: `http://localhost:${process.env.CHROMA_DB_PORT}`,
