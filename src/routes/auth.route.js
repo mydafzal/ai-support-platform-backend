@@ -300,6 +300,8 @@ router.get("/verify-email", async (req, res) => {
 
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
 
+    console.log("decodedToken - ", decodedToken);
+
     let user = await User.findByPk(decodedToken.userId, {
       attributes: {
         exclude: ["resetPasswordToken", "password"],
@@ -313,6 +315,8 @@ router.get("/verify-email", async (req, res) => {
     let invitation = await Invitation.findOne({
       email: user.toJSON().email,
     });
+
+    console.log("invitation - ", invitation);
 
     if (invitation) {
       invitation = invitation.toJSON();
