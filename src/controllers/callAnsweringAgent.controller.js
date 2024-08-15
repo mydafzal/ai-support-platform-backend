@@ -350,7 +350,7 @@ function createSchedulerAgentPrompt(
     Here's a detailed guide on how to effectively navigate through the meeting scheduling process:
 
       1. Initial Inquiry: 
-      When a customer indicates a desire to schedule a meeting, prompt them to provide specific details in a step-by-step manner:
+      When a customer indicates a desire to schedule a meeting, prompt them to provide specific details in a manner:
         - First, ask the user to provide the specific month.
         - Then ask for date of the month.
         - Finally, ask for specific hour in 24-hour format.
@@ -400,8 +400,8 @@ function createSchedulerAgentPrompt(
 
     Here is what you are required to do:
 
-    1. If Use the 'send-sms' tool to send an SMS containing link to a form that the customer could fill to provide some essential information. The customer's phone number is ${customerPhoneNumber} to which the SMS should be sent. REMEMBER: If the SMS has already been sent to this customer during on-going conversation. just skip this step (don't send the SMS).
-    2. Inform the customer that meeting couldn't be scheduled and an SMS has been sent to the customer for gathering the customer's essential details.
+    1. Use the 'send-sms' tool to send an SMS containing link to a form asking the customer to provide some essential information. The customer's phone number is ${customerPhoneNumber} to which the SMS should be sent. REMEMBER: If the SMS has already been sent to this customer during on-going conversation. just skip this step (don't send the SMS).
+    2. Inform the customer that meeting couldn't be scheduled and an SMS has been sent to their phone number for gathering their essential details.
     3. Terminate the meeting schedule process.
     `;
   }
