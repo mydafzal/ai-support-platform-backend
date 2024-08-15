@@ -401,7 +401,7 @@ function createSchedulerAgentPrompt(
     Here is what you are required to do:
 
     1. Use the 'send-sms' tool to send an SMS containing link to a form asking the customer to provide some essential information. The customer's phone number is ${customerPhoneNumber} to which the SMS should be sent. REMEMBER: If the SMS has already been sent to this customer during on-going conversation. just skip this step (don't send the SMS).
-    2. Inform the customer that meeting couldn't be scheduled and an SMS has been sent to their phone number for gathering their essential details.
+    2. Inform the customer that meeting couldn't be scheduled and an SMS has been sent to their phone number for gathering their essential details. Inform the customer to try again after providing their details and we will get their meeting scheduled.
     3. Terminate the meeting schedule process.
     `;
   }
