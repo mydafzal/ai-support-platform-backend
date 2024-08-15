@@ -1,6 +1,9 @@
 const router = require("express").Router();
 
-const { deleteCollection } = require("../integrations/chromaDB");
+const {
+  deleteCollection,
+  deleteAllCollections,
+} = require("../integrations/chromaDB");
 
 const multer = require("multer");
 
@@ -96,6 +99,11 @@ router.delete("/documents/:id", async (req, res, next) => {
 
 router.delete("/:name", async (req, res) => {
   await deleteCollection(req.params.name);
+  res.send("deleted.");
+});
+
+router.delete("/all", async (req, res) => {
+  await deleteAllCollections();
   res.send("deleted.");
 });
 

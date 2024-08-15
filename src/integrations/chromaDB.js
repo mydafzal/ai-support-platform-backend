@@ -41,8 +41,6 @@ async function getVectoreStore(collectionName) {
 }
 
 async function deleteCollection(collectionName) {
-  const collections = await client.listCollections();
-
   const collectionToDelete = await client.getCollection({
     name: collectionName,
   });
@@ -52,14 +50,18 @@ async function deleteCollection(collectionName) {
 
   const result = await collectionToDelete.delete({ ids: allDocs.ids });
   console.log("deletion result -  ", result);
+}
+
+async function deleteAllCollections() {
+  const collections = await client.listCollections();
 
   console.log("collections ", collections?.length);
 
-  // if (collections?.length > 0) {
-  //   await Promise.all(
-  //     collections.map((item) => client.deleteCollection({ name: item.name }))
-  //   );
-  // }
+  if (collections?.length > 0) {
+    await Promise.all(
+      collections.map((item) => client.deleteCollection({ name: item.name }))
+    );
+  }
 }
 
 async function deleteChunksByUrl(collectionName, urlId) {
@@ -109,4 +111,5 @@ module.exports = {
   deleteChunksByUrl,
   getChunksByUrl,
   getChunksByDocument,
+  deleteAllCollections,
 };
