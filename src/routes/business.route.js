@@ -21,7 +21,6 @@ const CallService = require("../services/call.service");
 const CallTagService = require("../services/call-tags.service");
 const IntegrationService = require("../services/integration.service");
 const UserService = require("../services/user.service");
-const SubscriptionService = require("../services/subscription.service");
 const asyncHandler = require("../utils/async-handler");
 
 router.post(
@@ -225,17 +224,6 @@ router.delete(
     });
 
     ResponseHandler.success(res, { statusCode: 204 });
-  })
-);
-
-router.get(
-  "/:id/subscriptions",
-  asyncHandler(async (req, res) => {
-    const subscription = await SubscriptionService.getSubscriptionDetails({
-      businessId: req.params.id,
-    });
-
-    ResponseHandler.success(res, { data: subscription });
   })
 );
 
