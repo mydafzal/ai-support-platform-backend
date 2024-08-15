@@ -68,6 +68,28 @@ async function deleteChunksByDocument(collectionName, documentId) {
   });
 }
 
+async function getChunksByUrl(collectionName, urlId) {
+  const collection = await client.getCollection({ name: collectionName });
+
+  const urlChunks = await collection.get({
+    where: { urlId: `url-${urlId}` },
+  });
+
+  console.log("urlChunks - ", urlChunks);
+  return urlChunks;
+}
+
+async function getChunksByDocument(collectionName, documentId) {
+  const collection = await client.getCollection({ name: collectionName });
+
+  const documentChunks = await collection.get({
+    where: { documentId: `document-${documentId}` },
+  });
+
+  console.log("documentChunks - ", documentChunks);
+  return documentChunks;
+}
+
 module.exports = {
   addToVectoreStore,
   addTextToVectoreStore,
@@ -75,4 +97,6 @@ module.exports = {
   deleteCollection,
   deleteChunksByDocument,
   deleteChunksByUrl,
+  getChunksByUrl,
+  getChunksByDocument,
 };
