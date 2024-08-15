@@ -204,7 +204,8 @@ async function handleIncomingCall(request) {
   twiml.play(callDetails.greetingMessageUrl);
 
   twiml.gather({
-    speechTimeout: "auto",
+    // speechTimeout: "auto",
+    speechTimeout: "7",
     speechModel: "experimental_conversations",
     input: "speech",
     action: `${BASE_URL}/calls/speech-input`,
@@ -221,7 +222,7 @@ async function gatherSpeechInput() {
 
   twiml.gather({
     // speechTimeout: "auto",
-    speechTimeout: "15",
+    speechTimeout: "7",
     speechModel: "experimental_conversations",
     input: "speech",
     action: `${BASE_URL}/calls/speech-input`,
