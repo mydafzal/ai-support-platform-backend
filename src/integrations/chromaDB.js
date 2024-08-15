@@ -48,10 +48,10 @@ async function deleteCollection(collectionName) {
   });
 
   const allDocs = await collectionToDelete.get();
-  console.log("get result -  ", allDocs);
+  console.log("get result -  ", allDocs.ids);
 
-  // const result = await collectionToDelete.delete();
-  // console.log("deletion result -  ", result);
+  const result = await collectionToDelete.delete({ ids: allDocs.ids });
+  console.log("deletion result -  ", result);
 
   console.log("collections ", collections?.length);
 
