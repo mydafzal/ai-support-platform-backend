@@ -770,11 +770,19 @@ async function removeExtraTeamMembers(userId) {
 }
 
 async function getSubscriptionDetails(data) {
-  const { businessId } = data;
+  const { userId, businessId } = data;
+
+  if (!userId) {
+    throw { statusCode: 400, message: "userId is required" };
+  }
+
+  if (!businessId) {
+    throw { statusCode: 400, message: "businessId is required" };
+  }
 
   let subscription = await Subscription.findOne({
     where: {
-      businessId,
+      userId,
     },
     include: [
       {
@@ -785,17 +793,11 @@ async function getSubscriptionDetails(data) {
         },
       },
       {
-        model: SubscriptionFeature,
-        as: "subscriptionFeatures",
+        model: User,
+        as: "user",
         attributes: {
-          exclude: ["subscriptionId"],
+          include: ["stripeCustomerId"],
         },
-        include: [
-          {
-            model: Feature,
-            as: "feature",
-          },
-        ],
       },
     ],
     attributes: {
@@ -805,23 +807,43 @@ async function getSubscriptionDetails(data) {
     nest: true,
   });
 
-  subscription.subscriptionFeatures = subscription.subscriptionFeatures.map(
-    (item) => {
-      const featureName = item.feature.namePlural || item.feature.nameSingular;
-      item.featureName = capitalizeFirstLetterOfEachWord(featureName);
+  if (!subscription) {
+    throw { statusCode: 404, message: "Subscription not found" };
+  }
 
-      delete item.feature;
-      return item;
-    }
-  );
+  const businsessFeatures = await BusinessFeature.findAll({
+    where: {
+      businessId,
+    },
+    include: [
+      {
+        model: Feature,
+        as: "feature",
+      },
+    ],
+    raw: true,
+    nest: true,
+  });
 
-  const stripeSubscription = await stripe.subscriptions.retrieve(
+  console.log("subscription - ", subscription);
+
+  subscription.subscriptionFeatures = businsessFeatures.map((item) => {
+    const featureName = item.feature.namePlural || item.feature.nameSingular;
+    item.featureName = capitalizeFirstLetterOfEachWord(featureName);
+
+    delete item.feature;
+    return item;
+  });
+
+  const stripeSubscription = await StripeService.getStripeSubscription(
     subscription.stripeSubscriptionId
   );
 
   const formattedDate = getNextMonthlyResetDate(
     stripeSubscription.billing_cycle_anchor
   );
+
+  delete subscription.user;
 
   subscription = {
     ...subscription,
