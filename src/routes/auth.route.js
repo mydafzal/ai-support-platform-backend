@@ -313,7 +313,9 @@ router.get("/verify-email", async (req, res) => {
     }
 
     let invitation = await Invitation.findOne({
-      email: user.toJSON().email,
+      where: {
+        email: user.toJSON().email,
+      },
     });
 
     console.log("invitation - ", invitation);
