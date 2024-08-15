@@ -21,6 +21,7 @@ const validateRequest = require("../middleware/request-validation.middleware");
 const asyncHandler = require("../utils/async-handler");
 const PricingPlanService = require("../services/pricing-plan.service");
 const PaymentMethodService = require("../services/payment-method.service");
+const SubscriptionService = require("../services/subscription.service");
 
 const storage = multer.diskStorage({
   destination: path.join(STORAGE_BASE_PATH, `profile-images`),
@@ -163,6 +164,18 @@ router.patch(
     });
 
     ResponseHandler.success(res, { message: "Payment method set as default." });
+  })
+);
+
+router.get(
+  "/:id/subscriptions",
+  asyncHandler(async (req, res) => {
+    const subscription = await SubscriptionService.getSubscriptionDetails({
+      userId: req.params.id,
+      businessId: req.query.businessId,
+    });
+
+    ResponseHandler.success(res, { data: subscription });
   })
 );
 
