@@ -72,7 +72,13 @@ async function initializeAgent(knowledgeBaseName) {
       });
 
       console.log("urlInformationRetrieverTool response - ", data);
-      return data;
+
+      let output = "";
+      for (const doc of data) {
+        output += doc.pageContent;
+      }
+
+      return output;
     },
   });
 
@@ -97,7 +103,13 @@ async function initializeAgent(knowledgeBaseName) {
       });
 
       console.log("documentInformationRetrieverTool response - ", data);
-      return data;
+
+      let output = "";
+      for (const doc of data) {
+        output += doc.pageContent;
+      }
+
+      return output;
     },
   });
 
