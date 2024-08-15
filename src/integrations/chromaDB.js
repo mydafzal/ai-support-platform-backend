@@ -43,7 +43,9 @@ async function getVectoreStore(collectionName) {
 async function deleteCollection(collectionName) {
   const collections = await client.listCollections();
 
-  const collectionToDelete = await client.getCollection(collectionName);
+  const collectionToDelete = await client.getCollection({
+    name: collectionName,
+  });
 
   const result = await collectionToDelete.delete();
   console.log("deletion result -  ", result);

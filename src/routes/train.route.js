@@ -24,15 +24,19 @@ const TrainService = require("../services/train.service");
 
 const ResponseHandler = require("../utils/responseHandler");
 
-router.post("/chat", validateRequest(teachChatSchema), async (req, res, next) => {
-  try {
-    const result = await TrainService.trainWithChat(req.body);
-    ResponseHandler.success(res, { statusCode: 201, message: result });
-  } catch (error) {
-    console.log(error);
-    next(error);
+router.post(
+  "/chat",
+  validateRequest(teachChatSchema),
+  async (req, res, next) => {
+    try {
+      const result = await TrainService.trainWithChat(req.body);
+      ResponseHandler.success(res, { statusCode: 201, message: result });
+    } catch (error) {
+      console.log(error);
+      next(error);
+    }
   }
-});
+);
 
 router.post("/urls", validateRequest(addUrlsSchema), async (req, res, next) => {
   try {
