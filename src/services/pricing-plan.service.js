@@ -97,7 +97,7 @@ async function getPricingPlans(data) {
 
   pricingPlans = pricingPlans.map((item) => item.toJSON());
 
-  let businessesFeatures = await BusinessFeature.findOne({
+  let businessesFeatures = await BusinessFeature.findAll({
     where: {
       businessId,
     },
