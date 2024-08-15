@@ -17,14 +17,17 @@ const { DynamicStructuredTool } = require("@langchain/community/tools/dynamic");
 const {
   getVectoreStore,
   addTextToVectoreStore,
+  getChunksByUrl,
 } = require("../integrations/chromaDB");
 
 const { ExtendedRedisChatMemory } = require("../utils/helpers");
 const { redisClient } = require("../integrations/redis");
 
-let agent;
+// let agent;
 
-async function initializeAgent() {
+async function initializeAgent(knowledgeBaseName) {
+  const vectorStore = await getVectoreStore(knowledgeBaseName);
+
   const informationSaverTool = new DynamicStructuredTool({
     name: "information-saver",
     description:
@@ -48,7 +51,61 @@ async function initializeAgent() {
     },
   });
 
-  const tools = [informationSaverTool];
+  const urlInformationRetrieverTool = new DynamicStructuredTool({
+    name: "url-information-retriever",
+    description:
+      "To retrieve more information about a URL, use must use this tool.",
+    schema: z.object({
+      urlId: z.number().describe("Id of the URL"),
+      query: z
+        .string()
+        .describe(
+          "a query based on the user's input and the context of the current conversation to retrieve specific information about the URL that the user is interested in knowing"
+        ),
+    }),
+    func: async ({ urlId, query }) => {
+      console.log("urlId - ", urlId);
+      console.log("query - ", query);
+
+      const data = await vectorStore.similaritySearch(query, 2, {
+        urlId: `url-${urlId}`,
+      });
+
+      console.log("urlInformationRetrieverTool response - ", data);
+      return data;
+    },
+  });
+
+  const documentInformationRetrieverTool = new DynamicStructuredTool({
+    name: "document-information-retriever",
+    description:
+      "To retrieve more information about a document, use must use this tool.",
+    schema: z.object({
+      documentId: z.number().describe("Id of the document"),
+      query: z
+        .string()
+        .describe(
+          "a query based on the user's input and the context of the current conversation to retrieve specific information about the document that the user is interested in knowing"
+        ),
+    }),
+    func: async ({ documentId, query }) => {
+      console.log("documentId - ", documentId);
+      console.log("query - ", query);
+
+      const data = await vectorStore.similaritySearch(query, 2, {
+        documentId: `document-${documentId}`,
+      });
+
+      console.log("documentInformationRetrieverTool response - ", data);
+      return data;
+    },
+  });
+
+  const tools = [
+    informationSaverTool,
+    urlInformationRetrieverTool,
+    documentInformationRetrieverTool,
+  ];
 
   const chatModel = new ChatOpenAI({
     modelName: "gpt-3.5-turbo-1106",
@@ -57,7 +114,7 @@ async function initializeAgent() {
 
   const systemTemplate = `You are an AI designed to learn about businesses through conversation. Your goal is to understand and reason about the information provided by the business. Continuously ask dynamic and insightful questions to gather more details, seek clarification, and make sense of the given information. Adapt your responses based on the context of the conversation and the information about the business that is provided to you below. Your role is to simulate a learning process, so engaging. If the business introduces new concepts, adapt your questions to explore those areas. Always strive to deepen your understanding and maintain a conversational flow. If the business starts the conversation with a greeting message, reply to the greeting message in way that conveys to the business that they should start telling you about the business.
 
-  NOTE: The business may upload webpages and documents to provide additional information. These will be visible in the conversation. If the business refers to a specific URL or document, mention the exact URL or document name, or ask for details that may be in the uploaded materials. Base your response on the information from these uploads. If you lack information about a reference, clearly state that you don’t know, rather than guessing or creating details.
+  NOTE: The business may upload webpages and documents to provide additional information. These will be visible in the conversation. If the business refers to a specific URL or document, mention the exact URL or document name, or ask for details that may be in the uploaded materials. Base your response on the information from these uploads. If you lack information about a reference, clearly state that you don’t know, rather than guessing or creating details. To test your knowledge, the business may want to know what have you learned from the uploaded webpage urls and documents by asking questions. Since you know what webpage urls and documents have been uploaded as part of the current conversation, you can use the 'url-information-retriever' and 'document-information-retriever' tools to access information about urls or documents that isn't available in the current conversation. IMPORTANT: You must reason about and understand when to utlize which of these tools for retreiving infomartion specific to business's input. 
 
   Here's some information about the business that we already know:
   ==========
@@ -162,9 +219,11 @@ async function generateTrainingAgentResponse(
   businessName,
   threadId
 ) {
-  if (!agent) {
-    agent = await initializeAgent();
-  }
+  // if (!agent) {
+  //   agent = await initializeAgent();
+  // }
+
+  let agent = await initializeAgent(knowledgeBaseName);
 
   const vectorStore = await getVectoreStore(knowledgeBaseName);
   const data = await vectorStore.similaritySearch(businessName);
