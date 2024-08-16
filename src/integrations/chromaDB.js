@@ -8,23 +8,11 @@ const client = new ChromaClient({
 });
 
 client.heartbeat().then((result) => {
-  console.log("chroma running on port ", process.env.CHROMA_DB_PORT);
-  console.log("chroma connection status ", result);
+  console.log("chroma running on port", process.env.CHROMA_DB_PORT);
+  console.log("chroma connection status", result);
 });
 
-async function createChromaDBCollection(collectionName) {
-  console.log("collectionName - ", collectionName);
-
-  const newCollection = await client.createCollection({
-    name: collectionName,
-  });
-  console.log("createChromaDBCollection - response", newCollection);
-}
-
 async function addToVectoreStore(collectionName, docs) {
-  console.log("collectionName - ", collectionName);
-  console.log("docs?.[0] - ", docs?.[0]);
-
   const vectorStore = await Chroma.fromDocuments(docs, new OpenAIEmbeddings(), {
     collectionName,
     url: `http://localhost:${process.env.CHROMA_DB_PORT}`,

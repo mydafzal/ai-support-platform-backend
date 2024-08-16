@@ -21,7 +21,6 @@ const {
   AUDIO_FILES_BASE_PATH,
   AUDIO_FILES_BASE_URL,
 } = require("../utils/constants");
-const { createChromaDBCollection } = require("../integrations/chromaDB");
 
 async function addBusiness(data) {
   const {
@@ -99,10 +98,6 @@ async function addBusiness(data) {
   const greetingMessageUrl = `${AUDIO_FILES_BASE_URL}/business-${business.id}/greetingMessage.mp3`;
   const farewellMessageUrl = `${AUDIO_FILES_BASE_URL}/business-${business.id}/farewellMessage.mp3`;
 
-  let knowledgeBaseName = uuidv4();
-
-  await createChromaDBCollection(knowledgeBaseName);
-
   let assistant = await Assistant.create({
     businessId: business.id,
     name: assistantName,
@@ -112,7 +107,7 @@ async function addBusiness(data) {
     farewellMessageUrl,
     greetingMessage,
     farewellMessage,
-    knowledgeBaseName,
+    knowledgeBaseName: uuidv4(),
   });
 
   business.assistant = assistant.toJSON();
