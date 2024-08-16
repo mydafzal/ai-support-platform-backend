@@ -35,9 +35,9 @@ router.post(
   "/",
   validateRequest(preChatFormSchema),
   asyncHandler(async (req, res) => {
-    await ChatService.createChat(req.body);
+    const result = await ChatService.createChat(req.body);
 
-    ResponseHandler.success(res, { data: response });
+    ResponseHandler.success(res, { data: result });
   })
 );
 
@@ -103,18 +103,20 @@ router.patch(
 
 router.post(
   "/:id/upload",
-  upload.array("files"),
   validateRequest(chatFileUploadsSchema),
+  upload.array("files"),
   async (req, res) => {
-    // if (!req.files || req.files.length < 1) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "Please provide one or more files to upload.",
-    //   });
-    // }
+    if (!req.files || req.files.length < 1) {
+      return ResponseHandler.error(res, {
+        statusCode: 400,
+        message: "Please provide one or more files to upload.",
+      });
+    }
 
     const chatId = req.params.id;
     const userId = req.body.userId;
+
+    console.log("req.files - ", req.files);
 
     const { chat, messages } = await ChatService.uploadFilesInChat({
       chatId,

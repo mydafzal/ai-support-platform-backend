@@ -34,8 +34,7 @@ const updateChatSchema = z.object({
 });
 
 const chatFileUploadsSchema = z.object({
-  files: z.array(z.any()).min(1),
-  userId: z.number().optional(),
+  userId: z.coerce.number().optional(),
 });
 
 module.exports = {

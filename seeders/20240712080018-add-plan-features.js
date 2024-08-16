@@ -54,6 +54,13 @@ module.exports = {
         createdAt: currentTimestamp,
         updatedAt: currentTimestamp,
       },
+      {
+        planId: FREE_PLAN_ID,
+        featureId: COMPANIES_FEATURE_ID,
+        baseQuantity: 1,
+        createdAt: currentTimestamp,
+        updatedAt: currentTimestamp,
+      },
 
       // PRO Plan Features
       {
@@ -93,6 +100,13 @@ module.exports = {
       {
         planId: PRO_PLAN_ID,
         featureId: POWERED_BY_FEATURE_ID,
+        createdAt: currentTimestamp,
+        updatedAt: currentTimestamp,
+      },
+      {
+        planId: PRO_PLAN_ID,
+        featureId: COMPANIES_FEATURE_ID,
+        baseQuantity: 1,
         createdAt: currentTimestamp,
         updatedAt: currentTimestamp,
       },

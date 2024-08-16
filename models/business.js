@@ -54,11 +54,6 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "businessId",
         as: "chats",
       });
-
-      Business.hasMany(models.BusinessFeature, {
-        foreignKey: "businessId",
-        as: "businessFeatures",
-      });
     }
   }
   Business.init(
