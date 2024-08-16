@@ -21,6 +21,9 @@ const {
   AUDIO_FILES_BASE_PATH,
   AUDIO_FILES_BASE_URL,
 } = require("../utils/constants");
+const {
+  initalizeSubscriptionFeaturesofBusiness,
+} = require("./business-feature.service");
 
 async function addBusiness(data) {
   const {
@@ -111,6 +114,8 @@ async function addBusiness(data) {
   });
 
   business.assistant = assistant.toJSON();
+
+  await initalizeSubscriptionFeaturesofBusiness(userId, business.id);
   return business;
 }
 
