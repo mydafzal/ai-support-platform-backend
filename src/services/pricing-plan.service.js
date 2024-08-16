@@ -2,7 +2,7 @@ const {
   Feature,
   Subscription,
   PricingPlan,
-  BusinessFeature,
+  SubscriptionFeature,
 } = require("../../models");
 
 const { Sequelize } = require("sequelize");
@@ -34,15 +34,7 @@ async function getFeaturesOfPlan(planId) {
 }
 
 async function getPricingPlans(data) {
-  const { userId, businessId } = data;
-
-  if (!userId) {
-    throw { statusCode: 400, message: "userId is required" };
-  }
-
-  if (!businessId) {
-    throw { statusCode: 400, message: "businessId is required" };
-  }
+  const { userId } = data;
 
   let pricingPlans = await PricingPlan.findAll({
     include: [
@@ -65,6 +57,13 @@ async function getPricingPlans(data) {
           userId,
         },
         required: false,
+        include: [
+          {
+            model: SubscriptionFeature,
+            as: "subscriptionFeatures",
+            attributes: ["featureId", "quantity"],
+          },
+        ],
         attributes: ["id", "planId"],
       },
     ],
@@ -97,21 +96,12 @@ async function getPricingPlans(data) {
 
   pricingPlans = pricingPlans.map((item) => item.toJSON());
 
-  let businessFeatures = await BusinessFeature.findAll({
-    where: {
-      businessId,
-    },
-    raw: true,
-  });
-
-  if (businessFeatures.length < 1) {
-    throw { statusCode: 404, message: "Invalid business id" };
-  }
-
-  pricingPlans = pricingPlans.map((planData) => {
+  return pricingPlans.map((planData) => {
     if (planData.isCurrentPlan) {
+      const subscription = planData.subscriptions?.[0];
+
       planData.features.forEach((feature) => {
-        const subscriptionFeature = businessFeatures?.find(
+        const subscriptionFeature = subscription?.subscriptionFeatures.find(
           (sf) => sf.featureId === feature.id
         );
 
@@ -122,47 +112,23 @@ async function getPricingPlans(data) {
     delete planData.subscriptions;
 
     if (planData.basePlan) {
-      let firstBasePlan = pricingPlans.find(
+      let basePlanFeatures = pricingPlans.find(
         (plan) => plan.id == planData.basePlan.id
-      );
-
-      let secondBasePlan = pricingPlans.find(
-        (plan) => plan.id == firstBasePlan.basePlan?.id
-      );
+      ).features;
 
       // Remove features from this plan that are also included in its base plan.
       planData.features = planData.features.filter((feature) => {
-        let existsInBasePlan;
-
-        existsInBasePlan = firstBasePlan.features.some(
+        const existsInBasePlan = basePlanFeatures.some(
           (item) =>
             item.id === feature.id && item.baseQuantity === feature.baseQuantity
         );
 
-        if (existsInBasePlan) {
-          return false;
-        }
-
-        if (secondBasePlan) {
-          existsInBasePlan = secondBasePlan.features.some(
-            (item) =>
-              item.id === feature.id &&
-              item.baseQuantity === feature.baseQuantity
-          );
-
-          if (existsInBasePlan) {
-            return false;
-          }
-        }
-
-        return true;
+        return !existsInBasePlan;
       });
     }
 
     return planData;
   });
-
-  return pricingPlans;
 }
 
 const PricingPlanService = { getFeaturesOfPlan, getPricingPlans };
