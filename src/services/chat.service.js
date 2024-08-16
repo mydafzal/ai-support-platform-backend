@@ -64,13 +64,12 @@ async function getChatsByBusiness(data) {
       },
     ],
     order: [["createdAt", "DESC"]],
-    raw: true,
-    nest: true,
   });
+
+  chats = chats.map((item) => item.toJSON());
 
   return await Promise.all(
     chats.map(async (chat) => {
-      chat = chat.toJSON();
       const lastMessage = await redisClient.lIndex(`chat-${chat.id}`, -1);
 
       if (lastMessage) {
