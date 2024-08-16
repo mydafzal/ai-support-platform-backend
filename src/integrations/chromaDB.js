@@ -78,5 +78,4 @@ module.exports = {
   deleteCollection,
   deleteChunksByDocument,
   deleteChunksByUrl,
-  createChromaDBCollection,
 };
