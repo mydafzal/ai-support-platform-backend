@@ -9,6 +9,15 @@ client.heartbeat().then((result) => {
   console.log("chroma connection status", result);
 });
 
+async function createChromaDBCollection(collectionName) {
+  console.log("collectionName - ", collectionName);
+
+  const newCollection = await client.createCollection({
+    name: collectionName,
+  });
+  console.log("createChromaDBCollection - response", newCollection);
+}
+
 async function addToVectoreStore(collectionName, docs) {
   console.log("collectionName - ", collectionName);
   console.log("docs?.[0] - ", docs?.[0]);
@@ -78,4 +87,5 @@ module.exports = {
   deleteCollection,
   deleteChunksByDocument,
   deleteChunksByUrl,
+  createChromaDBCollection,
 };
