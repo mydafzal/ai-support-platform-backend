@@ -9,9 +9,9 @@ module.exports = (sequelize, DataTypes) => {
         as: "plans",
       });
 
-      Feature.hasMany(models.BusinessFeature, {
+      Feature.hasMany(models.SubscriptionFeature, {
         foreignKey: "featureId",
-        as: "businessFeatures",
+        as: "subscriptionFeatures",
       });
     }
   }
