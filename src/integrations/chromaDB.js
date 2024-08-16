@@ -3,10 +3,13 @@ const { ChromaClient } = require("chromadb");
 const { Chroma } = require("@langchain/community/vectorstores/chroma");
 const { OpenAIEmbeddings } = require("@langchain/openai");
 
-const client = new ChromaClient();
+const client = new ChromaClient({
+  path: `http://localhost:${process.env.CHROMA_DB_PORT}`,
+});
 
 client.heartbeat().then((result) => {
-  console.log("chroma connection status", result);
+  console.log("chroma running on port ", process.env.CHROMA_DB_PORT);
+  console.log("chroma connection status ", result);
 });
 
 async function createChromaDBCollection(collectionName) {
