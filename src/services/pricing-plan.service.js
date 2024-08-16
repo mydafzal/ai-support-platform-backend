@@ -97,17 +97,21 @@ async function getPricingPlans(data) {
 
   pricingPlans = pricingPlans.map((item) => item.toJSON());
 
-  let businessesFeatures = await BusinessFeature.findAll({
+  let businessFeatures = await BusinessFeature.findAll({
     where: {
       businessId,
     },
     raw: true,
   });
 
+  if (businessFeatures.length < 1) {
+    throw { statusCode: 404, message: "Invalid business id" };
+  }
+
   pricingPlans = pricingPlans.map((planData) => {
     if (planData.isCurrentPlan) {
       planData.features.forEach((feature) => {
-        const subscriptionFeature = businessesFeatures?.find(
+        const subscriptionFeature = businessFeatures?.find(
           (sf) => sf.featureId === feature.id
         );
 
