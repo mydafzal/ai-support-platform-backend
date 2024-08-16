@@ -20,10 +20,10 @@ const { v4: uuidv4 } = require("uuid");
 const {
   AUDIO_FILES_BASE_PATH,
   AUDIO_FILES_BASE_URL,
+  COMPANIES_FEATURE_ID,
+  TEAM_MEMBERS_FEATURE_ID,
 } = require("../utils/constants");
-const {
-  initalizeSubscriptionFeaturesofBusiness,
-} = require("./business-feature.service");
+const SubscriptionService = require("./subscription.service");
 
 async function addBusiness(data) {
   const {
@@ -50,6 +50,19 @@ async function addBusiness(data) {
     };
   }
 
+  const hasReachedCompaniesLimit =
+    await SubscriptionService.hasReachedFeatureLimit(
+      COMPANIES_FEATURE_ID,
+      userId
+    );
+
+  if (hasReachedCompaniesLimit) {
+    throw {
+      statuCode: 400,
+      message: "Operation denied: Companies limit has been reached",
+    };
+  }
+
   // const twilioNumber = await buyPhoneNumber();
   // const verifyServiceId = await createVerifyService(businessName);
 
@@ -67,6 +80,12 @@ async function addBusiness(data) {
     userId: user.id,
     role: "Admin",
   });
+
+  await SubscriptionService.updateFeatureUsage(
+    COMPANIES_FEATURE_ID,
+    business.id,
+    1
+  );
 
   let promises = [
     convertTextToSpeech(greetingMessage, voiceId),
@@ -115,7 +134,6 @@ async function addBusiness(data) {
 
   business.assistant = assistant.toJSON();
 
-  await initalizeSubscriptionFeaturesofBusiness(userId, business.id);
   return business;
 }
 
@@ -279,6 +297,12 @@ async function removeMember(data) {
       userId: memberId,
     },
   });
+
+  await SubscriptionService.updateFeatureUsage(
+    TEAM_MEMBERS_FEATURE_ID,
+    businessId,
+    -1
+  );
 }
 
 async function getBusinessDetails(data) {
@@ -316,6 +340,12 @@ async function deleteBusiness(data) {
       id: businessId,
     },
   });
+
+  await SubscriptionService.updateFeatureUsage(
+    COMPANIES_FEATURE_ID,
+    businessId,
+    -1
+  );
 }
 
 const BusinessService = {
