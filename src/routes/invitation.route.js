@@ -10,7 +10,6 @@ const jwt = require("jsonwebtoken");
 
 const { sendEmail } = require("../integrations/nodemailer");
 const { generateEmailLink } = require("../utils/helpers");
-const { Op } = require("sequelize");
 
 const SubscriptionService = require("../services/subscription.service");
 const { TEAM_MEMBERS_FEATURE_ID } = require("../utils/constants");
@@ -44,6 +43,9 @@ router.post(
       nest: true,
     });
 
+    business.adminUser = business.users;
+    delete business.users;
+
     if (!business) {
       ResponseHandler.error(res, {
         statusCode: 404,
@@ -51,17 +53,17 @@ router.post(
       });
     }
 
-    // const hasReachedLimit = await SubscriptionService.hasReachedFeatureLimit(
-    //   TEAM_MEMBERS_FEATURE_ID,
-    //   businessId
-    // );
+    const hasReachedLimit = await SubscriptionService.hasReachedFeatureLimit(
+      TEAM_MEMBERS_FEATURE_ID,
+      business.adminUser.id
+    );
 
-    // if (hasReachedLimit) {
-    //   ResponseHandler.error(res, {
-    //     statusCode: 400,
-    //     message: "Operation denied: Feature limit has been exceeded.",
-    //   });
-    // }
+    if (hasReachedLimit) {
+      ResponseHandler.error(res, {
+        statusCode: 400,
+        message: "Operation denied: Feature limit has been exceeded.",
+      });
+    }
 
     let invitation = await Invitation.create({
       email,
@@ -87,18 +89,15 @@ router.post(
       { where: { id: invitation.id } }
     );
 
-    business.adminUser = business.users;
-    delete business.users;
-
     const emailLink = generateEmailLink("invites", `token=${invitationToken}`);
     const emailTemplate = `${business.adminUser.email} invited you to ${business.name}. Click <a href="${emailLink}">here</a> to accept the invitation.`;
     await sendEmail(email, emailTemplate);
 
-    // await SubscriptionService.updateFeatureUsage(
-    //   TEAM_MEMBERS_FEATURE_ID,
-    //   businessId,
-    //   1
-    // );
+    await SubscriptionService.updateFeatureUsage(
+      TEAM_MEMBERS_FEATURE_ID,
+      businessId,
+      1
+    );
 
     ResponseHandler.success(res, {
       statusCode: 201,
@@ -234,11 +233,11 @@ router.delete(
 
       await sendEmail(invitation.email, emailTemplate);
 
-      // await SubscriptionService.updateFeatureUsage(
-      //   TEAM_MEMBERS_FEATURE_ID,
-      //   business.id,
-      //   -1
-      // );
+      await SubscriptionService.updateFeatureUsage(
+        TEAM_MEMBERS_FEATURE_ID,
+        business.id,
+        -1
+      );
     }
 
     ResponseHandler.success(res, { statusCode: 204 });

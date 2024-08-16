@@ -99,18 +99,17 @@ async function handleIncomingCall(request) {
     return twiml.toString();
   }
 
-  let hasReachedLimit = false;
-  // let hasReachedLimit = await SubscriptionService.hasReachedFeatureLimit(
-  //   CALL_MINUTES_FEATURE_ID,
-  //   business.id
-  // );
+  let hasReachedLimit = await SubscriptionService.hasReachedFeatureLimit(
+    CALL_MINUTES_FEATURE_ID,
+    business.adminUser.id
+  );
 
-  // if (hasReachedLimit) {
-  //   twiml.say(
-  //     "Sorry, we can't handle your call at the moment. please try again later."
-  //   );
-  //   return twiml.toString();
-  // }
+  if (hasReachedLimit) {
+    twiml.say(
+      "Sorry, we can't handle your call at the moment. please try again later."
+    );
+    return twiml.toString();
+  }
 
   await Call.create({
     id: callId,
@@ -156,10 +155,10 @@ async function handleIncomingCall(request) {
 
   console.log("count - ", count);
 
-  // hasReachedLimit = await SubscriptionService.hasReachedFeatureLimit(
-  //   MEETING_FEATURE_ID,
-  //   business.id
-  // );
+  hasReachedLimit = await SubscriptionService.hasReachedFeatureLimit(
+    MEETING_FEATURE_ID,
+    business.adminUser.id
+  );
 
   // Businesses must connect both Google Calendar and Calendly integrations so that customers can schedule meetings on phone call.
   let canScheduleMeeting =
