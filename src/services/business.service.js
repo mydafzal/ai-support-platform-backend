@@ -308,11 +308,22 @@ async function getBusinessDetails(data) {
   return business;
 }
 
+async function deleteBusiness(data) {
+  const { businessId } = data;
+
+  await Business.destroy({
+    where: {
+      id: businessId,
+    },
+  });
+}
+
 const BusinessService = {
   addBusiness,
   updateBusiness,
   removeMember,
   getBusinessDetails,
+  deleteBusiness,
 };
 
 module.exports = BusinessService;

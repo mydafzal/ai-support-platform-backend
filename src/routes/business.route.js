@@ -8,7 +8,7 @@ const validateRequest = require("../middleware/request-validation.middleware");
 const {
   addBusinessSchema,
   updateBusinessSchema,
-  getBusinessSchema,
+  businessIdSchema,
 } = require("../validators/business.validator");
 
 const BusinessService = require("../services/business.service");
@@ -37,7 +37,7 @@ router.post(
 
 router.get(
   "/:id",
-  validateRequest(getBusinessSchema, "params"),
+  validateRequest(businessIdSchema, "params"),
   asyncHandler(async (req, res) => {
     const result = await BusinessService.getBusinessDetails({
       businessId: req.params.id,
@@ -47,6 +47,18 @@ router.get(
       statusCode: 200,
       data: result,
     });
+  })
+);
+
+router.delete(
+  "/:id",
+  validateRequest(businessIdSchema, "params"),
+  asyncHandler(async (req, res) => {
+    await BusinessService.deleteBusiness({
+      businessId: req.params.id,
+    });
+
+    ResponseHandler.success(res, { statusCode: 204 });
   })
 );
 
