@@ -9,7 +9,11 @@ const {
   BusinessMembership,
 } = require("../../models");
 
-const { FREE_PLAN_ID, TEAM_MEMBERS_FEATURE_ID } = require("../utils/constants");
+const {
+  FREE_PLAN_ID,
+  TEAM_MEMBERS_FEATURE_ID,
+  COMPANIES_FEATURE_ID,
+} = require("../utils/constants");
 const {
   calculateYearlyPrice,
   capitalizeFirstLetterOfEachWord,
@@ -128,7 +132,11 @@ async function createSubscription(data) {
       subscriptionId: subscription.id,
       featureId: item.featureId,
       quantity: customFeature ? customFeature.quantity : item.baseQuantity,
-      usedQuantity: item.featureId == TEAM_MEMBERS_FEATURE_ID ? 1 : 0,
+      usedQuantity:
+        item.featureId == TEAM_MEMBERS_FEATURE_ID ||
+        item.featureId == COMPANIES_FEATURE_ID
+          ? 1
+          : 0,
     };
   });
 
@@ -479,7 +487,11 @@ async function handleSubscriptionCancellation(
     subscriptionId: subscription.id,
     featureId: item.featureId,
     quantity: item.baseQuantity,
-    usedQuantity: 0,
+    usedQuantity:
+      item.featureId == TEAM_MEMBERS_FEATURE_ID ||
+      item.featureId == COMPANIES_FEATURE_ID
+        ? 1
+        : 0,
   }));
 
   await SubscriptionFeature.bulkCreate(features);
