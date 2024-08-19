@@ -338,7 +338,7 @@ async function updateSubscription(data) {
         quantity: item.baseQuantity,
       }));
 
-    return SubscriptionFeature.bulkCreate(
+    await SubscriptionFeature.bulkCreate(
       newPlanFeaturesNotInCurrentSubscription
     );
   }
@@ -374,7 +374,7 @@ async function updateSubscription(data) {
   await Promise.all(promises);
 
   if (isDowngradingSubscription) {
-    await removeExtraTeamMembers(subscription.userId, subscription.userId);
+    await removeExtraTeamMembers(subscription.userId, subscription.id);
   }
 
   return "Subscription updated succesfully.";
@@ -692,6 +692,9 @@ async function removeExtraTeamMembers(userId, subscriptionId) {
   });
 
   const businessIds = businesses.map((item) => item.businessId);
+
+  console.log("TEAM_MEMBERS_FEATURE_ID -", TEAM_MEMBERS_FEATURE_ID);
+  console.log("subscriptionId -", subscriptionId);
 
   const subscriptionFeature = await SubscriptionFeature.findOne({
     where: {
