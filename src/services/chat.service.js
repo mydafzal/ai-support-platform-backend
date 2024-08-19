@@ -609,9 +609,9 @@ async function sendMessage(data) {
         },
       },
     ],
-    raw: true,
-    nest: true,
   });
+
+  chat = chat.toJSON();
 
   if (response?.name === "HumanConnector" && chat.connectedUser) {
     // Trigger chat transfer notification to the human agent.

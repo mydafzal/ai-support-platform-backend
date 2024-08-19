@@ -18,6 +18,8 @@ const {
   BusinessIntegration,
   Integration,
   Business,
+  GroupMembership,
+  BusinessMembership,
 } = require("../../../models");
 
 const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
@@ -384,13 +386,13 @@ function createAgentAvailabilityCheckerTool() {
     func: async ({ chatId }) => {
       const chatMessages = await redisClient.lRange(`chat-${chatId}`, 0, -1);
 
-      let teamGroupId;
+      let groupId;
 
       for (let i = chatMessages.length - 1; i >= 0; i--) {
         const item = JSON.parse(chatMessages[i]);
 
         if (item["type"] === "pre-chat-form") {
-          teamGroupId = item.content.teamGroupId;
+          groupId = item.content.groupId;
           break;
         }
       }
@@ -399,9 +401,8 @@ function createAgentAvailabilityCheckerTool() {
         where: {
           id: chatId,
         },
+        raw: true,
       });
-
-      chat = chat.toJSON();
 
       let chats = await Chat.findAll({
         where: {
@@ -410,23 +411,43 @@ function createAgentAvailabilityCheckerTool() {
           },
           businessId: chat.businessId,
         },
+        raw: true,
       });
 
-      const connectedUserIds = chats.map(
-        (item) => item.toJSON().connectedUserId
-      );
+      const connectedUserIds = chats.map((item) => item.connectedUserId);
+
+      const availableMembers = await BusinessMembership.findAll({
+        where: {
+          businessId: chat.businessId,
+          userId: {
+            [Op.notIn]: connectedUserIds,
+          },
+        },
+        raw: true,
+      });
+
+      let availableMemberIds = availableMembers.map((item) => item.userId);
+
+      if (groupId) {
+        const availableMembersofGroup = await GroupMembership.findAll({
+          where: {
+            groupId,
+            userId: {
+              [Op.in]: availableMemberIds,
+            },
+          },
+          raw: true,
+        });
+
+        availableMemberIds = availableMembersofGroup.map((item) => item.userId);
+      }
 
       let whereCondition = {
         id: {
-          [Op.notIn]: connectedUserIds,
+          [Op.in]: availableMemberIds,
         },
         status: ACCEPTING_CHATS,
-        businessId: chat.businessId,
       };
-
-      if (teamGroupId) {
-        whereCondition.teamGroupId = teamGroupId;
-      }
 
       let user = await User.findOne({
         where: whereCondition,
