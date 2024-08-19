@@ -9,12 +9,11 @@ module.exports = (io, socket) => {
   const sendMessage = async (payload, callback) => {
     const { chatId, message } = payload;
 
-    const senderId = isValidInteger(userId) ? parseInt(userId) : null;
-
-    let chat = await Chat.findOne({
+    const chat = await Chat.findOne({
       where: {
         id: chatId,
       },
+      raw: true,
     });
 
     if (!chat) {
@@ -22,27 +21,26 @@ module.exports = (io, socket) => {
       return;
     }
 
-    chat = chat.toJSON();
+    const sender = isValidInteger(userId) ? "agent" : "customer";
 
     let user;
 
-    if (senderId) {
+    if (sender === "agent") {
       user = await User.findOne({
         where: {
-          id: senderId,
+          id: userId,
         },
         attributes: ["profileImageUrl"],
+        raw: true,
       });
-
-      user = user?.toJSON();
     }
 
     const humanMessage = {
       id: uuidv4(),
       type: "human",
-      senderId,
+      senderId: sender === "agent" ? userId : "",
       senderProfileImageUrl: user ? user.profileImageUrl : null,
-      receiverId: senderId ? null : chat.connectedUserId,
+      receiverId: sender === "agent" ? null : chat.connectedUserId,
       content: message,
       status: "Delivered",
       timestamp: new Date().getTime(),
@@ -51,12 +49,8 @@ module.exports = (io, socket) => {
     await redisClient.rPush(`chat-${chatId}`, JSON.stringify(humanMessage));
 
     let receiverId;
-
-    if (senderId) {
-      receiverId = `chat-${chatId}`;
-    } else {
-      receiverId = `${userId}`;
-    }
+    if (sender === "agent") receiverId = `chat-${chatId}`;
+    else receiverId = `${chat.connectedUserId}`;
 
     socket
       .to(receiverId)
@@ -75,22 +69,11 @@ module.exports = (io, socket) => {
   const handleTyping = async (payload) => {
     const { chatId, isTyping } = payload;
 
-    const senderId = isValidInteger(userId) ? parseInt(userId) : null;
-
-    let receiverId;
-
-    if (senderId) {
-      receiverId = `chat-${chatId}`;
-    } else {
-      receiverId = `${userId}`;
-    }
-
-    socket.to(receiverId).emit("chat:typing", { chatId, isTyping });
-
-    let chat = await Chat.findOne({
+    const chat = await Chat.findOne({
       where: {
         id: chatId,
       },
+      raw: true,
     });
 
     if (!chat) {
@@ -98,7 +81,14 @@ module.exports = (io, socket) => {
       return;
     }
 
-    chat = chat.toJSON();
+    const sender = isValidInteger(userId) ? "agent" : "customer";
+
+    let receiverId;
+
+    if (sender === "agent") receiverId = `chat-${chatId}`;
+    else receiverId = `${chat.connectedUserId}`;
+
+    socket.to(receiverId).emit("chat:typing", { chatId, isTyping });
 
     const roomName = `team-${chat.businessId}`;
     socket.to(roomName).emit("chat:typing", { chatId, isTyping });
