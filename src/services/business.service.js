@@ -335,6 +335,17 @@ async function getBusinessDetails(data) {
 async function deleteBusiness(data) {
   const { businessId } = data;
 
+  const business = await Business.findOne({
+    where: {
+      id: businessId,
+    },
+    raw: true,
+  });
+
+  if (!business) {
+    throw { statuCode: 404, message: "Business doesn't exist" };
+  }
+
   await SubscriptionService.updateFeatureUsage(
     COMPANIES_FEATURE_ID,
     businessId,
