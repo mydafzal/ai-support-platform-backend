@@ -335,17 +335,17 @@ async function getBusinessDetails(data) {
 async function deleteBusiness(data) {
   const { businessId } = data;
 
-  await Business.destroy({
-    where: {
-      id: businessId,
-    },
-  });
-
   await SubscriptionService.updateFeatureUsage(
     COMPANIES_FEATURE_ID,
     businessId,
     -1
   );
+
+  await Business.destroy({
+    where: {
+      id: businessId,
+    },
+  });
 }
 
 const BusinessService = {
