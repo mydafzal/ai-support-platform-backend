@@ -8,6 +8,7 @@ const {
   Business,
   BusinessMembership,
   User,
+  Invitation,
 } = require("../../models");
 
 const { convertTextToSpeech } = require("../integrations/textToSpeech");
@@ -297,6 +298,23 @@ async function removeMember(data) {
       userId: memberId,
     },
   });
+
+  const user = await User.findOne({
+    where: {
+      id: memberId,
+    },
+    attributes: ["email"],
+    raw: true,
+  });
+
+  if (user) {
+    await Invitation.destroy({
+      where: {
+        businessId,
+        email: user.email,
+      },
+    });
+  }
 
   await SubscriptionService.updateFeatureUsage(
     TEAM_MEMBERS_FEATURE_ID,
