@@ -258,7 +258,7 @@ router.get(
         { model: Business, as: "business", attributes: ["id", "name"] },
       ],
       attributes: {
-        exclude: ["businessId", "token"],
+        exclude: ["businessId"],
       },
       raw: true,
       nest: true,
