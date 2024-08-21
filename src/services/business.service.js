@@ -185,9 +185,6 @@ async function updateBusiness(data) {
     raw: true,
   });
 
-  let greetingMessageUrl = assistant.greetingMessageUrl;
-  let farewellMessageUrl = assistant.farewellMessageUrl;
-
   const currentGreetingMessage = assistant.greetingMessage;
   const currentFarewellMessage = assistant.farewellMessage;
   voiceId = voiceId || assistant.voiceId;
@@ -260,17 +257,7 @@ async function updateBusiness(data) {
     }
   );
 
-  return {
-    businessId,
-    businessName,
-    assistantName,
-    voiceName,
-    voiceId,
-    greetingMessage,
-    farewellMessage,
-    greetingMessageUrl,
-    farewellMessageUrl,
-  };
+  return await getBusinessDetails({ businessId });
 }
 
 async function removeMember(data) {
