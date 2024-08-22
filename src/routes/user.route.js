@@ -11,6 +11,7 @@ const {
   addUserSchema,
   unviewedChatsSchema,
   updateUserSchema,
+  userIdSchema,
 } = require("../validators/user.validator");
 
 const UserService = require("../services/user.service");
@@ -176,6 +177,18 @@ router.get(
     });
 
     ResponseHandler.success(res, { data: subscription });
+  })
+);
+
+router.get(
+  "/:id/business-memberships",
+  validateRequest(userIdSchema, "params"),
+  asyncHandler(async (req, res) => {
+    const result = await UserService.getMembershipsOfUser({
+      userId: req.params.id,
+    });
+
+    ResponseHandler.success(res, { data: result });
   })
 );
 
