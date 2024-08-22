@@ -9,7 +9,6 @@ async function addPaymentMethod(data) {
     where: {
       id: userId,
     },
-    attributes: ["email"],
     raw: true,
   });
 
