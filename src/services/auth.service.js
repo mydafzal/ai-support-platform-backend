@@ -223,6 +223,7 @@ async function verifyEmail(data) {
   );
 
   delete user.emailVerificationToken;
+  user.emailVerified = true;
 
   const businessMemberships = await BusinessMembership.findAll({
     where: {
