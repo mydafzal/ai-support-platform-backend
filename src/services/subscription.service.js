@@ -545,6 +545,10 @@ async function updateFeatureUsage(featureId, businessId, additionalUsage) {
     raw: true,
   });
 
+  if (!subscription) {
+    return;
+  }
+
   const subscriptionFeature = await SubscriptionFeature.findOne({
     where: {
       featureId,
@@ -573,6 +577,10 @@ async function hasReachedFeatureLimit(featureId, userId) {
     },
     raw: true,
   });
+
+  if (!subscription) {
+    return false;
+  }
 
   const subscriptionFeature = await SubscriptionFeature.findOne({
     where: {
