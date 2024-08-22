@@ -357,6 +357,17 @@ async function getBusinessesOfUser(data) {
   return user.toJSON().businesses;
 }
 
+async function getMembershipsOfUser(data) {
+  const { userId } = data;
+
+  return await BusinessMembership.findAll({
+    where: {
+      userId,
+    },
+    raw: true,
+  });
+}
+
 const UserService = {
   registerUser,
   updateUser,
@@ -365,5 +376,6 @@ const UserService = {
   getUsersByBusiness,
   createMembershipsForAcceptedInvitations,
   getBusinessesOfUser,
+  getMembershipsOfUser,
 };
 module.exports = UserService;

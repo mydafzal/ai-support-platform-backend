@@ -17,4 +17,13 @@ const unviewedChatsSchema = z.object({
   viewed: z.coerce.boolean().optional(),
 });
 
-module.exports = { addUserSchema, updateUserSchema, unviewedChatsSchema };
+const userIdSchema = z.object({
+  id: z.coerce.number(),
+});
+
+module.exports = {
+  addUserSchema,
+  updateUserSchema,
+  unviewedChatsSchema,
+  userIdSchema,
+};
