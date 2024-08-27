@@ -66,7 +66,8 @@ router.post("/", async (req, res) => {
     } else if (integration.name === "HubSpot") {
       response = await getHubSpotAccessToken(code, redirectUri);
     } else if (integration.name === "Google Calendar") {
-      response = await getGoogleOAuthAccessToken(decodeURIComponent(code));
+      // response = await getGoogleOAuthAccessToken(decodeURIComponent(code));
+      response = await getGoogleOAuthAccessToken(code);
     }
 
     const { accessToken, refreshToken, expiresIn } = response;
