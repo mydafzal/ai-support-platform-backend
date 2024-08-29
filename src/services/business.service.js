@@ -11,7 +11,10 @@ const {
   Invitation,
 } = require("../../models");
 
-const { convertTextToSpeech } = require("../integrations/textToSpeech");
+const {
+  convertTextToSpeech,
+  cloneVoice,
+} = require("../integrations/textToSpeech");
 
 const fs = require("fs/promises");
 const fsWithoutPromises = require("fs");
@@ -27,7 +30,7 @@ const {
 const SubscriptionService = require("./subscription.service");
 
 async function addBusiness(data) {
-  const {
+  let {
     userId,
     businessName,
     assistantName,
@@ -35,6 +38,7 @@ async function addBusiness(data) {
     voiceId,
     greetingMessage,
     farewellMessage,
+    file,
   } = data;
 
   let user = await User.findByPk(userId, {
@@ -87,6 +91,13 @@ async function addBusiness(data) {
     business.id,
     1
   );
+
+  if (file) {
+    voiceId = await cloneVoice(file.path, assistantName, userId);
+    voiceName = assistantName;
+
+    await fs.unlink(file.path);
+  }
 
   let promises = [
     convertTextToSpeech(greetingMessage, voiceId),
@@ -148,6 +159,7 @@ async function updateBusiness(data) {
     greetingMessage,
     farewellMessage,
     leadMode,
+    file,
   } = data;
 
   let count = await Business.count({
@@ -188,8 +200,30 @@ async function updateBusiness(data) {
   const currentGreetingMessage = assistant.greetingMessage;
   const currentFarewellMessage = assistant.farewellMessage;
   voiceId = voiceId || assistant.voiceId;
+  voiceName = voiceName || assistant.voiceName;
 
-  if (greetingMessage || (voiceId && voiceName)) {
+  if (file) {
+    const adminUser = await BusinessMembership.findOne({
+      where: {
+        businessId,
+        role: "Admin",
+      },
+      attributes: ["userId"],
+      raw: true,
+    });
+
+    voiceId = await cloneVoice(file.path, voiceName, adminUser.userId);
+
+    console.log("cloned voice id - ", voiceId);
+
+    await fs.unlink(file.path);
+  }
+
+  if (
+    greetingMessage ||
+    (voiceId && voiceName) ||
+    voiceId != assistant.voiceId
+  ) {
     let greetingMessageSpeech = await convertTextToSpeech(
       greetingMessage || currentGreetingMessage,
       voiceId
@@ -210,11 +244,13 @@ async function updateBusiness(data) {
       `${businessDataDirectoryPath}/greetingMessage.mp3`,
       greetingMessageSpeech
     );
-
-    greetingMessageUrl = `${AUDIO_FILES_BASE_URL}/business-${businessId}/greetingMessage.mp3`;
   }
 
-  if (farewellMessage || (voiceId && voiceName)) {
+  if (
+    farewellMessage ||
+    (voiceId && voiceName) ||
+    voiceId != assistant.voiceId
+  ) {
     let farewellMessageSpeech = await convertTextToSpeech(
       farewellMessage || currentFarewellMessage,
       voiceId
@@ -235,12 +271,9 @@ async function updateBusiness(data) {
       `${businessDataDirectoryPath}/farewellMessage.mp3`,
       farewellMessageSpeech
     );
-
-    farewellMessageUrl = `${AUDIO_FILES_BASE_URL}/business-${businessId}/farewellMessage.mp3`;
   }
 
   assistantName = assistantName || assistant.name;
-  voiceName = voiceName || assistant.voiceName;
   greetingMessage = greetingMessage || assistant.greetingMessage;
   farewellMessage = farewellMessage || assistant.farewellMessage;
 
