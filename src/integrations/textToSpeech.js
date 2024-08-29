@@ -1,4 +1,7 @@
 const fetch = require("node-fetch");
+const FormData = require("form-data");
+
+const fs = require("fs");
 
 const MODEL_ID = "eleven_turbo_v2"; //eleven_multilingual_v2
 const SIMILARITY_BOOST = 0.75;
@@ -49,17 +52,72 @@ async function getElevenLabsModels() {
   return await response.json();
 }
 
-async function getElevenLabsVoices() {
+async function getElevenLabsVoices(userId) {
   const response = await fetch(
-    "https://api.elevenlabs.io/v1/voices?show_legacy=true"
+    "https://api.elevenlabs.io/v1/voices?show_legacy=true",
+    {
+      headers: {
+        "xi-api-key": process.env.ELEVEN_LABS_API_KEY,
+      },
+    }
   );
   const data = await response.json();
+
+  if (userId) {
+    data.voices = data.voices.filter(
+      (voice) =>
+        voice.category === "premade" ||
+        (voice.category === "cloned" && voice.labels.userId == userId)
+    );
+  }
 
   return data.voices.map((voice) => ({
     voiceId: voice.voice_id,
     voiceName: voice.name,
     previewUrl: voice.preview_url,
+    category: voice.category,
   }));
 }
 
-module.exports = { convertTextToSpeech, getElevenLabsVoices };
+async function cloneVoice(filePath, voiceName, userId) {
+  const file = fs.createReadStream(filePath);
+
+  const labels = {
+    userId: `${userId}`,
+  };
+
+  const formdata = new FormData();
+  formdata.append("name", voiceName);
+  formdata.append("files", file);
+  formdata.append("labels", JSON.stringify(labels));
+
+  const response = await fetch("https://api.elevenlabs.io/v1/voices/add", {
+    method: "POST",
+    headers: {
+      "xi-api-key": process.env.ELEVEN_LABS_API_KEY,
+    },
+    body: formdata,
+  });
+
+  const voice = await response.json();
+
+  console.log("cloned voice - ", voice);
+
+  return voice.voice_id;
+}
+
+async function deleteVoice(voiceId) {
+  await fetch(`https://api.elevenlabs.io/v1/voices/${voiceId}`, {
+    headers: {
+      "xi-api-key": process.env.ELEVEN_LABS_API_KEY,
+    },
+    method: "DELETE",
+  });
+}
+
+module.exports = {
+  convertTextToSpeech,
+  getElevenLabsVoices,
+  cloneVoice,
+  deleteVoice,
+};
