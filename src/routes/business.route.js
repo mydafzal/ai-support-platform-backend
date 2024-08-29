@@ -23,11 +23,42 @@ const IntegrationService = require("../services/integration.service");
 const UserService = require("../services/user.service");
 const asyncHandler = require("../utils/async-handler");
 
+const multer = require("multer");
+const { STORAGE_BASE_PATH } = require("../utils/constants");
+
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = ["audio/mpeg", "audio/wav", "audio/ogg"];
+
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(
+      new Error(
+        "Invalid file type. Only audio files of type mp3, wav, and ogg are allowed."
+      ),
+      false
+    );
+  }
+};
+
+const storage = multer.diskStorage({
+  destination: STORAGE_BASE_PATH,
+  filename: (req, file, cb) => {
+    cb(null, file.originalname);
+  },
+});
+
+const upload = multer({ storage, fileFilter });
+
 router.post(
   "/",
+  upload.single("file"),
   validateRequest(addBusinessSchema),
   asyncHandler(async (req, res) => {
-    const result = await BusinessService.addBusiness(req.body);
+    const result = await BusinessService.addBusiness({
+      ...req.body,
+      file: req.file,
+    });
     ResponseHandler.success(res, {
       statusCode: 201,
       data: result,
@@ -64,11 +95,13 @@ router.delete(
 
 router.patch(
   "/:id",
+  upload.single("file"),
   validateRequest(updateBusinessSchema),
   asyncHandler(async (req, res) => {
     const result = await BusinessService.updateBusiness({
       businessId: req.params.id,
       ...req.body,
+      file: req.file,
     });
 
     ResponseHandler.success(res, {

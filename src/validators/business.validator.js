@@ -1,13 +1,14 @@
 const { z } = require("zod");
 
 const addBusinessSchema = z.object({
-  userId: z.number(),
+  userId: z.coerce.number(),
   businessName: z.string(),
   assistantName: z.string(),
   voiceId: z.string(),
   voiceName: z.string(),
   greetingMessage: z.string(),
   farewellMessage: z.string(),
+  file: z.any().optional(),
 });
 
 const updateBusinessSchema = z.object({
@@ -17,6 +18,7 @@ const updateBusinessSchema = z.object({
   voiceName: z.string().optional(),
   greetingMessage: z.string().optional(),
   farewellMessage: z.string().optional(),
+  file: z.any().optional(),
 });
 
 const businessIdSchema = z.object({
