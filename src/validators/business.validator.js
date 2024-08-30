@@ -4,7 +4,7 @@ const addBusinessSchema = z.object({
   userId: z.coerce.number(),
   businessName: z.string(),
   assistantName: z.string(),
-  voiceId: z.string(),
+  voiceId: z.string().optional(),
   voiceName: z.string(),
   greetingMessage: z.string(),
   farewellMessage: z.string(),
