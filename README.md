@@ -1,64 +1,87 @@
-# Customer Bot Backend
+# CustomerBot AI Backend
 
-Welcome to the Customer Bot backend repository! This Node.js project serves as the backend for the Customer Bot, an AI application designed to assist various businesses in customizing and utilizing AI to service their customers.
+CustomerBot AI Backend is a multi-tenant backend for AI-powered customer support automation. It manages business workspaces, chat widgets, training documents, calls, subscriptions, integrations, and LangChain/LangGraph-based agent workflows.
 
-## Pre-requisites
+The project is designed as the backend layer for a configurable customer-service platform that can ingest business knowledge and expose AI chat, voice, meeting scheduling, CRM, and support workflows.
 
-Before you can run the project locally, ensure you have the following installed on your local machine:
+## Highlights
 
-- [Chroma DB](https://docs.trychroma.com/getting-started?lang=js)
-- [Redis](https://redis.io/docs/install/install-stack/)
-- [PostgreSQL](https://www.postgresql.org/download/)
+- Express.js API with a modular route/controller/service structure
+- LangChain, LangGraph, OpenAI, and ChromaDB for AI agent workflows
+- PostgreSQL persistence through Sequelize models and migrations
+- Redis and Socket.IO support for real-time chat and state
+- Training pipeline for documents, URLs, PDFs, and business data
+- Multi-agent workflow modules for tool creation, supervisor routing, and meeting scheduling
+- Integrations for HubSpot, Google Calendar/OAuth, Twilio, Stripe, email, Azure Blob Storage, S3, and Cloudinary
+- Subscription, invitation, team group, call, chat widget, and business integration domains
+- Docker support and database migrations/seeders
 
-If any of the above is not installed on your local machine, visit the respective links and following the setup instructions in the documentation.
+## Tech Stack
 
-## Getting Started
+- Node.js
+- Express
+- Sequelize
+- PostgreSQL
+- Redis
+- Socket.IO
+- LangChain / LangGraph
+- OpenAI
+- ChromaDB
+- Stripe
+- Twilio
+- HubSpot API
+- Google APIs
+- AWS S3 / Azure Blob Storage
 
-Follow these steps to set up and run the Customer Bot backend on your local machine:
+## Architecture
 
-1. **Clone the Repository:**
-   ```bash
-   git clone https://github.com/ccriptdev9/customer-bot-backend.git
-   cd customer-bot-backend
-   ```
+```text
+src/
+  controllers/          API controllers and AI workflow controllers
+  routes/               REST endpoints for auth, chat, calls, training, billing, users
+  integrations/         external services such as CRM, storage, calendar, Redis, email
+  services/             domain services for subscriptions, pricing, training, summaries
+  eventHandlers/        Socket.IO chat and user events
+  validators/           request validation
 
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+migrations/             Sequelize database migrations
+models/                 Sequelize models
+config/                 database and environment configuration
+```
 
-3. **Start Chroma DB:**
-   <br /> Open a new terminal and run the following command:
-   ```bash
-   chroma run
-   ```
+## Local Development
 
-4. **Start Redis:**
-   <br />  Open a new terminal and run the following command:
-   ```bash
-   redis-stack-server
-   ```
-4. **Initialize Database:**
-    <br /> First, go to config/config.json file and note the credentials under "development". Create a PostgreSQL database named "customer-bot". You can also create a PostgresSQL database with a different name but then you'll need to replace it under "development" in the config/config.json file.
- 
-   <br /> After you have created your PostgreSQL database, run the following commands in the terminal within the project's root directory:
+Install dependencies:
 
-   <br />  Run the following to generate database models in the database:
-   ```bash
-   npx sequelize-cli db:migrate
-   ```
-   <br />  Run the following to execute the seeders:
-   ```bash
-   npx sequelize-cli db:seed:all
-   ```
+```bash
+npm install
+```
 
-6. **Run the Application:**
-    <br /> To start the server, run the following command:
-   ```bash
-   npm run start:dev
-   ```
+Start supporting services:
 
-   <br /> If an occurs while running the command, it's probably due to the reason that you don't have nodemon installed on your machine. Run the following command to install nodemon globally:
-   ```bash
-   npm i -g nodemon
-   ```
+```bash
+chroma run
+redis-stack-server
+```
+
+Run migrations and seeders:
+
+```bash
+npx sequelize-cli db:migrate
+npx sequelize-cli db:seed:all
+```
+
+Start the API:
+
+```bash
+npm run start:dev
+```
+
+## Environment
+
+Create a local `.env` file from `.env.example` and provide values for database, Redis, OpenAI, ChromaDB, JWT, Stripe, storage, email, CRM, and telephony integrations.
+
+## Security
+
+Never commit real `.env` files, OAuth credential JSON, API keys, tokens, customer documents, or production exports. The repository is configured to ignore those files.
+

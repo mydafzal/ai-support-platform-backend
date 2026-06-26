@@ -1,4 +1,16 @@
 node_modules
-.env
+
+
+
+!.env.example
+
+credentials.json
+
+keyfile.json
+
+*token*.json
+
 data
+
 documents
+config.bat
